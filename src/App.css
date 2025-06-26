@@ -351,26 +351,20 @@ body, #root {
   }
 }
 
-.main-content {
-  margin-left: 220px;
+.app-layout {
+  display: flex;
+  height: 100vh;
+}
+
+.main-content-area {
   flex: 1;
-  font-family: inherit;
-  transition: margin-left 0.22s cubic-bezier(.4,0,.2,1);
-  background: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
-.sidebar--collapsed ~ .main-content,
-.sidebar--collapsed + .main-content {
-  margin-left: 56px;
-}
-@media (max-width: 900px) {
-  .main-content {
-    margin-left: 64px;
-  }
-}
-@media (max-width: 700px) {
-  .main-content {
-    margin-left: 0;
-  }
+
+.main-content {
+  margin-left: 0 !important;
 }
 
 .main-seo-content {
@@ -393,8 +387,6 @@ body, #root {
   transition: background 0.3s;
   border-radius: 18px;
   padding: 1.5rem 0.5rem;
-  max-height: calc(100vh - 180px);
-  overflow: hidden;
   padding-bottom: 1.5rem;
 }
 .hero {
@@ -1083,14 +1075,6 @@ html, body, #root {
   box-sizing: border-box;
 }
 
-.main-seo-content {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-}
-
 .company-tracker-page {
   flex: 1 1 auto;
   min-height: 0;
@@ -1525,4 +1509,32 @@ select, .company-table select, .company-form select, .template-form select, .tra
 select:focus, .company-table select:focus, .company-form select:focus, .template-form select:focus, .trash-table select:focus {
   border: 1.5px solid #6a1b9a !important;
   box-shadow: 0 4px 16px #eaeaff !important;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+@media (max-width: 768px) {
+  table, thead, tbody, th, td, tr {
+    display: block;
+  }
+  th, td {
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+  }
+}
+
+.responsive-table-wrapper {
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 1rem;
 }

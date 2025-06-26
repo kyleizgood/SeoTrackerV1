@@ -66,7 +66,7 @@ const TemplateTrash = () => {
   return (
     <section className="company-tracker-page">
       <h1 className="trash-header">Template Trash</h1>
-      <div className="table-scroll-container">
+      <div className="table-scroll-container table-responsive">
         <table className="company-table trash-table">
           <thead>
             <tr>

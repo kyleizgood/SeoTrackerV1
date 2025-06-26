@@ -135,7 +135,7 @@ export default function LinkBuildings() {
                 onChange={e => setSearch(s => ({ ...s, [pkg]: e.target.value }))}
               />
             </div>
-            <div className="table-scroll-container" style={{marginBottom: 0, minHeight: 0, maxHeight: 540, height: 'auto', width: '100%', overflowY: filteredCompanies.length > 15 ? 'auto' : 'visible'}}>
+            <div className="table-scroll-container table-responsive" style={{marginBottom: 0, height: 'auto', width: '100%'}}>
               <table className="company-table report-table" style={{marginBottom: 0, width: '100%', tableLayout: 'fixed'}}>
                 <thead>
                   <tr>

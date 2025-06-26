@@ -68,6 +68,22 @@ const Tickets = () => {
   const todayFollowUps = tickets.filter(t => isToday(t.followUpDate));
   // Find tickets that were due yesterday and not followed up
   const yesterdayFollowUps = tickets.filter(t => isYesterday(t.followUpDate));
+  // Find tickets that were due before today (not today or future)
+  const overdueFollowUps = tickets.filter(t => {
+    if (!t.followUpDate) return false;
+    const today = new Date();
+    const d = new Date(t.followUpDate);
+    // Only count if before today (not today)
+    return d < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  });
+
+  // Helper to check if a date is overdue (before today)
+  function isOverdue(dateStr) {
+    if (!dateStr) return false;
+    const today = new Date();
+    const d = new Date(dateStr);
+    return d < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  }
 
   return (
     <div className="main-content">
@@ -133,7 +149,38 @@ const Tickets = () => {
           }} title="Dismiss">×</button>
         </div>
       )}
-      <div style={{ maxWidth: 1800, width: '100%', margin: '0 auto', marginLeft: '50px' }}>
+      {overdueFollowUps.length > 0 && showAlert && (
+        <div style={{
+          background: 'linear-gradient(90deg, #fff3e0 0%, #ffeaea 100%)',
+          color: '#b26a00',
+          border: '1.5px solid #ffd6d6',
+          borderRadius: 12,
+          padding: '1.1em 2em',
+          margin: '0 auto 1.2em auto',
+          maxWidth: 700,
+          fontWeight: 600,
+          fontSize: '1.13em',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 2px 12px #ffeaea',
+        }}>
+          <span>⚠️ You have {overdueFollowUps.length} ticket{overdueFollowUps.length > 1 ? 's' : ''} that needed follow up in previous days!</span>
+          <button onClick={() => setShowAlert(false)} style={{
+            background: 'none',
+            border: 'none',
+            color: '#b26a00',
+            fontWeight: 700,
+            fontSize: '1.3em',
+            marginLeft: 18,
+            cursor: 'pointer',
+            borderRadius: 6,
+            padding: '0.1em 0.7em',
+            transition: 'background 0.18s',
+          }} title="Dismiss">×</button>
+        </div>
+      )}
+      <div className="responsive-table-wrapper">
         <h1 style={{ textAlign: 'center', marginBottom: 28, marginTop: 0 }}>Tickets</h1>
         <button className="hero-cta" style={{ marginBottom: 18 }} onClick={() => setShowForm(true)}>
           Add Tickets
@@ -179,26 +226,24 @@ const Tickets = () => {
               value={form.ticketId}
               onChange={handleChange}
               required
-              style={{ fontSize: '1.1rem', gridColumn: '1 / 2' }}
+              style={{ fontSize: '1.1rem' }}
             />
-            <div style={{ gridColumn: '2 / 3' }}>
-              <DatePicker
-                selected={form.followUpDate}
-                onChange={handleDateChange}
-                dateFormat="yyyy-MM-dd"
-                placeholderText="Follow Up Date"
-                className="company-form-datepicker"
-                required
-                style={{ fontSize: '1.1rem', width: '100%' }}
-              />
-            </div>
-            <div style={{ display: 'flex', gap: 16, gridColumn: '2 / 3', justifyContent: 'flex-start' }}>
+            <DatePicker
+              selected={form.followUpDate}
+              onChange={handleDateChange}
+              dateFormat="yyyy-MM-dd"
+              placeholderText="Follow Up Date"
+              className="company-form-datepicker"
+              required
+              style={{ fontSize: '1.1rem', width: '100%' }}
+            />
+            <div style={{ gridColumn: '1 / span 2', display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8 }}>
               <button type="submit" className="hero-cta save" style={{ minWidth: 100 }}>{editId ? 'Update' : 'Add'}</button>
               <button type="button" className="delete-btn" style={{ background: '#f5f5f5', color: '#232323', minWidth: 100 }} onClick={handleCancel}>Cancel</button>
             </div>
           </form>
         )}
-        <div className="table-scroll-container" style={{ width: '100%', maxWidth: 1800, margin: '0 auto', overflowX: 'auto' }}>
+        <div className="table-scroll-container table-responsive" style={{ width: '100%', maxWidth: 1800, margin: '0 auto', overflowX: 'auto' }}>
           <table className="company-table tickets-table" style={{ width: '100%', minWidth: 600, tableLayout: 'fixed' }}>
             <thead>
               <tr>
@@ -267,6 +312,14 @@ const Tickets = () => {
                     {isYesterday(t.followUpDate) && (
                       <span
                         title="Missed follow up!"
+                        style={{ marginLeft: 8, fontSize: '1.2em', verticalAlign: 'middle', color: '#b26a00' }}
+                      >
+                        ⚠️
+                      </span>
+                    )}
+                    {isOverdue(t.followUpDate) && !isToday(t.followUpDate) && !isYesterday(t.followUpDate) && (
+                      <span
+                        title="Overdue follow up!"
                         style={{ marginLeft: 8, fontSize: '1.2em', verticalAlign: 'middle', color: '#b26a00' }}
                       >
                         ⚠️

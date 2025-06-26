@@ -241,7 +241,7 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
         <button type="submit">{editId ? 'Update' : 'Add'}</button>
         {editId && <button type="button" onClick={handleCancel} style={{background:'#eee',color:'#232323',marginLeft:8}}>Cancel</button>}
       </form>
-      <div className="table-scroll-container">
+      <div className="table-scroll-container table-responsive">
         <table className="company-table">
           <thead>
             <tr>
@@ -506,10 +506,9 @@ function PackagePage({ pkg }) {
 
   return (
     <section className="company-tracker-page">
-      <h1 className="fancy-title">SEO Packages</h1>
       <h2 className="fancy-subtitle">{pkg} Companies</h2>
       <div className="company-total-badge"><span className="total-icon" role="img" aria-label="Total">👥</span>Total: {filteredCompanies.length}</div>
-      <div className="table-scroll-container">
+      <div className="table-scroll-container table-responsive">
         <table className="company-table">
           <thead>
             <tr>
@@ -857,8 +856,8 @@ function Report() {
                 onChange={e => setSearch(s => ({ ...s, [pkg]: e.target.value }))}
               />
             </div>
-            <div className="table-scroll-container" style={{
-              marginBottom: 0, minHeight: 0, maxHeight: 540, height: 'auto', width: '100%', overflowY: filtered.length > 15 ? 'auto' : 'visible'}}>
+            <div className="table-scroll-container table-responsive" style={{
+              marginBottom: 0, height: 'auto', width: '100%'}}>
               <table className="company-table report-table" style={{marginBottom: 0, width: '100%', tableLayout: 'fixed'}}>
                 <thead>
                   <tr>
@@ -1242,7 +1241,7 @@ function App() {
       {sidebarOpen && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
       )}
-      <div style={{ display: 'flex' }}>
+      <div className="app-layout">
         <div
           onMouseEnter={() => windowWidth > 700 && setSidebarCollapsed(false)}
           onMouseLeave={() => windowWidth > 700 && setSidebarCollapsed(true)}
@@ -1250,46 +1249,45 @@ function App() {
         >
           <Sidebar className={sidebarClass} />
         </div>
-        <div
-          className="minimal-bg main-content"
-          style={{ marginLeft: mainContentMarginLeft, transition: 'margin-left 0.22s cubic-bezier(.4,0,.2,1)' }}
-        >
-          <header className="minimal-header">
-            <div className="header-content">
-              <span className="header-title">SEO TRACKER</span>
-              <nav>
-                <a href="#projects">Projects</a>
-                <a href="#info">Info</a>
-              </nav>
-            </div>
-          </header>
-          <div className="minimalist-divider" />
-          <main className="main-seo-content">
-            <Routes>
-              <Route path="/" element={<HomeHero />} />
-              <Route path="/da-pa-checker" element={<DApaChecker />} />
-              <Route path="/company-tracker" element={<CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} />} />
-              <Route path="/seo-basic" element={<PackagePage pkg="SEO - BASIC" />} />
-              <Route path="/seo-premium" element={<PackagePage pkg="SEO - PREMIUM" />} />
-              <Route path="/seo-pro" element={<PackagePage pkg="SEO - PRO" />} />
-              <Route path="/seo-ultimate" element={<PackagePage pkg="SEO - ULTIMATE" />} />
-              <Route path="/report" element={<Report />} />
-              <Route path="/link-buildings" element={<LinkBuildings />} />
-              <Route path="/templates" element={<Templates />} />
-              <Route path="/template-trash" element={<TemplateTrash />} />
-              <Route path="/social-bookmarking" element={<SocialBookmarking />} />
-              <Route path="/trash" element={<TrashPage />} />
-              <Route path="/tickets" element={<Tickets />} />
-            </Routes>
-          </main>
-          <div className="minimalist-divider" />
-          <footer className="minimal-footer">
-            <div className="footer-content">
-              <span>&copy; 2025 OPPA JEWO</span>
-              <span className="footer-tagline">Kung ang bayot ma amnesia, bayot gihapon?</span>
-              <a href="#website" className="footer-link">Website</a>
-            </div>
-          </footer>
+        <div className="main-content-area" style={{ paddingLeft: mainContentMarginLeft, transition: 'padding-left 0.22s cubic-bezier(.4,0,.2,1)' }}>
+          <div className="minimal-bg main-content">
+            <header className="minimal-header">
+              <div className="header-content">
+                <span className="header-title">SEO TRACKER</span>
+                <nav>
+                  <a href="#projects">Projects</a>
+                  <a href="#info">Info</a>
+                </nav>
+              </div>
+            </header>
+            <div className="minimalist-divider" />
+            <main className="main-seo-content">
+              <Routes>
+                <Route path="/" element={<HomeHero />} />
+                <Route path="/da-pa-checker" element={<DApaChecker />} />
+                <Route path="/company-tracker" element={<CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} />} />
+                <Route path="/seo-basic" element={<PackagePage pkg="SEO - BASIC" />} />
+                <Route path="/seo-premium" element={<PackagePage pkg="SEO - PREMIUM" />} />
+                <Route path="/seo-pro" element={<PackagePage pkg="SEO - PRO" />} />
+                <Route path="/seo-ultimate" element={<PackagePage pkg="SEO - ULTIMATE" />} />
+                <Route path="/report" element={<Report />} />
+                <Route path="/link-buildings" element={<LinkBuildings />} />
+                <Route path="/templates" element={<Templates />} />
+                <Route path="/template-trash" element={<TemplateTrash />} />
+                <Route path="/social-bookmarking" element={<SocialBookmarking />} />
+                <Route path="/trash" element={<TrashPage />} />
+                <Route path="/tickets" element={<Tickets />} />
+              </Routes>
+            </main>
+            <div className="minimalist-divider" />
+            <footer className="minimal-footer">
+              <div className="footer-content">
+                <span>&copy; 2025 OPPA JEWO</span>
+                <span className="footer-tagline">Kung ang bayot ma amnesia, bayot gihapon?</span>
+                <a href="#website" className="footer-link">Website</a>
+              </div>
+            </footer>
+          </div>
         </div>
       </div>
     </>
