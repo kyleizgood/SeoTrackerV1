@@ -67,11 +67,7 @@ body, #root {
   text-align: center;
   gap: 0.7em;
   position: relative;
-<<<<<<< HEAD
   padding: 1.2rem 2vw 0.6rem 2vw;
-=======
-  padding: 0.4rem 2vw 0.2rem 2vw;
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   font-size: 1.05rem;
   letter-spacing: 0.13em;
   background: transparent;
@@ -239,7 +235,6 @@ body, #root {
   display: flex;
   justify-content: center;
   align-items: center;
-<<<<<<< HEAD
   padding: 0.7rem 0.7rem 0.7rem 0.7rem;
   font-size: 0.98rem;
   color: #888;
@@ -250,19 +245,6 @@ body, #root {
   z-index: 2;
   margin-top: 1.2rem;
   min-height: 40px;
-=======
-  padding: 0.3rem 0.7rem;
-  font-size: 0.98rem;
-  color: #888;
-  letter-spacing: 0.12em;
-  background: transparent;
-  border-top: none;
-  box-shadow: none;
-  font-family: inherit;
-  z-index: 2;
-  margin-top: 0.7rem;
-  min-height: 32px;
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
 }
 .footer-content {
   display: flex;
@@ -1555,7 +1537,6 @@ table {
   width: 100%;
   padding: 0 1rem;
 }
-<<<<<<< HEAD
 
 /* Add extra bottom margin to table containers in report and link building pages */
 .report-table-container, .link-building-table-container {
@@ -1586,5 +1567,3 @@ table {
   border: 2px solid #81c784;
   background: linear-gradient(90deg, #e0e7ef 60%, #f7f6f2 100%);
 }
-=======
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd

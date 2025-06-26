@@ -10,17 +10,12 @@ const linksPerPackage = {
   'SEO - ULTIMATE': '42 Links',
 };
 
-<<<<<<< HEAD
 export default function LinkBuildings({ packages, setPackages }) {
-=======
-export default function LinkBuildings() {
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
   const currentMonth = monthNames[new Date().getMonth()];
-<<<<<<< HEAD
   const [status, setStatus] = useState({});
   const [confirmRemove, setConfirmRemove] = useState({ pkg: null, companyId: null, companyName: '' });
   const [search, setSearch] = useState({});
@@ -30,30 +25,11 @@ export default function LinkBuildings() {
     // Initialize status from company data if available
     const initialStatus = {};
     Object.values(packages).forEach(companies => {
-=======
-  const [packages, setPackages] = useState({
-    'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': []
-  });
-  const [status, setStatus] = useState({});
-  const [confirmRemove, setConfirmRemove] = useState({ pkg: null, companyId: null, companyName: '' });
-  const [search, setSearch] = useState({});
-
-  useEffect(() => {
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const pkgs = saved ? JSON.parse(saved) : {
-      'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': []
-    };
-    setPackages(pkgs);
-    // Initialize status from company data if available
-    const initialStatus = {};
-    Object.values(pkgs).forEach(companies => {
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
       companies.forEach(c => {
         initialStatus[c.id] = c.linkBuildingStatus || 'Pending';
       });
     });
     setStatus(initialStatus);
-<<<<<<< HEAD
   }, [packages]);
 
   // Handle status change for a company and persist in Firestore
@@ -63,19 +39,6 @@ export default function LinkBuildings() {
     updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c => c.id === companyId ? { ...c, linkBuildingStatus: value } : c);
     setPackages(updatedPackages);
     // Optionally, savePackages(updatedPackages) if you want to persist immediately
-=======
-  }, []);
-
-  // Handle status change for a company and persist in localStorage
-  const handleStatusChange = (pkg, companyId, value) => {
-    setStatus(s => ({ ...s, [companyId]: value }));
-    // Persist in localStorage
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const pkgs = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    pkgs[pkg] = (pkgs[pkg] || []).map(c => c.id === companyId ? { ...c, linkBuildingStatus: value } : c);
-    localStorage.setItem(PACKAGE_KEY, JSON.stringify(pkgs));
-    setPackages(pkgs);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   };
 
   // Dropdown style (reuse from Report page)
@@ -103,23 +66,12 @@ export default function LinkBuildings() {
   };
   const handleRemoveConfirm = () => {
     const { pkg, companyId } = confirmRemove;
-<<<<<<< HEAD
     const updatedPackages = { ...packages };
     // Find the company to remove
     const companyToRemove = (updatedPackages[pkg] || []).find(c => c.id === companyId);
     // Remove from package
     updatedPackages[pkg] = (updatedPackages[pkg] || []).filter(c => c.id !== companyId);
     setPackages(updatedPackages);
-=======
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const pkgs = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    // Find the company to remove
-    const companyToRemove = (pkgs[pkg] || []).find(c => c.id === companyId);
-    // Remove from package
-    pkgs[pkg] = (pkgs[pkg] || []).filter(c => c.id !== companyId);
-    localStorage.setItem(PACKAGE_KEY, JSON.stringify(pkgs));
-    setPackages(pkgs);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
     // Add to trash if found
     if (companyToRemove) {
       const trash = JSON.parse(localStorage.getItem(TRASH_KEY) || '[]');
@@ -136,15 +88,11 @@ export default function LinkBuildings() {
       <p className="hero-desc" style={{marginBottom: 10}}>All companies, grouped by SEO package for link building.</p>
       {packageNames.map(pkg => {
         const companies = (packages[pkg] || []).filter(c => c.status !== 'OnHold');
-<<<<<<< HEAD
         const filteredCompanies = companies.filter(c => {
           const matchesSearch = !search[pkg] || c.name.toLowerCase().includes(search[pkg].toLowerCase());
           const matchesStatus = !statusFilter[pkg] || (status[c.id] || 'Pending') === statusFilter[pkg];
           return matchesSearch && matchesStatus;
         });
-=======
-        const filteredCompanies = companies.filter(c => !search[pkg] || c.name.toLowerCase().includes(search[pkg].toLowerCase()));
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
         const pendingCount = filteredCompanies.filter(c => (status[c.id] || 'Pending') !== 'Completed').length;
         return (
           <div key={pkg} style={{ marginBottom: 32, width: '100%' }}>
@@ -171,7 +119,6 @@ export default function LinkBuildings() {
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 0}}>
               <div className="company-total-badge"><span className="total-icon" role="img" aria-label="Total">🔗</span>Total: {filteredCompanies.length}</div>
               <h2 className="fancy-subtitle">{pkg}</h2>
-<<<<<<< HEAD
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <select
                   value={statusFilter[pkg] || ''}
@@ -193,18 +140,6 @@ export default function LinkBuildings() {
               </div>
             </div>
             <div className="table-scroll-container table-responsive" style={{marginBottom: 0, height: 'auto', width: '100%', position: 'relative'}}>
-=======
-              <input
-                type="text"
-                className="package-search-input"
-                style={{ minWidth: 180, marginLeft: 16, marginBottom: 0, fontSize: '1em' }}
-                placeholder={`Search company...`}
-                value={search[pkg] || ''}
-                onChange={e => setSearch(s => ({ ...s, [pkg]: e.target.value }))}
-              />
-            </div>
-            <div className="table-scroll-container table-responsive" style={{marginBottom: 0, height: 'auto', width: '100%'}}>
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
               <table className="company-table report-table" style={{marginBottom: 0, width: '100%', tableLayout: 'fixed'}}>
                 <thead>
                   <tr>

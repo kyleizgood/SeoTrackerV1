@@ -1,15 +1,7 @@
-<<<<<<< HEAD
 import { useState, useEffect, useRef } from 'react';
 import './App.css'
 import Sidebar from './Sidebar';
 import TemplateManager from './TemplateManager';
-=======
-import { useState, useEffect } from 'react';
-import './App.css'
-import Sidebar from './Sidebar';
-import TemplateManager from './TemplateManager';
-import TemplateTrash from './TemplateTrash';
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import DApaChecker from './DApaChecker';
 import DatePicker from 'react-datepicker';
@@ -21,13 +13,10 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import AuthPage from './AuthPage';
 import Login from './Login';
 import Register from './Register';
-<<<<<<< HEAD
 import { getCompanies, saveCompany, deleteCompany } from './firestoreHelpers';
 import { getPackages, savePackages, getTrash, saveTrash, getTemplates, saveTemplate, deleteTemplate, getTickets, saveTicket, deleteTicket } from './firestoreHelpers';
 import { onSnapshot, collection } from 'firebase/firestore';
 import { db } from './firebase';
-=======
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
 
 function HomeHero() {
   const navigate = useNavigate();
@@ -40,12 +29,6 @@ function HomeHero() {
   );
 }
 
-<<<<<<< HEAD
-=======
-const COMPANY_KEY = 'company-tracker-list';
-const PACKAGE_KEY = 'company-package-pages';
-const TRASH_KEY = 'company-trash';
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
 const ALL_PACKAGES = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
 
 const months = [
@@ -67,69 +50,35 @@ function getEOC(start) {
   return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
-<<<<<<< HEAD
 function CompanyTracker({ editCompany, setEditData, editData, clearEdit, packages, setPackages }) {
   const [companies, setCompanies] = useState([]);
   const [form, setForm] = useState({
     name: '',
     startDate: null,
-=======
-function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
-  const [companies, setCompanies] = useState(() => {
-    const saved = localStorage.getItem(COMPANY_KEY);
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [form, setForm] = useState({
-    name: '',
-    package: 'SEO - BASIC',
-    day: '',
-    month: '',
-    year: '',
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
     status: 'Active',
   });
   const [editId, setEditId] = useState(null);
   const [showAddToPackage, setShowAddToPackage] = useState(null); // company id
 
-<<<<<<< HEAD
   // Load companies from Firestore on mount
   useEffect(() => {
     getCompanies().then(setCompanies);
   }, []);
 
-=======
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   // If editData is provided (from package page), load it into the form
   useEffect(() => {
     if (editData) {
       setEditId(editData.id);
-<<<<<<< HEAD
       let startDate = null;
       if (editData.start) {
         const match = editData.start.match(/^(\w+) (\d{1,2}), (\d{4})$/);
         if (match) {
           startDate = new Date(`${match[1]} ${match[2]}, ${match[3]}`);
-=======
-      let day = '', month = '', year = '';
-      if (editData.start) {
-        const match = editData.start.match(/^(\w+) (\d{1,2}), (\d{4})$/);
-        if (match) {
-          month = months.indexOf(match[1]).toString();
-          day = match[2];
-          year = match[3];
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
         }
       }
       setForm({
         name: editData.name,
-<<<<<<< HEAD
         startDate,
-=======
-        package: editData.package,
-        day,
-        month,
-        year,
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
         status: editData.status,
       });
       if (clearEdit) clearEdit();
@@ -138,19 +87,13 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
   }, [editData]);
 
   useEffect(() => {
-<<<<<<< HEAD
     getCompanies().then(setCompanies);
   }, []);
-=======
-    localStorage.setItem(COMPANY_KEY, JSON.stringify(companies));
-  }, [companies]);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
 
   const handleChange = e => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-<<<<<<< HEAD
   const handleDateChange = date => {
     setForm({ ...form, startDate: date });
   };
@@ -197,98 +140,31 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
       });
       savePackages(packages);
     });
-=======
-  const updatePackages = (updatedCompany) => {
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    Object.keys(packages).forEach(pkg => {
-      packages[pkg] = packages[pkg].map(c => c.id === updatedCompany.id ? updatedCompany : c);
-    });
-    localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-  };
-
-  const handleAddOrEdit = e => {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-    let start = '';
-    if (form.day && form.month && form.year) {
-      start = `${months[parseInt(form.month, 10)]} ${form.day}, ${form.year}`;
-    }
-    if (editId) {
-      const updated = { ...form, start, id: editId };
-      setCompanies(companies.map(c => c.id === editId ? updated : c));
-      updatePackages(updated);
-      setEditId(null);
-    } else {
-      setCompanies([
-        ...companies,
-        { ...form, start, id: Date.now() }
-      ]);
-    }
-    setForm({ name: '', package: 'SEO - BASIC', day: '', month: '', year: '', status: 'Active' });
-  };
-
-  const handleDelete = id => {
-    setCompanies(companies.filter(c => c.id !== id));
-    if (editId === id) {
-      setEditId(null);
-      setForm({ name: '', package: 'SEO - BASIC', day: '', month: '', year: '', status: 'Active' });
-    }
-    // Remove from all package pages
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    Object.keys(packages).forEach(pkg => {
-      packages[pkg] = packages[pkg].filter(c => c.id !== id);
-    });
-    localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   };
 
   const handleEdit = c => {
     setEditId(c.id);
-<<<<<<< HEAD
     let startDate = null;
     if (c.start) {
       const match = c.start.match(/^(\w+) (\d{1,2}), (\d{4})$/);
       if (match) {
         startDate = new Date(`${match[1]} ${match[2]}, ${match[3]}`);
-=======
-    let day = '', month = '', year = '';
-    if (c.start) {
-      const match = c.start.match(/^(\w+) (\d{1,2}), (\d{4})$/);
-      if (match) {
-        month = months.indexOf(match[1]).toString();
-        day = match[2];
-        year = match[3];
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
       }
     }
     setForm({
       name: c.name,
-<<<<<<< HEAD
       startDate,
-=======
-      package: c.package,
-      day,
-      month,
-      year,
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
       status: c.status,
     });
   };
 
   const handleCancel = () => {
     setEditId(null);
-<<<<<<< HEAD
     setForm({ name: '', startDate: null, status: 'Active' });
-=======
-    setForm({ name: '', package: 'SEO - BASIC', day: '', month: '', year: '', status: 'Active' });
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   };
 
   // Add to package pages
   const handleAddToPackage = (company, pkg) => {
-<<<<<<< HEAD
     // Remove from CompanyTracker (Firestore and local state)
     deleteCompany(company.id).then(() => {
       setCompanies(prev => prev.filter(c => c.id !== company.id));
@@ -317,30 +193,6 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
       }
       setShowAddToPackage(null);
     });
-=======
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    if (!packages[pkg]) packages[pkg] = [];
-    if (!packages[pkg].some(c => c.id === company.id)) {
-      packages[pkg].push({
-        ...company,
-        package: pkg,
-        tasks: {
-          forVSO: 'Pending',
-          forRevision: 'Pending',
-          ra: 'Pending',
-          distribution: 'Pending',
-          businessProfileClaiming: 'Ticket',
-        },
-      });
-      localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-    }
-    // Remove from tracker
-    const updatedCompanies = companies.filter(c => c.id !== company.id);
-    setCompanies(updatedCompanies);
-    localStorage.setItem(COMPANY_KEY, JSON.stringify(updatedCompanies));
-    setShowAddToPackage(null);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   };
 
   return (
@@ -356,7 +208,6 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
           onChange={handleChange}
           required
         />
-<<<<<<< HEAD
         <DatePicker
           selected={form.startDate}
           onChange={handleDateChange}
@@ -366,32 +217,6 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
           required
           style={{ fontSize: '1.1rem', width: '100%' }}
         />
-=======
-        <select name="package" value={form.package} onChange={handleChange}>
-          <option value="SEO - BASIC">SEO - BASIC</option>
-          <option value="SEO - PREMIUM">SEO - PREMIUM</option>
-          <option value="SEO - PRO">SEO - PRO</option>
-          <option value="SEO - ULTIMATE">SEO - ULTIMATE</option>
-        </select>
-        <select name="month" value={form.month} onChange={handleChange} required>
-          <option value="">Month</option>
-          {months.map((m, i) => (
-            <option value={i} key={m}>{m}</option>
-          ))}
-        </select>
-        <select name="day" value={form.day} onChange={handleChange} required>
-          <option value="">Day</option>
-          {days.map(d => (
-            <option value={d} key={d}>{d}</option>
-          ))}
-        </select>
-        <select name="year" value={form.year} onChange={handleChange} required>
-          <option value="">Year</option>
-          {years.map(y => (
-            <option value={y} key={y}>{y}</option>
-          ))}
-        </select>
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
         <select name="status" value={form.status} onChange={handleChange}>
           <option value="Active">Active</option>
           <option value="OnHold">OnHold</option>
@@ -404,10 +229,6 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
           <thead>
             <tr>
               <th>Company Name</th>
-<<<<<<< HEAD
-=======
-              <th>SEO Package</th>
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
               <th>Start Date</th>
               <th>EOC</th>
               <th>Status</th>
@@ -416,28 +237,11 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
           </thead>
           <tbody>
             {companies.length === 0 && (
-<<<<<<< HEAD
               <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies yet.</td></tr>
-=======
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: '#aaa' }}>No companies yet.</td></tr>
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
             )}
             {companies.map(c => (
               <tr key={c.id} style={{ position: 'relative' }}>
                 <td className="company-name">{c.name}</td>
-<<<<<<< HEAD
-=======
-                <td>
-                  <span className={
-                    c.package === 'SEO - BASIC' ? 'package-basic' :
-                    c.package === 'SEO - PREMIUM' ? 'package-premium' :
-                    c.package === 'SEO - PRO' ? 'package-pro' :
-                    c.package === 'SEO - ULTIMATE' ? 'package-ultimate' : ''
-                  }>
-                    {c.package}
-                  </span>
-                </td>
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
                 <td>{c.start}</td>
                 <td>{getEOC(c.start)}</td>
                 <td>
@@ -446,7 +250,6 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
                     value={c.status}
                     onChange={e => {
                       const newStatus = e.target.value;
-<<<<<<< HEAD
                       getPackages().then(packages => {
                         const updatedCompanies = (packages[pkg] || []).map(row =>
                           row.id === c.id ? { ...row, status: newStatus } : row
@@ -455,17 +258,6 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit }) {
                         savePackages(packages);
                         setCompanies(updatedCompanies);
                       });
-=======
-                      // Update in localStorage and state
-                      const saved = localStorage.getItem(PACKAGE_KEY);
-                      const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-                      const updatedCompanies = (packages[pkg] || []).map(row =>
-                        row.id === c.id ? { ...row, status: newStatus } : row
-                      );
-                      packages[pkg] = updatedCompanies;
-                      localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-                      setCompanies(updatedCompanies);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
                     }}
                   >
                     <option value="Active">🟢 Active</option>
@@ -529,11 +321,7 @@ function formatDateToDisplay(dateObj) {
   return `${months[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()}`;
 }
 
-<<<<<<< HEAD
 function PackagePage({ pkg, packages, setPackages }) {
-=======
-function PackagePage({ pkg }) {
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   const [companies, setCompanies] = useState([]);
   const [editId, setEditId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -573,7 +361,6 @@ function PackagePage({ pkg }) {
     { value: 'Completed', label: '🟢 Completed' },
   ];
 
-<<<<<<< HEAD
   // Load companies from Firestore and ensure tasks are initialized
   useEffect(() => {
     getPackages().then(packages => {
@@ -594,33 +381,10 @@ function PackagePage({ pkg }) {
         savePackages(packages);
       }
     });
-=======
-  // Load companies from localStorage and ensure tasks are initialized
-  useEffect(() => {
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    let pkgCompanies = (packages[pkg] || []).map(c => ({
-      ...c,
-      tasks: {
-        forVSO: c.tasks?.forVSO || 'Pending',
-        forRevision: c.tasks?.forRevision || 'Pending',
-        ra: c.tasks?.ra || 'Pending',
-        distribution: c.tasks?.distribution || 'Pending',
-        businessProfileClaiming: c.tasks?.businessProfileClaiming === 'Pending' || !c.tasks?.businessProfileClaiming ? 'Ticket' : c.tasks?.businessProfileClaiming,
-      },
-    }));
-    setCompanies(pkgCompanies);
-    // Save back if any tasks were missing or changed
-    if (pkgCompanies.some((c, i) => JSON.stringify(c.tasks) !== JSON.stringify((packages[pkg][i]||{}).tasks))) {
-      packages[pkg] = pkgCompanies;
-      localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-    }
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   }, [pkg]);
 
   // Handle dropdown change
   const handleTaskChange = (companyId, taskKey, value) => {
-<<<<<<< HEAD
     getPackages().then(packages => {
       let pkgCompanies = (packages[pkg] || []).map(c => {
         if (c.id === companyId) {
@@ -635,22 +399,6 @@ function PackagePage({ pkg }) {
       savePackages(packages);
       setCompanies(pkgCompanies);
     });
-=======
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    let pkgCompanies = (packages[pkg] || []).map(c => {
-      if (c.id === companyId) {
-        return {
-          ...c,
-          tasks: { ...c.tasks, [taskKey]: value },
-        };
-      }
-      return c;
-    });
-    packages[pkg] = pkgCompanies;
-    localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-    setCompanies(pkgCompanies);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   };
 
   const handleEdit = (company) => {
@@ -661,7 +409,6 @@ function PackagePage({ pkg }) {
   };
 
   const handleEditSave = (company) => {
-<<<<<<< HEAD
     getPackages().then(packages => {
       const updatedCompanies = (packages[pkg] || []).map(c =>
         c.id === company.id ? {
@@ -679,25 +426,6 @@ function PackagePage({ pkg }) {
       setEditStart(null);
       setEditEOC(null);
     });
-=======
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    const updatedCompanies = (packages[pkg] || []).map(c =>
-      c.id === company.id ? {
-        ...c,
-        name: editName,
-        start: formatDateToDisplay(editStart),
-        eoc: formatDateToDisplay(editEOC),
-      } : c
-    );
-    packages[pkg] = updatedCompanies;
-    localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-    setCompanies(updatedCompanies);
-    setEditId(null);
-    setEditName('');
-    setEditStart(null);
-    setEditEOC(null);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   };
 
   const handleEditCancel = () => {
@@ -710,7 +438,6 @@ function PackagePage({ pkg }) {
   const handleRemove = (company) => {
     setConfirmRemoveId(company.id);
   };
-<<<<<<< HEAD
   const handleRemoveConfirm = () => {
     // Use confirmRemoveId to find the company to remove
     getPackages().then(packages => {
@@ -728,21 +455,6 @@ function PackagePage({ pkg }) {
       }
       setConfirmRemoveId(null);
     });
-=======
-  const handleRemoveConfirm = (company) => {
-    // Remove from package
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    const updatedCompanies = (packages[pkg] || []).filter(c => c.id !== company.id);
-    packages[pkg] = updatedCompanies;
-    localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-    setCompanies(updatedCompanies);
-    // Add to trash
-    const trash = JSON.parse(localStorage.getItem(TRASH_KEY) || '[]');
-    trash.push({ ...company, originalPackage: pkg });
-    localStorage.setItem(TRASH_KEY, JSON.stringify(trash));
-    setConfirmRemoveId(null);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   };
   const handleRemoveCancel = () => {
     setConfirmRemoveId(null);
@@ -904,7 +616,6 @@ function PackagePage({ pkg }) {
                     onChange={e => {
                       const newStatus = e.target.value;
                       // Update in localStorage and state
-<<<<<<< HEAD
                       getPackages().then(packages => {
                         const updatedCompanies = (packages[pkg] || []).map(row =>
                           row.id === c.id ? { ...row, status: newStatus } : row
@@ -913,16 +624,6 @@ function PackagePage({ pkg }) {
                         savePackages(packages);
                         setCompanies(updatedCompanies);
                       });
-=======
-                      const saved = localStorage.getItem(PACKAGE_KEY);
-                      const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-                      const updatedCompanies = (packages[pkg] || []).map(row =>
-                        row.id === c.id ? { ...row, status: newStatus } : row
-                      );
-                      packages[pkg] = updatedCompanies;
-                      localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-                      setCompanies(updatedCompanies);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
                     }}
                   >
                     <option value="Active">🟢 Active</option>
@@ -968,11 +669,7 @@ function PackagePage({ pkg }) {
             <div className="confirm-title">Are you sure you want to remove this company?</div>
             <div className="confirm-desc">It will be moved to Trash.</div>
             <div className="confirm-btns">
-<<<<<<< HEAD
               <button className="confirm-btn delete" onClick={handleRemoveConfirm}>Yes, Remove</button>
-=======
-              <button className="confirm-btn delete" onClick={() => handleRemoveConfirm(companies.find(c => c.id === confirmRemoveId))}>Yes, Remove</button>
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
               <button className="confirm-btn cancel" onClick={handleRemoveCancel}>Cancel</button>
             </div>
           </div>
@@ -982,18 +679,7 @@ function PackagePage({ pkg }) {
   );
 }
 
-<<<<<<< HEAD
 function Report({ packages, setPackages }) {
-=======
-function Report() {
-  // Load all companies from localStorage PACKAGE_KEY
-  const [packages, setPackages] = useState(() => {
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    return saved ? JSON.parse(saved) : {
-      'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': []
-    };
-  });
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   // Store filters for each package in an object
   const [filterI, setFilterI] = useState({});
   const [filterII, setFilterII] = useState({});
@@ -1008,13 +694,7 @@ function Report() {
   const currentMonth = monthNames[new Date().getMonth()];
 
   useEffect(() => {
-<<<<<<< HEAD
     getPackages().then(setPackages);
-=======
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    setPackages(saved ? JSON.parse(saved) : {
-      'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] });
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
     // Monthly reset logic
     const today = new Date();
     const firstOfMonth = today.getDate() === 1;
@@ -1022,7 +702,6 @@ function Report() {
     const lastReset = localStorage.getItem('report-last-reset');
     if (firstOfMonth && lastReset !== thisMonth) {
       // Reset all reportI and reportII to 'Pending'
-<<<<<<< HEAD
       getPackages().then(pkgs => {
         Object.keys(pkgs).forEach(pkg => {
           pkgs[pkg] = (pkgs[pkg] || []).map(c => ({ ...c, reportI: 'Pending', reportII: 'Pending' }));
@@ -1031,15 +710,6 @@ function Report() {
         setPackages(pkgs);
         localStorage.setItem('report-last-reset', thisMonth);
       });
-=======
-      const pkgs = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-      Object.keys(pkgs).forEach(pkg => {
-        pkgs[pkg] = (pkgs[pkg] || []).map(c => ({ ...c, reportI: 'Pending', reportII: 'Pending' }));
-      });
-      localStorage.setItem(PACKAGE_KEY, JSON.stringify(pkgs));
-      setPackages(pkgs);
-      localStorage.setItem('report-last-reset', thisMonth);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
     }
   }, []);
 
@@ -1047,7 +717,6 @@ function Report() {
 
   // Helper to update report status in localStorage
   const handleReportStatusChange = (pkg, companyId, reportKey, value) => {
-<<<<<<< HEAD
     getPackages().then(packages => {
       packages[pkg] = (packages[pkg] || []).map(c =>
         c.id === companyId ? { ...c, [reportKey]: value } : c
@@ -1055,15 +724,6 @@ function Report() {
       savePackages(packages);
       setPackages(packages);
     });
-=======
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    packages[pkg] = (packages[pkg] || []).map(c =>
-      c.id === companyId ? { ...c, [reportKey]: value } : c
-    );
-    localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-    setPackages(packages);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   };
 
   // Helper for dropdown color
@@ -1350,7 +1010,6 @@ function Report() {
   );
 }
 
-<<<<<<< HEAD
 function Bookmarking({ packages, setPackages }) {
   // Store filters for each package in an object
   const [filterCreation, setFilterCreation] = useState({});
@@ -1619,8 +1278,6 @@ function Bookmarking({ packages, setPackages }) {
   );
 }
 
-=======
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
 function Templates() {
   return (
     <section className="company-tracker-page">
@@ -1639,7 +1296,6 @@ function SocialBookmarking() {
 }
 
 function TrashPage() {
-<<<<<<< HEAD
   const [trash, setTrash] = useState([]);
   const [search, setSearch] = useState('');
   const [showDeleteAll, setShowDeleteAll] = useState(false);
@@ -1669,60 +1325,25 @@ function TrashPage() {
     const updatedTrash = trash.filter(c => c.id !== item.id);
     setTrash(updatedTrash);
     await saveTrash(updatedTrash);
-=======
-  const [trash, setTrash] = useState(() => JSON.parse(localStorage.getItem(TRASH_KEY) || '[]'));
-  const [search, setSearch] = useState('');
-  const [showDeleteAll, setShowDeleteAll] = useState(false);
-  const handleRestore = (company) => {
-    // Remove from trash
-    const updatedTrash = trash.filter(c => c.id !== company.id);
-    setTrash(updatedTrash);
-    localStorage.setItem(TRASH_KEY, JSON.stringify(updatedTrash));
-    // Restore to original package
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    if (!packages[company.originalPackage].some(c => c.id === company.id)) {
-      packages[company.originalPackage].push(company);
-      localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-    }
-  };
-  const handleDeleteForever = (company) => {
-    const updatedTrash = trash.filter(c => c.id !== company.id);
-    setTrash(updatedTrash);
-    localStorage.setItem(TRASH_KEY, JSON.stringify(updatedTrash));
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   };
   // Delete all logic
   const handleDeleteAll = () => {
     setShowDeleteAll(true);
   };
-<<<<<<< HEAD
   const handleDeleteAllConfirm = async () => {
     setTrash([]);
     await saveTrash([]);
-=======
-  const handleDeleteAllConfirm = () => {
-    setTrash([]);
-    localStorage.setItem(TRASH_KEY, JSON.stringify([]));
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
     setShowDeleteAll(false);
   };
   const handleDeleteAllCancel = () => {
     setShowDeleteAll(false);
   };
   // Filtered trash based on search
-<<<<<<< HEAD
   const filteredTrash = trash.filter(item =>
     (item.type === 'template'
       ? (item.title && item.title.toLowerCase().includes(search.toLowerCase())) || (item.content && item.content.toLowerCase().includes(search.toLowerCase()))
       : (item.name && item.name.toLowerCase().includes(search.toLowerCase())) || (item.originalPackage || '').toLowerCase().includes(search.toLowerCase()) || (item.status || '').toLowerCase().includes(search.toLowerCase())
     )
-=======
-  const filteredTrash = trash.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.originalPackage || '').toLowerCase().includes(search.toLowerCase()) ||
-    (c.status || '').toLowerCase().includes(search.toLowerCase())
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   );
   return (
     <section className="company-tracker-page">
@@ -1733,11 +1354,7 @@ function TrashPage() {
             <tr>
               <th style={{ minWidth: 220 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-<<<<<<< HEAD
                   <span>Item</span>
-=======
-                  <span>Company Name</span>
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
                   <input
                     type="text"
                     className="package-search-input"
@@ -1746,16 +1363,9 @@ function TrashPage() {
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                   />
-<<<<<<< HEAD
                 </div>
               </th>
               <th>Type</th>
-=======
-                      </div>
-                    </th>
-              <th>Original Package</th>
-              <th>Status</th>
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
               <th style={{ minWidth: 120, textAlign: 'right' }}>
                 {trash.length > 0 && (
                   <button className="trash-action-btn delete" style={{ minWidth: 100, marginLeft: 8 }} onClick={handleDeleteAll}>
@@ -1767,7 +1377,6 @@ function TrashPage() {
           </thead>
           <tbody>
             {filteredTrash.length === 0 && (
-<<<<<<< HEAD
               <tr><td colSpan={3} className="trash-empty">Trash is empty.</td></tr>
             )}
             {filteredTrash.map(item => (
@@ -1782,18 +1391,6 @@ function TrashPage() {
                 <td>
                   <button className="trash-action-btn restore" onClick={() => handleRestore(item)}>Restore</button>
                   <button className="trash-action-btn delete" onClick={() => handleDeleteForever(item)}>Delete Forever</button>
-=======
-              <tr><td colSpan={4} className="trash-empty">Trash is empty.</td></tr>
-            )}
-            {filteredTrash.map(c => (
-              <tr key={c.id}>
-                <td style={{ fontWeight: 700, fontSize: '1.13rem', color: '#232323', background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #4e342e', letterSpacing: '0.02em' }}>{c.name}</td>
-                <td style={{ background: '#fff8f8' }}>{c.originalPackage}</td>
-                <td style={{ background: '#fff8f8' }}>{c.status}</td>
-                <td>
-                  <button className="trash-action-btn restore" onClick={() => handleRestore(c)}>Restore</button>
-                  <button className="trash-action-btn delete" onClick={() => handleDeleteForever(c)}>Delete Forever</button>
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
                 </td>
               </tr>
             ))}
@@ -1823,7 +1420,6 @@ function App() {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const location = useLocation();
   const [editData, setEditData] = useState(null);
-<<<<<<< HEAD
   // Shared packages state
   const [packages, setPackages] = useState({ 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] });
   const navigate = useNavigate();
@@ -1832,8 +1428,6 @@ function App() {
   const [ticketsChanged, setTicketsChanged] = useState(0);
   const bellRef = useRef();
   const dropdownRef = useRef();
-=======
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, setUser);
@@ -1848,7 +1442,6 @@ function App() {
     // eslint-disable-next-line
   }, [location]);
 
-<<<<<<< HEAD
   useEffect(() => {
     getPackages().then(setPackages);
   }, []);
@@ -1985,8 +1578,6 @@ function App() {
     fetchAlerts();
   }, [packages]);
 
-=======
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   let sidebarClass = 'sidebar';
   if (windowWidth <= 700) {
     sidebarClass = sidebarOpen ? 'sidebar sidebar--open' : 'sidebar';
@@ -2002,7 +1593,6 @@ function App() {
     mainContentMarginLeft = 56;
   }
 
-<<<<<<< HEAD
   // Close alerts dropdown when clicking outside
   useEffect(() => {
     if (!showAlerts) return;
@@ -2025,8 +1615,6 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showAlerts]);
 
-=======
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   if (!user) {
     return <AuthPage />;
   }
@@ -2056,7 +1644,6 @@ function App() {
       >
         Logout
       </button>
-<<<<<<< HEAD
       {/* Notification Icon */}
       <div style={{ position: 'fixed', top: 18, right: 170, zIndex: 2000 }}>
         <button
@@ -2148,8 +1735,6 @@ function App() {
           </div>
         )}
       </div>
-=======
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
       <button
         className="hamburger"
         aria-label="Open sidebar"
@@ -2185,7 +1770,6 @@ function App() {
               <Routes>
                 <Route path="/" element={<HomeHero />} />
                 <Route path="/da-pa-checker" element={<DApaChecker />} />
-<<<<<<< HEAD
                 <Route path="/company-tracker" element={<CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} packages={packages} setPackages={setPackages} />} />
                 <Route path="/seo-basic" element={<PackagePage pkg="SEO - BASIC" packages={packages} setPackages={setPackages} />} />
                 <Route path="/seo-premium" element={<PackagePage pkg="SEO - PREMIUM" packages={packages} setPackages={setPackages} />} />
@@ -2195,18 +1779,6 @@ function App() {
                 <Route path="/link-buildings" element={<LinkBuildings packages={packages} setPackages={setPackages} />} />
                 <Route path="/templates" element={<Templates />} />
                 <Route path="/social-bookmarking" element={<Bookmarking packages={packages} setPackages={setPackages} />} />
-=======
-                <Route path="/company-tracker" element={<CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} />} />
-                <Route path="/seo-basic" element={<PackagePage pkg="SEO - BASIC" />} />
-                <Route path="/seo-premium" element={<PackagePage pkg="SEO - PREMIUM" />} />
-                <Route path="/seo-pro" element={<PackagePage pkg="SEO - PRO" />} />
-                <Route path="/seo-ultimate" element={<PackagePage pkg="SEO - ULTIMATE" />} />
-                <Route path="/report" element={<Report />} />
-                <Route path="/link-buildings" element={<LinkBuildings />} />
-                <Route path="/templates" element={<Templates />} />
-                <Route path="/template-trash" element={<TemplateTrash />} />
-                <Route path="/social-bookmarking" element={<SocialBookmarking />} />
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
                 <Route path="/trash" element={<TrashPage />} />
                 <Route path="/tickets" element={<Tickets />} />
               </Routes>
@@ -2216,11 +1788,7 @@ function App() {
               <div className="footer-content">
                 <span>&copy; 2025 OPPA JEWO</span>
                 <span className="footer-tagline">Kung ang bayot ma amnesia, bayot gihapon?</span>
-<<<<<<< HEAD
                 <a href="https://talhub-smakdat-team.netlify.app/" className="footer-link" target="_blank" rel="noopener noreferrer">TalHub Smak Dat</a>
-=======
-                <a href="#website" className="footer-link">Website</a>
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
               </div>
             </footer>
           </div>

@@ -1,21 +1,10 @@
 import React, { useState, useEffect } from 'react';
-<<<<<<< HEAD
 import { getTemplates, saveTemplate, deleteTemplate, getTrash, saveTrash } from './firestoreHelpers';
 
 const TRASH_KEY = 'company-trash';
 
 const TemplateManager = () => {
   const [templates, setTemplates] = useState([]);
-=======
-
-const TEMPLATE_TRASH_KEY = 'template-trash';
-
-const TemplateManager = () => {
-  const [templates, setTemplates] = useState(() => {
-    const savedTemplates = localStorage.getItem('templates');
-    return savedTemplates ? JSON.parse(savedTemplates) : [];
-  });
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [newTemplate, setNewTemplate] = useState({ title: '', content: '' });
@@ -23,7 +12,6 @@ const TemplateManager = () => {
   const [showCopyDialog, setShowCopyDialog] = useState(false);
 
   useEffect(() => {
-<<<<<<< HEAD
     getTemplates().then(setTemplates);
   }, []);
 
@@ -40,29 +28,6 @@ const TemplateManager = () => {
     const newT = { id: Date.now(), title: newTemplate.title, content: newTemplate.content };
     await saveTemplate(newT);
     setTemplates(await getTemplates());
-=======
-    localStorage.setItem('templates', JSON.stringify(templates));
-  }, [templates]);
-
-  // Trash logic
-  const addToTrash = (template) => {
-    const trash = JSON.parse(localStorage.getItem(TEMPLATE_TRASH_KEY) || '[]');
-    trash.push(template);
-    localStorage.setItem(TEMPLATE_TRASH_KEY, JSON.stringify(trash));
-  };
-
-  const handleAdd = (e) => {
-    e.preventDefault();
-    if (!newTemplate.title || !newTemplate.content) return;
-    setTemplates([
-      ...templates,
-      {
-        id: Date.now(),
-        title: newTemplate.title,
-        content: newTemplate.content
-      }
-    ]);
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
     setNewTemplate({ title: '', content: '' });
   };
 
@@ -72,26 +37,15 @@ const TemplateManager = () => {
     setSelectedTemplate(template.id);
   };
 
-<<<<<<< HEAD
   const handleUpdate = async (e) => {
     e.preventDefault();
     await saveTemplate({ id: selectedTemplate, title: newTemplate.title, content: newTemplate.content });
     setTemplates(await getTemplates());
-=======
-  const handleUpdate = (e) => {
-    e.preventDefault();
-    setTemplates(templates.map(template => 
-      template.id === selectedTemplate
-        ? { ...template, title: newTemplate.title, content: newTemplate.content }
-        : template
-    ));
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
     setIsEditing(false);
     setNewTemplate({ title: '', content: '' });
     setSelectedTemplate(null);
   };
 
-<<<<<<< HEAD
   const handleDelete = async (id) => {
     const template = templates.find(t => t.id === id);
     await deleteTemplate(id);
@@ -99,8 +53,6 @@ const TemplateManager = () => {
     setTemplates(await getTemplates());
   };
 
-=======
->>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   const handleCopy = (content) => {
     navigator.clipboard.writeText(content);
     setShowCopyDialog(true);
