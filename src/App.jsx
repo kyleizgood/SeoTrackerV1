@@ -20,11 +20,140 @@ import { db } from './firebase';
 
 function HomeHero() {
   const navigate = useNavigate();
+  // Motivational quotes for daily rotation
+  const quotes = [
+    "👾 Track your companies, manage reports, and conquer the SEO galaxy!\nAll your data is safe in the cloud.",
+    "🌟 Success is not for the lazy. Take action today!",
+    "🚀 Every day is a new chance to optimize and grow.",
+    "💡 Small steps every day lead to big results.",
+    "🪐 Dream big, work hard, and reach for the stars!",
+    "📈 Progress, not perfection. Keep moving forward!",
+    "✨ Your SEO journey is your superpower. Use it!",
+    "🌱 Growth is a journey, not a destination.",
+    "🔥 Passion fuels progress.",
+    "🧠 Learn something new every day.",
+    "🎯 Focus on what matters most.",
+    "⏳ Time you enjoy wasting is not wasted time.",
+    "🦾 Consistency beats intensity.",
+    "🌞 Start your day with a win.",
+    "🧩 Every problem has a solution.",
+    "🌈 Positivity is a choice.",
+    "🛠️ Build your dreams, one step at a time.",
+    "🦄 Be unique. Be you.",
+    "🧭 Let your values guide you.",
+    "🕹️ Level up your skills today!",
+    "📚 Knowledge is power.",
+    "🧘‍♂️ Balance brings clarity.",
+    "🎵 Find your rhythm and flow.",
+    "🧗‍♂️ Challenges make you stronger.",
+    "🌻 Bloom where you are planted.",
+    "🛸 Explore new possibilities.",
+    "🧲 Attract what you expect.",
+    "🦋 Embrace change and transformation.",
+    "🧑‍🚀 Reach beyond your limits.",
+    "🧩 Piece by piece, you build success.",
+    "🕰️ Make every moment count.",
+    "🧃 Stay fresh, stay creative.",
+    "🧑‍💻 Code your own destiny.",
+    "🧭 Stay true to your direction.",
+    "🧱 Lay strong foundations.",
+    "🧗‍♀️ Climb higher every day.",
+    "🧠 Sharpen your mind.",
+    "🧑‍🎨 Create your masterpiece.",
+    "🧑‍🔬 Experiment and learn.",
+    "🧑‍🏫 Teach what you know.",
+    "🧑‍🚒 Be brave in the face of fear.",
+    "🧑‍✈️ Navigate your journey.",
+    "🧑‍🌾 Plant seeds of success.",
+    "🧑‍🍳 Mix hard work with fun.",
+    "🧑‍🔧 Fix what you can, accept what you can't.",
+    "🧑‍🎤 Let your voice be heard.",
+    "🧑‍🎓 Never stop learning.",
+    "🧑‍🚀 The sky is not the limit.",
+    "🧑‍🚒 Rescue your dreams from doubt.",
+    "🧑‍⚖️ Judge less, understand more.",
+    "🧑‍🌾 Grow through what you go through.",
+    "🧑‍🍳 Cook up new ideas.",
+    "🧑‍🔬 Science your way to success.",
+    "🧑‍🎨 Paint your future bright.",
+    "🧑‍🚀 Explore the unknown.",
+    "🧑‍💻 Debug your worries.",
+    "🧑‍🏫 Share your wisdom.",
+    "🧑‍🎤 Sing your own song.",
+    "🧑‍🔧 Tinker until it works.",
+    "🧑‍🚒 Put out fires with calm.",
+    "🧑‍✈️ Fly above negativity.",
+    "🧑‍🌾 Harvest your efforts.",
+    "🧑‍🍳 Taste the fruits of labor.",
+    "🧑‍🔬 Discover your strengths.",
+    "🧑‍🎨 Draw outside the lines.",
+    "🧑‍🚀 Launch your ideas.",
+    "🧑‍💻 Hack your habits.",
+    "🧑‍🏫 Inspire others by example.",
+    "🧑‍🎤 Perform with passion.",
+    "🧑‍🔧 Build your legacy.",
+    "🧑‍🚒 Protect your peace.",
+    "🧑‍✈️ Chart your own course.",
+    "🧑‍🌾 Nurture your goals.",
+    "🧑‍🍳 Spice up your routine.",
+    "🧑‍🔬 Test your limits.",
+    "🧑‍🎨 Color your world.",
+    "🧑‍🚀 Take giant leaps.",
+    "🧑‍💻 Automate the boring stuff.",
+    "🧑‍🏫 Learn, unlearn, relearn.",
+    "🧑‍🎤 Rock your day.",
+    "🧑‍🔧 Repair with care.",
+    "🧑‍🚒 Stay cool under pressure.",
+    "🧑‍✈️ Soar with confidence.",
+    "🧑‍🌾 Reap what you sow.",
+    "🧑‍🍳 Savor your achievements.",
+    "🧑‍🔬 Analyze, adapt, advance.",
+    "🧑‍🎨 Imagine the impossible.",
+    "🧑‍🚀 Boldly go forward.",
+    "🧑‍💻 Type your own story.",
+    "🧑‍🏫 Mentor with kindness.",
+    "🧑‍🎤 Find your harmony.",
+    "🧑‍🔧 Fine-tune your craft.",
+    "🧑‍🚒 Be a hero in small ways.",
+    "🧑‍✈️ Glide through challenges.",
+    "🧑‍🌾 Water your dreams daily.",
+    "🧑‍🍳 Mix in gratitude.",
+    "🧑‍🔬 Observe, reflect, improve.",
+    "🧑‍🎨 Sketch your ambitions.",
+    "🧑‍🚀 Set your sights high.",
+    "🧑‍💻 Code with courage.",
+    "🧑‍🏫 Pass on positivity.",
+    "🧑‍🎤 Let your light shine.",
+    "🧑‍🔧 Keep your tools sharp.",
+    "🧑‍🚒 Stay ready for anything.",
+    "🧑‍✈️ Pilot your progress."
+  ];
+  // Pick quote based on day of year
+  const today = new Date();
+  const start = new Date(today.getFullYear(), 0, 0);
+  const diff = today - start;
+  const oneDay = 1000 * 60 * 60 * 24;
+  const dayOfYear = Math.floor(diff / oneDay);
+  const quote = quotes[dayOfYear % quotes.length];
   return (
-    <section className="hero">
-      <h1 className="fancy-title">Welcome to Your Personal Tracker</h1>
-      <p className="hero-desc">Customize this space for your daily routine, notes, or anything you want!</p>
-      <button className="hero-cta" onClick={() => navigate('/company-tracker')}>Go to Company Tracker</button>
+    <section className="hero" style={{ position: 'relative', overflow: 'hidden' }}>
+      {/* Animated Blobs for Fancy Background */}
+      <div className="bg-blob bg-blob1" />
+      <div className="bg-blob bg-blob2" />
+      <div className="bg-blob bg-blob3" />
+      {/* Alien/Space Theme */}
+      <h1 className="fancy-title" style={{ fontFamily: 'Orbitron, Inter, sans-serif', fontSize: '2.7rem', display: 'flex', alignItems: 'center', gap: '0.5em', zIndex: 2 }}>
+        <span role="img" aria-label="alien">👽</span> Welcome Earthling,
+      </h1>
+      <p className="hero-desc" style={{ fontSize: '1.25rem', color: '#1976d2', fontWeight: 600, marginBottom: 18, zIndex: 2 }}>
+        You have landed on your <span style={{ color: '#81c784' }}>Personal SEO Tracker</span>.
+      </p>
+      <p className="hero-desc" style={{ fontSize: '1.08rem', color: '#444', marginBottom: 18, zIndex: 2, whiteSpace: 'pre-line' }}>
+        {quote}
+      </p>
+      <button className="hero-cta" style={{ zIndex: 2 }} onClick={() => navigate('/company-tracker')}>
+        🚀 Go to Company Tracker
+      </button>
     </section>
   );
 }
