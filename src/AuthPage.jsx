@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { auth } from './firebase';
+<<<<<<< HEAD
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
+=======
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
 
 export default function AuthPage() {
   const [tab, setTab] = useState('login');
@@ -14,17 +18,23 @@ export default function AuthPage() {
   const [regPassword, setRegPassword] = useState('');
   const [regError, setRegError] = useState('');
   const [regSuccess, setRegSuccess] = useState('');
+<<<<<<< HEAD
   const [showReset, setShowReset] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetMessage, setResetMessage] = useState('');
   const navigate = useNavigate();
+=======
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
     try {
       await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+<<<<<<< HEAD
       navigate('/');
+=======
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
     } catch (err) {
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
         setLoginError('Incorrect email or password.');
@@ -48,6 +58,7 @@ export default function AuthPage() {
     }
   };
 
+<<<<<<< HEAD
   const handleResetPassword = async (e) => {
     e.preventDefault();
     setResetMessage('');
@@ -59,6 +70,8 @@ export default function AuthPage() {
     }
   };
 
+=======
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(120deg, #e0e7ef 0%, #f7f6f2 100%)' }}>
       <div style={{ background: '#fff', borderRadius: 18, boxShadow: '0 4px 32px #e0e7ef', padding: '2.5em 2.2em 2em 2.2em', minWidth: 340, maxWidth: 380, width: '100%' }}>
@@ -93,6 +106,7 @@ export default function AuthPage() {
           }}>Register</button>
         </div>
         {tab === 'login' ? (
+<<<<<<< HEAD
           <>
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Email" required style={{ padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em' }} />
@@ -109,6 +123,14 @@ export default function AuthPage() {
               </form>
             )}
           </>
+=======
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Email" required style={{ padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em' }} />
+            <input type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Password" required style={{ padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em' }} />
+            <button type="submit" style={{ background: 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: '1.1em', padding: '0.8em 0', marginTop: 6, cursor: 'pointer', boxShadow: '0 2px 8px #e0e7ef' }}>Login</button>
+            {loginError && <div style={{ color: '#c00', fontWeight: 600, marginTop: 4 }}>{loginError}</div>}
+          </form>
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
         ) : (
           <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="Email" required style={{ padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em' }} />

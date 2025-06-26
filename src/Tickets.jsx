@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import DatePicker from 'react-datepicker';
@@ -6,16 +7,32 @@ import { getTickets, saveTicket, deleteTicket } from './firestoreHelpers';
 
 const Tickets = () => {
   const [tickets, setTickets] = useState([]);
+=======
+import React, { useState } from 'react';
+import './App.css';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+
+const Tickets = () => {
+  const [tickets, setTickets] = useState(() => {
+    // Persist tickets in localStorage
+    const saved = localStorage.getItem('tickets-list');
+    return saved ? JSON.parse(saved) : [];
+  });
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ company: '', subject: '', ticketId: '', followUpDate: null });
   const [editId, setEditId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
   const [showAlert, setShowAlert] = useState(true);
+<<<<<<< HEAD
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     getTickets().then(setTickets);
   }, []);
+=======
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
 
   const handleChange = e => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -25,6 +42,7 @@ const Tickets = () => {
     setForm({ ...form, followUpDate: date });
   };
 
+<<<<<<< HEAD
   const handleAdd = async e => {
     e.preventDefault();
     if (!form.company.trim() || !form.subject.trim() || !form.ticketId.trim() || !form.followUpDate) return;
@@ -37,25 +55,50 @@ const Tickets = () => {
       const newTicket = { ...form, followUpDate: followUpDateISO, id: Date.now() };
       await saveTicket(newTicket);
       setTickets(await getTickets());
+=======
+  const handleAdd = e => {
+    e.preventDefault();
+    if (!form.company.trim() || !form.subject.trim() || !form.ticketId.trim() || !form.followUpDate) return;
+    if (editId) {
+      const updated = tickets.map(t => t.id === editId ? { ...form, id: editId } : t);
+      setTickets(updated);
+      localStorage.setItem('tickets-list', JSON.stringify(updated));
+      setEditId(null);
+    } else {
+      const newTickets = [...tickets, { ...form, id: Date.now() }];
+      setTickets(newTickets);
+      localStorage.setItem('tickets-list', JSON.stringify(newTickets));
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
     }
     setForm({ company: '', subject: '', ticketId: '', followUpDate: null });
     setShowForm(false);
   };
 
   const handleEdit = t => {
+<<<<<<< HEAD
     setForm({
       company: t.company,
       subject: t.subject,
       ticketId: t.ticketId,
       followUpDate: t.followUpDate ? new Date(t.followUpDate) : null
     });
+=======
+    setForm({ company: t.company, subject: t.subject, ticketId: t.ticketId, followUpDate: t.followUpDate ? new Date(t.followUpDate) : null });
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
     setEditId(t.id);
     setShowForm(true);
   };
 
+<<<<<<< HEAD
   const handleDelete = async id => {
     await deleteTicket(id);
     setTickets(await getTickets());
+=======
+  const handleDelete = id => {
+    const updated = tickets.filter(t => t.id !== id);
+    setTickets(updated);
+    localStorage.setItem('tickets-list', JSON.stringify(updated));
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   };
 
   const handleCancel = () => {
@@ -70,6 +113,7 @@ const Tickets = () => {
     setTimeout(() => setCopiedId(null), 1200);
   };
 
+<<<<<<< HEAD
   // Filtered tickets based on search
   const filteredTickets = tickets.filter(t => {
     const q = search.trim().toLowerCase();
@@ -80,6 +124,8 @@ const Tickets = () => {
     );
   });
 
+=======
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   // Find tickets that need follow up today
   const todayFollowUps = tickets.filter(t => isToday(t.followUpDate));
   // Find tickets that were due yesterday and not followed up
@@ -201,6 +247,7 @@ const Tickets = () => {
         <button className="hero-cta" style={{ marginBottom: 18 }} onClick={() => setShowForm(true)}>
           Add Tickets
         </button>
+<<<<<<< HEAD
         <div style={{ maxWidth: 400, margin: '0 auto 18px auto', display: 'flex', justifyContent: 'center' }}>
           <input
             type="text"
@@ -210,6 +257,8 @@ const Tickets = () => {
             style={{ width: '100%', padding: '0.6em 1em', borderRadius: 8, border: '1.5px solid #e0e7ef', fontSize: '1.05em', marginBottom: 0 }}
           />
         </div>
+=======
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
         {showForm && (
           <form className="company-form" onSubmit={handleAdd} style={{
             width: '100%',
@@ -254,7 +303,11 @@ const Tickets = () => {
               style={{ fontSize: '1.1rem' }}
             />
             <DatePicker
+<<<<<<< HEAD
               selected={form.followUpDate instanceof Date ? form.followUpDate : (form.followUpDate ? new Date(form.followUpDate) : null)}
+=======
+              selected={form.followUpDate}
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
               onChange={handleDateChange}
               dateFormat="yyyy-MM-dd"
               placeholderText="Follow Up Date"
@@ -280,10 +333,17 @@ const Tickets = () => {
               </tr>
             </thead>
             <tbody>
+<<<<<<< HEAD
               {filteredTickets.length === 0 && (
                 <tr><td colSpan={4} style={{ textAlign: 'center', color: '#aaa' }}>No tickets found.</td></tr>
               )}
               {filteredTickets.map(t => (
+=======
+              {tickets.length === 0 && (
+                <tr><td colSpan={4} style={{ textAlign: 'center', color: '#aaa' }}>No tickets yet.</td></tr>
+              )}
+              {tickets.map(t => (
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
                 <tr key={t.id}>
                   <td style={{ fontWeight: 700, fontSize: '1.08em', color: '#232323', fontFamily: 'Inter, Segoe UI, Arial, sans-serif', letterSpacing: '0.01em' }}>{t.company}</td>
                   <td style={{ color: '#4e5d6c', fontSize: '1.05em', fontWeight: 500, fontFamily: 'Nunito, Segoe UI, Arial, sans-serif', letterSpacing: '0.01em' }}>{t.subject}</td>
@@ -353,8 +413,13 @@ const Tickets = () => {
                   </td>
                   <td>
                     <div style={{ display: 'inline-flex', gap: 8, background: '#f7f7fa', borderRadius: 8, padding: '0.2em 0.5em', border: '1.5px solid #ececec' }}>
+<<<<<<< HEAD
                       <button className="edit-btn" style={{ marginRight: 0, background: '#1976d2', color: '#fff', fontWeight: 700, borderRadius: '5px', padding: '0.18em 0.6em', fontSize: '0.89em', border: 'none' }} onClick={() => handleEdit(t)}>Edit</button>
                       <button className="remove-btn" style={{ background: '#ffeaea', color: '#c00', fontWeight: 700, borderRadius: '5px', padding: '0.18em 0.6em', fontSize: '0.89em', border: 'none', marginLeft: 2 }} onClick={() => handleDelete(t.id)}>×</button>
+=======
+                      <button className="edit-btn" style={{ marginRight: 0 }} onClick={() => handleEdit(t)}>Edit</button>
+                      <button className="remove-btn" onClick={() => handleDelete(t.id)}>×</button>
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
                     </div>
                   </td>
                 </tr>

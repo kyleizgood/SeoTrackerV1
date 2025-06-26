@@ -13,6 +13,10 @@ const navLinks = [
   { icon: '🔖', text: 'Bookmarking', href: '/social-bookmarking', aria: 'Bookmarking' },
   { icon: '📄', text: 'Templates', href: '/templates', aria: 'Templates' },
   { icon: '🎫', text: 'Tickets', href: '/tickets', aria: 'Tickets' },
+<<<<<<< HEAD
+=======
+  { icon: '🗑️', text: 'Template Trash', href: '/template-trash', aria: 'Template Trash' },
+>>>>>>> f6da3cd75bab56c6c636b57e5b112d12ff0c6dbd
   { icon: '🗑️', text: 'Trash', href: '/trash', aria: 'Trash' },
 ];
 
