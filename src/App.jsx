@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import './App.css'
 import Sidebar from './Sidebar';
 import TemplateManager from './TemplateManager';
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import DApaChecker from './DApaChecker';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -17,6 +17,8 @@ import { getCompanies, saveCompany, deleteCompany } from './firestoreHelpers';
 import { getPackages, savePackages, getTrash, saveTrash, getTemplates, saveTemplate, deleteTemplate, getTickets, saveTicket, deleteTicket } from './firestoreHelpers';
 import { onSnapshot, collection } from 'firebase/firestore';
 import { db } from './firebase';
+import GitsPage from './GitsPage';
+import SiteAuditsPage from './SiteAuditsPage';
 
 function HomeHero() {
   const navigate = useNavigate();
@@ -143,8 +145,11 @@ function HomeHero() {
       <div className="bg-blob bg-blob3" />
       {/* Alien/Space Theme */}
       <h1 className="fancy-title" style={{ fontFamily: 'Orbitron, Inter, sans-serif', fontSize: '2.7rem', display: 'flex', alignItems: 'center', gap: '0.5em', zIndex: 2 }}>
-        <span role="img" aria-label="alien">👽</span> Welcome Earthling,
+        <span role="img" aria-label="alien">👽</span> Welcome Kupal
       </h1>
+      <p style={{ fontSize: '0.92rem', color: '#888', fontWeight: 400, marginTop: -10, marginBottom: 10, fontStyle: 'italic', letterSpacing: '0.01em' }}>
+        Mangutana asa ka padung? Sakay naka jeep? Gikan paka school?
+      </p>
       <p className="hero-desc" style={{ fontSize: '1.25rem', color: '#1976d2', fontWeight: 600, marginBottom: 18, zIndex: 2 }}>
         You have landed on your <span style={{ color: '#81c784' }}>Personal SEO Tracker</span>.
       </p>
@@ -191,7 +196,21 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
 
   // Load companies from Firestore on mount
   useEffect(() => {
-    getCompanies().then(setCompanies);
+    getCompanies().then(async (all) => {
+      // One-time cleanup: delete companies with blank names
+      const blanks = all.filter(c => !c.name || c.name.trim() === '');
+      for (const c of blanks) {
+        await deleteCompany(c.id);
+      }
+      // One-time migration: add missing audit status fields
+      const needsMigration = all.filter(c => !('siteAuditBStatus' in c) || !('siteAuditCStatus' in c));
+      for (const c of needsMigration) {
+        await saveCompany({ ...c, siteAuditBStatus: c.siteAuditBStatus || 'Pending', siteAuditCStatus: c.siteAuditCStatus || 'Pending' });
+      }
+      // Now reload with all fields present
+      const updated = await getCompanies();
+      setCompanies(updated.filter(c => c.name && c.name.trim() !== ''));
+    });
   }, []);
 
   // If editData is provided (from package page), load it into the form
@@ -216,7 +235,14 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
   }, [editData]);
 
   useEffect(() => {
-    getCompanies().then(setCompanies);
+    getCompanies().then(async (all) => {
+      // One-time cleanup: delete companies with blank names
+      const blanks = all.filter(c => !c.name || c.name.trim() === '');
+      for (const c of blanks) {
+        await deleteCompany(c.id);
+      }
+      setCompanies(all.filter(c => c.name && c.name.trim() !== ''));
+    });
   }, []);
 
   const handleChange = e => {
@@ -247,7 +273,7 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
       setCompanies(await getCompanies());
       setEditId(null);
     } else {
-      const newCompany = { ...form, start, id: Date.now() };
+      const newCompany = { ...form, start, id: Date.now(), siteAuditBStatus: 'Pending', siteAuditCStatus: 'Pending' };
       await saveCompany(newCompany);
       setCompanies(await getCompanies());
     }
@@ -255,6 +281,10 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
   };
 
   const handleDelete = async id => {
+    // Optimistically update UI
+    setCompanies(prev => prev.filter(c => c.id !== id));
+    // Optimistically update alerts
+    if (window.fetchAlerts) fetchAlerts();
     await deleteCompany(id);
     setCompanies(await getCompanies());
     if (editId === id) {
@@ -293,35 +323,33 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
   };
 
   // Add to package pages
-  const handleAddToPackage = (company, pkg) => {
+  const handleAddToPackage = async (company, pkg) => {
     // Remove from CompanyTracker (Firestore and local state)
-    deleteCompany(company.id).then(() => {
-      setCompanies(prev => prev.filter(c => c.id !== company.id));
-      // Add to package
-      const updatedPackages = { ...packages };
-      if (!updatedPackages[pkg]) updatedPackages[pkg] = [];
-      if (!updatedPackages[pkg].some(c => c.id === company.id)) {
-        updatedPackages[pkg].push({
-          ...company,
-          package: pkg,
-          tasks: {
-            forVSO: 'Pending',
-            forRevision: 'Pending',
-            ra: 'Pending',
-            distribution: 'Pending',
-            businessProfileClaiming: 'Ticket',
-          },
-          reportI: 'Pending',
-          reportII: 'Pending',
-          bmCreation: 'Pending',
-          bmSubmission: 'Pending',
-        });
-        savePackages(updatedPackages).then(() => {
-          setPackages(updatedPackages);
-        });
-      }
-      setShowAddToPackage(null);
-    });
+    await deleteCompany(company.id);
+    setCompanies(prev => prev.filter(c => c.id !== company.id));
+    // Add to package
+    const updatedPackages = { ...packages };
+    if (!updatedPackages[pkg]) updatedPackages[pkg] = [];
+    if (!updatedPackages[pkg].some(c => c.id === company.id)) {
+      updatedPackages[pkg].push({
+        ...company,
+        package: pkg,
+        tasks: {
+          forVSO: 'Pending',
+          forRevision: 'Pending',
+          ra: 'Pending',
+          distribution: 'Pending',
+          businessProfileClaiming: 'Ticket',
+        },
+        reportI: 'Pending',
+        reportII: 'Pending',
+        bmCreation: 'Pending',
+        bmSubmission: 'Pending',
+      });
+      setPackages(updatedPackages);
+      await savePackages(updatedPackages);
+    }
+    setShowAddToPackage(null);
   };
 
   return (
@@ -365,10 +393,10 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
             </tr>
           </thead>
           <tbody>
-            {companies.length === 0 && (
+            {companies.filter(c => c.name && c.name.trim() !== '').length === 0 && (
               <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies yet.</td></tr>
             )}
-            {companies.map(c => (
+            {companies.filter(c => c.name && c.name.trim() !== '').map(c => (
               <tr key={c.id} style={{ position: 'relative' }}>
                 <td className="company-name">{c.name}</td>
                 <td>{c.start}</td>
@@ -513,21 +541,21 @@ function PackagePage({ pkg, packages, setPackages }) {
   }, [pkg]);
 
   // Handle dropdown change
-  const handleTaskChange = (companyId, taskKey, value) => {
-    getPackages().then(packages => {
-      let pkgCompanies = (packages[pkg] || []).map(c => {
-        if (c.id === companyId) {
-          return {
-            ...c,
-            tasks: { ...c.tasks, [taskKey]: value },
-          };
-        }
-        return c;
-      });
-      packages[pkg] = pkgCompanies;
-      savePackages(packages);
-      setCompanies(pkgCompanies);
+  const handleTaskChange = async (companyId, taskKey, value) => {
+    const updatedPackages = { ...packages };
+    let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
+      if (c.id === companyId) {
+        return {
+          ...c,
+          tasks: { ...c.tasks, [taskKey]: value },
+        };
+      }
+      return c;
     });
+    updatedPackages[pkg] = pkgCompanies;
+    setPackages(updatedPackages); // Optimistically update UI
+    await savePackages(updatedPackages); // Persist to Firestore
+    setCompanies(pkgCompanies);
   };
 
   const handleEdit = (company) => {
@@ -537,24 +565,24 @@ function PackagePage({ pkg, packages, setPackages }) {
     setEditEOC(parseDisplayDateToInput(company.eoc || getEOC(company.start)));
   };
 
-  const handleEditSave = (company) => {
-    getPackages().then(packages => {
-      const updatedCompanies = (packages[pkg] || []).map(c =>
-        c.id === company.id ? {
-          ...c,
-          name: editName,
-          start: formatDateToDisplay(editStart),
-          eoc: formatDateToDisplay(editEOC),
-        } : c
-      );
-      packages[pkg] = updatedCompanies;
-      savePackages(packages);
-      setCompanies(updatedCompanies);
-      setEditId(null);
-      setEditName('');
-      setEditStart(null);
-      setEditEOC(null);
-    });
+  const handleEditSave = async (company) => {
+    const updatedPackages = { ...packages };
+    const updatedCompanies = (updatedPackages[pkg] || []).map(c =>
+      c.id === company.id ? {
+        ...c,
+        name: editName,
+        start: formatDateToDisplay(editStart),
+        eoc: formatDateToDisplay(editEOC),
+      } : c
+    );
+    updatedPackages[pkg] = updatedCompanies;
+    setPackages(updatedPackages);
+    await savePackages(updatedPackages);
+    setCompanies(updatedCompanies);
+    setEditId(null);
+    setEditName('');
+    setEditStart(null);
+    setEditEOC(null);
   };
 
   const handleEditCancel = () => {
@@ -567,23 +595,22 @@ function PackagePage({ pkg, packages, setPackages }) {
   const handleRemove = (company) => {
     setConfirmRemoveId(company.id);
   };
-  const handleRemoveConfirm = () => {
+  const handleRemoveConfirm = async () => {
     // Use confirmRemoveId to find the company to remove
-    getPackages().then(packages => {
-      const companyToRemove = (packages[pkg] || []).find(c => c.id === confirmRemoveId);
-      const updatedCompanies = (packages[pkg] || []).filter(c => c.id !== confirmRemoveId);
-      packages[pkg] = updatedCompanies;
-      savePackages(packages);
-      setCompanies(updatedCompanies);
-      // Add to trash
-      if (companyToRemove) {
-        getTrash().then(trash => {
-          trash.push({ ...companyToRemove, originalPackage: pkg });
-          saveTrash(trash);
-        });
-      }
-      setConfirmRemoveId(null);
-    });
+    const updatedPackages = { ...packages };
+    const companyToRemove = (updatedPackages[pkg] || []).find(c => c.id === confirmRemoveId);
+    const updatedCompanies = (updatedPackages[pkg] || []).filter(c => c.id !== confirmRemoveId);
+    updatedPackages[pkg] = updatedCompanies;
+    setPackages(updatedPackages);
+    await savePackages(updatedPackages);
+    setCompanies(updatedCompanies);
+    // Add to trash
+    if (companyToRemove) {
+      const trash = await getTrash();
+      trash.push({ ...companyToRemove, originalPackage: pkg });
+      await saveTrash(trash);
+    }
+    setConfirmRemoveId(null);
   };
   const handleRemoveCancel = () => {
     setConfirmRemoveId(null);
@@ -844,15 +871,14 @@ function Report({ packages, setPackages }) {
 
   const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
 
-  // Helper to update report status in localStorage
-  const handleReportStatusChange = (pkg, companyId, reportKey, value) => {
-    getPackages().then(packages => {
-      packages[pkg] = (packages[pkg] || []).map(c =>
-        c.id === companyId ? { ...c, [reportKey]: value } : c
-      );
-      savePackages(packages);
-      setPackages(packages);
-    });
+  // Helper to update report status in shared state
+  const handleReportStatusChange = async (pkg, companyId, reportKey, value) => {
+    const updatedPackages = { ...packages };
+    updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
+      c.id === companyId ? { ...c, [reportKey]: value } : c
+    );
+    setPackages(updatedPackages); // Optimistically update UI
+    await savePackages(updatedPackages); // Persist to Firestore
   };
 
   // Helper for dropdown color
@@ -882,22 +908,13 @@ function Report({ packages, setPackages }) {
   const handleRemoveFromReport = (pkg, companyId, companyName) => {
     setConfirmRemove({ pkg, companyId, companyName });
   };
-  const handleRemoveConfirm = () => {
+  const handleRemoveConfirm = async () => {
     const { pkg, companyId } = confirmRemove;
-    const saved = localStorage.getItem(PACKAGE_KEY);
-    const packages = saved ? JSON.parse(saved) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-    // Find the company to remove
-    const companyToRemove = (packages[pkg] || []).find(c => c.id === companyId);
-    // Remove from package
-    packages[pkg] = (packages[pkg] || []).filter(c => c.id !== companyId);
-    localStorage.setItem(PACKAGE_KEY, JSON.stringify(packages));
-    setPackages(packages);
-    // Add to trash if found
-    if (companyToRemove) {
-      const trash = JSON.parse(localStorage.getItem(TRASH_KEY) || '[]');
-      trash.push({ ...companyToRemove, originalPackage: pkg });
-      localStorage.setItem(TRASH_KEY, JSON.stringify(trash));
-    }
+    const updatedPackages = { ...packages };
+    updatedPackages[pkg] = (updatedPackages[pkg] || []).filter(c => c.id !== companyId);
+    setPackages(updatedPackages);
+    if (window.fetchAlerts) fetchAlerts();
+    await savePackages(updatedPackages);
     setConfirmRemove({ pkg: null, companyId: null, companyName: '' });
   };
   const handleRemoveCancel = () => setConfirmRemove({ pkg: null, companyId: null, companyName: '' });
@@ -1156,12 +1173,13 @@ function Bookmarking({ packages, setPackages }) {
   const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
 
   // Helper to update BM status in shared state
-  const handleBMStatusChange = (pkg, companyId, bmKey, value) => {
+  const handleBMStatusChange = async (pkg, companyId, bmKey, value) => {
     const updatedPackages = { ...packages };
     updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
       c.id === companyId ? { ...c, [bmKey]: value } : c
     );
-    setPackages(updatedPackages);
+    setPackages(updatedPackages); // Optimistically update UI
+    await savePackages(updatedPackages); // Persist to Firestore
   };
 
   // Handlers for per-package filters
@@ -1173,11 +1191,13 @@ function Bookmarking({ packages, setPackages }) {
     setConfirmRemove({ pkg, companyId, companyName });
   };
 
-  const handleRemoveConfirm = () => {
+  const handleRemoveConfirm = async () => {
     const { pkg, companyId } = confirmRemove;
     const updatedPackages = { ...packages };
     updatedPackages[pkg] = (updatedPackages[pkg] || []).filter(c => c.id !== companyId);
     setPackages(updatedPackages);
+    if (window.fetchAlerts) fetchAlerts();
+    savePackages(updatedPackages);
     setConfirmRemove({ pkg: null, companyId: null, companyName: '' });
     setShowDeleteToast(true);
     setTimeout(() => setShowDeleteToast(false), 1800);
@@ -1218,26 +1238,50 @@ function Bookmarking({ packages, setPackages }) {
           });
         // Count companies with BM Creation not completed (excluding OnHold)
         const pendingBMCreationCount = (packages[pkg] || []).filter(c => c.status !== 'OnHold' && c.bmCreation !== 'Completed').length;
+        // Count companies with BM Submission not completed (excluding OnHold)
+        const pendingBMSubmissionCount = (packages[pkg] || []).filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length;
         return (
           <div key={pkg} style={{ marginBottom: 32, width: '100%' }}>
+            {/* BM Creation Alert Banner */}
             {pendingBMCreationCount > 0 && (
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                background: '#fffbe6',
-                color: '#b26a00',
+                background: '#ffeaea',
+                color: '#c00',
                 borderRadius: 999,
                 padding: '0.5em 1.5em',
                 fontWeight: 700,
                 fontSize: '1.08em',
-                border: '1.5px solid #ffe082',
-                boxShadow: '0 1px 4px #fffbe6',
+                border: '1.5px solid #ffd6d6',
+                boxShadow: '0 1px 4px #ffeaea',
+                marginBottom: 18,
+                marginLeft: 12,
+                letterSpacing: '0.03em',
+              }}>
+                <span style={{fontSize:'1.2em',marginRight:8}}>📝</span>
+                {pendingBMCreationCount} compan{pendingBMCreationCount === 1 ? 'y' : 'ies'} under the {pkg.replace('SEO - ', '').toUpperCase()} SEO package are still pending for BM Creation this month.
+              </div>
+            )}
+            {/* BM Submission Action Banner (distinct from notification bell) */}
+            {pendingBMSubmissionCount > 0 && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                background: 'linear-gradient(90deg, #fffbe6 60%, #ffe0b2 100%)',
+                color: '#b26a00',
+                borderRadius: 12,
+                border: '2.5px solid #ff9800',
+                padding: '1em 2em',
+                fontWeight: 700,
+                fontSize: '1.13em',
+                boxShadow: '0 2px 8px #ffe082',
                 marginBottom: 18,
                 marginLeft: 2,
                 letterSpacing: '0.03em',
               }}>
-                <span style={{fontSize:'1.2em',marginRight:8}}>⚠️</span>
-                {pendingBMCreationCount} compan{pendingBMCreationCount === 1 ? 'y' : 'ies'} under the {pkg.replace('SEO - ', '').toUpperCase()} SEO package are still pending for BM Submission this month.
+                <span style={{fontSize:'1.4em',marginRight:12}}>🚩</span>
+                Action Needed: You have <b>{pendingBMSubmissionCount}</b> compan{pendingBMSubmissionCount === 1 ? 'y' : 'ies'} in this package that still need BM Submission.
               </div>
             )}
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 0}}>
@@ -1278,6 +1322,7 @@ function Bookmarking({ packages, setPackages }) {
                           onChange={e => handleFilterSubmission(pkg, e.target.value)}
                           style={getDropdownStyle(filterSubmission[pkg] || 'Pending')}
                         >
+                          <option value="">All</option>
                           <option value="Pending">Pending</option>
                           <option value="Completed">Completed</option>
                         </select>
@@ -1303,6 +1348,7 @@ function Bookmarking({ packages, setPackages }) {
                           onChange={e => handleFilterCreation(pkg, e.target.value)}
                           style={getDropdownStyle(filterCreation[pkg] || 'Pending')}
                         >
+                          <option value="">All</option>
                           <option value="Pending">Pending</option>
                           <option value="Completed">Completed</option>
                         </select>
@@ -1440,6 +1486,15 @@ function TrashPage() {
     if (item.type === 'template') {
       // Restore to templates in Firestore
       await saveTemplate({ id: item.id, title: item.title, content: item.content });
+    } else if (item.type === 'ticket') {
+      // Restore to tickets in Firestore
+      await saveTicket({
+        id: item.id,
+        company: item.company,
+        subject: item.subject,
+        ticketId: item.ticketId,
+        followUpDate: item.followUpDate
+      });
     } else {
       // Restore to original package in Firestore
       getPackages().then(packages => {
@@ -1511,12 +1566,21 @@ function TrashPage() {
             {filteredTrash.map(item => (
               <tr key={item.id}>
                 <td style={{ fontWeight: 700, fontSize: '1.13rem', color: '#232323', background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #4e342e', letterSpacing: '0.02em' }}>
-                  {item.type === 'template' ? item.title : item.name}
+                  {item.type === 'template' && item.title}
+                  {item.type === 'ticket' && (
+                    <>
+                      <div><b>Company:</b> {item.company}</div>
+                      <div><b>Subject:</b> {item.subject}</div>
+                      <div><b>Ticket ID:</b> {item.ticketId}</div>
+                      <div><b>Follow Up:</b> {item.followUpDate ? new Date(item.followUpDate).toLocaleDateString() : ''}</div>
+                    </>
+                  )}
+                  {(!item.type || item.type === 'company') && item.name}
                   {item.type === 'template' && (
                     <div style={{ fontWeight: 400, fontSize: '0.98em', color: '#888', marginTop: 4, whiteSpace: 'pre-wrap' }}>{item.content}</div>
                   )}
                 </td>
-                <td style={{ background: '#fff8f8' }}>{item.type === 'template' ? 'Template' : 'Company'}</td>
+                <td style={{ background: '#fff8f8' }}>{item.type === 'template' ? 'Template' : item.type === 'ticket' ? 'Ticket' : 'Company'}</td>
                 <td>
                   <button className="trash-action-btn restore" onClick={() => handleRestore(item)}>Restore</button>
                   <button className="trash-action-btn delete" onClick={() => handleDeleteForever(item)}>Delete Forever</button>
@@ -1542,6 +1606,18 @@ function TrashPage() {
   );
 }
 
+let fetchAlertsRef = { current: null };
+
+// This function will be set inside App to always have the latest packages and setAlerts
+export function setFetchAlertsImpl(fn) {
+  fetchAlertsRef.current = fn;
+}
+
+export async function fetchAlerts() {
+  if (!fetchAlertsRef.current) return;
+  await fetchAlertsRef.current();
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -1557,6 +1633,179 @@ function App() {
   const [ticketsChanged, setTicketsChanged] = useState(0);
   const bellRef = useRef();
   const dropdownRef = useRef();
+  // Keep a ref to always have the latest packages and setAlerts
+  const packagesRef = useRef(packages);
+  const setAlertsRef = useRef(setAlerts);
+  useEffect(() => { packagesRef.current = packages; }, [packages]);
+  useEffect(() => { setAlertsRef.current = setAlerts; }, [setAlerts]);
+  useEffect(() => {
+    setFetchAlertsImpl(async () => {
+      let allAlerts = [];
+      // Tickets alerts
+      const tickets = await getTickets();
+      const today = new Date();
+      const isToday = d => {
+        if (!d) return false;
+        const date = new Date(d);
+        return date.toDateString() === today.toDateString();
+      };
+      const isYesterday = d => {
+        if (!d) return false;
+        const date = new Date(d);
+        const yest = new Date(today);
+        yest.setDate(today.getDate() - 1);
+        return date.toDateString() === yest.toDateString();
+      };
+      const isOverdue = d => {
+        if (!d) return false;
+        const date = new Date(d);
+        return date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      };
+      const todayFollowUps = tickets.filter(t => isToday(t.followUpDate));
+      const yesterdayFollowUps = tickets.filter(t => isYesterday(t.followUpDate));
+      const overdueFollowUps = tickets.filter(t => isOverdue(t.followUpDate));
+      if (yesterdayFollowUps.length > 0) {
+        allAlerts.push({
+          id: 'tickets-yesterday',
+          type: 'tickets',
+          message: `Missed follow up: ${yesterdayFollowUps.length} ticket${yesterdayFollowUps.length > 1 ? 's' : ''} (yesterday)` ,
+          link: '/tickets',
+          color: '#ff9800',
+          icon: '⏰',
+        });
+      }
+      if (todayFollowUps.length > 0) {
+        allAlerts.push({
+          id: 'tickets-today',
+          type: 'tickets',
+          message: `Follow up today: ${todayFollowUps.length} ticket${todayFollowUps.length > 1 ? 's' : ''}` ,
+          link: '/tickets',
+          color: '#d32f2f',
+          icon: '⏰',
+        });
+      }
+      if (overdueFollowUps.length > 0) {
+        allAlerts.push({
+          id: 'tickets-overdue',
+          type: 'tickets',
+          message: `Overdue: ${overdueFollowUps.length} ticket${overdueFollowUps.length > 1 ? 's' : ''}` ,
+          link: '/tickets',
+          color: '#b26a00',
+          icon: '⚠️',
+        });
+      }
+      // Summarize Report, Bookmarking, Link Building alerts by type
+      const summary = {
+        report: {},
+        bm: {},
+        linkbuilding: {},
+      };
+      Object.entries(packagesRef.current).forEach(([pkg, companies]) => {
+        // Report
+        const pendingReport = (companies || []).filter(c => c.status !== 'OnHold' && c.reportI !== 'Completed').length;
+        if (pendingReport > 0) summary.report[pkg] = pendingReport;
+        // Bookmarking
+        const pendingBM = (companies || []).filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length;
+        if (pendingBM > 0) summary.bm[pkg] = pendingBM;
+        // Link Building
+        const pendingLB = (companies || []).filter(c => c.status !== 'OnHold' && c.linkBuildingStatus !== 'Completed').length;
+        if (pendingLB > 0) summary.linkbuilding[pkg] = pendingLB;
+      });
+      // Add summarized alerts
+      if (Object.keys(summary.report).length > 0) {
+        const total = Object.values(summary.report).reduce((a, b) => a + b, 0);
+        allAlerts.push({
+          id: 'report-summary',
+          type: 'report',
+          message: `Report I: ${total} pending (${Object.entries(summary.report).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
+          link: '/report',
+          color: '#1976d2',
+          icon: '📊',
+        });
+      }
+      if (Object.keys(summary.bm).length > 0) {
+        const total = Object.values(summary.bm).reduce((a, b) => a + b, 0);
+        allAlerts.push({
+          id: 'bm-summary',
+          type: 'bm',
+          message: `BM Submission: ${total} pending (${Object.entries(summary.bm).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
+          link: '/social-bookmarking',
+          color: '#388e3c',
+          icon: '🔖',
+        });
+      }
+      // --- BM Creation Alert ---
+      // Count all companies needing BM Creation (not Completed, not OnHold)
+      const bmCreationCount = Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmCreation !== 'Completed').length;
+      if (bmCreationCount > 0) {
+        allAlerts.push({
+          id: 'bm-creation',
+          type: 'bmcreation',
+          message: `BM Creation: <b>${bmCreationCount}</b> compan${bmCreationCount === 1 ? 'y' : 'ies'} need creation`,
+          link: '/social-bookmarking',
+          color: '#c00',
+          icon: '📝',
+        });
+      }
+      // --- BM Submission Alert ---
+      // Count all companies needing BM Submission (not Completed, not OnHold)
+      const bmSubmissionCount = Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length;
+      if (bmSubmissionCount > 0) {
+        allAlerts.push({
+          id: 'bm-submission',
+          type: 'bmsubmission',
+          message: `BM Submission: <b>${bmSubmissionCount}</b> compan${bmSubmissionCount === 1 ? 'y' : 'ies'} need submission`,
+          link: '/social-bookmarking',
+          color: '#b26a00',
+          icon: '🔖',
+        });
+      }
+      // --- Link Building Alert ---
+      if (Object.keys(summary.linkbuilding).length > 0) {
+        const total = Object.values(summary.linkbuilding).reduce((a, b) => a + b, 0);
+        allAlerts.push({
+          id: 'linkbuilding-summary',
+          type: 'linkbuilding',
+          message: `Link Building: ${total} pending (${Object.entries(summary.linkbuilding).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
+          link: '/link-buildings',
+          color: '#b26a00',
+          icon: '🔗',
+        });
+      }
+      // --- Site Audit Alerts ---
+      const siteAuditB = [];
+      const siteAuditC = [];
+      Object.values(packagesRef.current).flat().forEach(c => {
+        if (!c.start) return;
+        const startDate = new Date(c.start);
+        if (isNaN(startDate)) return;
+        const daysSinceStart = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+        if (daysSinceStart >= 183 && c.siteAuditBStatus !== 'Completed') siteAuditB.push(c);
+        if (daysSinceStart >= 334 && c.siteAuditCStatus !== 'Completed') siteAuditC.push(c);
+      });
+      if (siteAuditB.length > 0) {
+        allAlerts.push({
+          id: 'siteaudit-b',
+          type: 'siteaudit',
+          message: `Site Audit B: ${siteAuditB.length} compan${siteAuditB.length === 1 ? 'y' : 'ies'} need audit`,
+          link: '/site-audits',
+          color: '#b26a00',
+          icon: '⚠️',
+        });
+      }
+      if (siteAuditC.length > 0) {
+        allAlerts.push({
+          id: 'siteaudit-c',
+          type: 'siteaudit',
+          message: `Site Audit C: ${siteAuditC.length} compan${siteAuditC.length === 1 ? 'y' : 'ies'} need audit`,
+          link: '/site-audits',
+          color: '#1976d2',
+          icon: '🔔',
+        });
+      }
+      setAlertsRef.current(allAlerts);
+    });
+  }, [packages, setAlerts]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, setUser);
@@ -1592,120 +1841,20 @@ function App() {
     return () => unsubscribe();
   }, [user]);
 
-  // Real-time listener for tickets
+  // Fetch alerts whenever packages change (for non-ticket alerts)
   useEffect(() => {
-    if (!user) return;
-    const ticketsCol = collection(db, 'users', user.uid, 'tickets');
-    async function fetchAlerts() {
-      let allAlerts = [];
-      // Tickets alerts
-      const tickets = await getTickets();
-      const today = new Date();
-      const isToday = d => {
-        if (!d) return false;
-        const date = new Date(d);
-        return date.toDateString() === today.toDateString();
-      };
-      const isYesterday = d => {
-        if (!d) return false;
-        const date = new Date(d);
-        const yest = new Date(today);
-        yest.setDate(today.getDate() - 1);
-        return date.toDateString() === yest.toDateString();
-      };
-      const isOverdue = d => {
-        if (!d) return false;
-        const date = new Date(d);
-        return date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      };
-      const todayFollowUps = tickets.filter(t => isToday(t.followUpDate));
-      const yesterdayFollowUps = tickets.filter(t => isYesterday(t.followUpDate));
-      const overdueFollowUps = tickets.filter(t => isOverdue(t.followUpDate));
-      if (yesterdayFollowUps.length > 0) {
-        allAlerts.push({
-          id: 'tickets-yesterday',
-          type: 'tickets',
-          message: `Missed follow up: ${yesterdayFollowUps.length} ticket${yesterdayFollowUps.length > 1 ? 's' : ''} (yesterday)`,
-          link: '/tickets',
-          color: '#ff9800',
-          icon: '⏰',
-        });
-      }
-      if (todayFollowUps.length > 0) {
-        allAlerts.push({
-          id: 'tickets-today',
-          type: 'tickets',
-          message: `Follow up today: ${todayFollowUps.length} ticket${todayFollowUps.length > 1 ? 's' : ''}`,
-          link: '/tickets',
-          color: '#d32f2f',
-          icon: '⏰',
-        });
-      }
-      if (overdueFollowUps.length > 0) {
-        allAlerts.push({
-          id: 'tickets-overdue',
-          type: 'tickets',
-          message: `Overdue: ${overdueFollowUps.length} ticket${overdueFollowUps.length > 1 ? 's' : ''}`,
-          link: '/tickets',
-          color: '#b26a00',
-          icon: '⚠️',
-        });
-      }
-      // Summarize Report, Bookmarking, Link Building alerts by type
-      const summary = {
-        report: {},
-        bm: {},
-        linkbuilding: {},
-      };
-      Object.entries(packages).forEach(([pkg, companies]) => {
-        // Report
-        const pendingReport = (companies || []).filter(c => c.status !== 'OnHold' && c.reportI !== 'Completed').length;
-        if (pendingReport > 0) summary.report[pkg] = pendingReport;
-        // Bookmarking
-        const pendingBM = (companies || []).filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length;
-        if (pendingBM > 0) summary.bm[pkg] = pendingBM;
-        // Link Building
-        const pendingLB = (companies || []).filter(c => c.status !== 'OnHold' && c.linkBuildingStatus !== 'Completed').length;
-        if (pendingLB > 0) summary.linkbuilding[pkg] = pendingLB;
-      });
-      // Add summarized alerts
-      if (Object.keys(summary.report).length > 0) {
-        const total = Object.values(summary.report).reduce((a, b) => a + b, 0);
-        allAlerts.push({
-          id: 'report-summary',
-          type: 'report',
-          message: `Report I: ${total} pending (${Object.entries(summary.report).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
-          link: '/report',
-          color: '#1976d2',
-          icon: '📊',
-        });
-      }
-      if (Object.keys(summary.bm).length > 0) {
-        const total = Object.values(summary.bm).reduce((a, b) => a + b, 0);
-        allAlerts.push({
-          id: 'bm-summary',
-          type: 'bm',
-          message: `BM Submission: ${total} pending (${Object.entries(summary.bm).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
-          link: '/social-bookmarking',
-          color: '#388e3c',
-          icon: '🔖',
-        });
-      }
-      if (Object.keys(summary.linkbuilding).length > 0) {
-        const total = Object.values(summary.linkbuilding).reduce((a, b) => a + b, 0);
-        allAlerts.push({
-          id: 'linkbuilding-summary',
-          type: 'linkbuilding',
-          message: `Link Building: ${total} pending (${Object.entries(summary.linkbuilding).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
-          link: '/link-buildings',
-          color: '#ffb300',
-          icon: '🔗',
-        });
-      }
-      setAlerts(allAlerts);
-    }
     fetchAlerts();
   }, [packages]);
+
+  // Real-time listener for tickets (alerts)
+  useEffect(() => {
+    if (!user) return;
+    const ticketsColRef = collection(db, 'users', user.uid, 'tickets');
+    const unsubscribe = onSnapshot(ticketsColRef, () => {
+      fetchAlerts();
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   let sidebarClass = 'sidebar';
   if (windowWidth <= 700) {
@@ -1858,7 +2007,7 @@ function App() {
                 onKeyDown={e => { if (e.key === 'Enter') { setShowAlerts(false); navigate(alert.link); } }}
               >
                 <span style={{fontSize:'1.3em',marginRight:4}}>{alert.icon}</span>
-                <span>{alert.message}</span>
+                <span dangerouslySetInnerHTML={{__html: alert.message}} />
               </div>
             ))}
           </div>
@@ -1891,6 +2040,7 @@ function App() {
                 <nav>
                   <a href="#projects">Projects</a>
                   <a href="#info">Info</a>
+                  <Link to="/gits">Gits</Link>
                 </nav>
               </div>
             </header>
@@ -1910,6 +2060,8 @@ function App() {
                 <Route path="/social-bookmarking" element={<Bookmarking packages={packages} setPackages={setPackages} />} />
                 <Route path="/trash" element={<TrashPage />} />
                 <Route path="/tickets" element={<Tickets />} />
+                <Route path="/gits" element={<GitsPage />} />
+                <Route path="/site-audits" element={<SiteAuditsPage />} />
               </Routes>
             </main>
             <div className="minimalist-divider" />
