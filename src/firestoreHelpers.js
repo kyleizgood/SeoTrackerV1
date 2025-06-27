@@ -83,4 +83,12 @@ export async function getTrash() {
   const docSnap = await getDocs(collection(db, 'users', user.uid, 'meta'));
   const meta = docSnap.docs.find(d => d.id === 'trash');
   return meta ? meta.data().trash : [];
+}
+
+// Update a specific audit status field for a company
+export async function updateCompanyAuditStatus(companyId, field, value) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  const companyRef = doc(db, 'users', user.uid, 'companies', companyId.toString());
+  await setDoc(companyRef, { [field]: value }, { merge: true });
 } 

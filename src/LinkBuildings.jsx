@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { savePackages } from './firestoreHelpers';
 
 const PACKAGE_KEY = 'company-package-pages';
 const TRASH_KEY = 'company-trash';
@@ -20,6 +21,7 @@ export default function LinkBuildings({ packages, setPackages }) {
   const [confirmRemove, setConfirmRemove] = useState({ pkg: null, companyId: null, companyName: '' });
   const [search, setSearch] = useState({});
   const [statusFilter, setStatusFilter] = useState({});
+  const [showDeleteToast, setShowDeleteToast] = useState(false);
 
   useEffect(() => {
     // Initialize status from company data if available
@@ -33,12 +35,11 @@ export default function LinkBuildings({ packages, setPackages }) {
   }, [packages]);
 
   // Handle status change for a company and persist in Firestore
-  const handleStatusChange = (pkg, companyId, value) => {
-    setStatus(s => ({ ...s, [companyId]: value }));
+  const handleStatusChange = async (pkg, companyId, value) => {
     const updatedPackages = { ...packages };
     updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c => c.id === companyId ? { ...c, linkBuildingStatus: value } : c);
-    setPackages(updatedPackages);
-    // Optionally, savePackages(updatedPackages) if you want to persist immediately
+    setPackages(updatedPackages); // Optimistically update UI
+    await savePackages(updatedPackages); // Persist to Firestore
   };
 
   // Dropdown style (reuse from Report page)
@@ -65,20 +66,14 @@ export default function LinkBuildings({ packages, setPackages }) {
     setConfirmRemove({ pkg, companyId, companyName });
   };
   const handleRemoveConfirm = () => {
-    const { pkg, companyId } = confirmRemove;
     const updatedPackages = { ...packages };
-    // Find the company to remove
-    const companyToRemove = (updatedPackages[pkg] || []).find(c => c.id === companyId);
-    // Remove from package
-    updatedPackages[pkg] = (updatedPackages[pkg] || []).filter(c => c.id !== companyId);
-    setPackages(updatedPackages);
-    // Add to trash if found
-    if (companyToRemove) {
-      const trash = JSON.parse(localStorage.getItem(TRASH_KEY) || '[]');
-      trash.push({ ...companyToRemove, originalPackage: pkg });
-      localStorage.setItem(TRASH_KEY, JSON.stringify(trash));
-    }
+    updatedPackages[pkg] = (updatedPackages[pkg] || []).filter(c => c.id !== confirmRemove.companyId);
+    setPackages(updatedPackages); // Optimistically update UI
+    if (window.fetchAlerts) fetchAlerts(); // Optimistically update alerts
+    savePackages(updatedPackages);
     setConfirmRemove({ pkg: null, companyId: null, companyName: '' });
+    setShowDeleteToast(true);
+    setTimeout(() => setShowDeleteToast(false), 1800);
   };
   const handleRemoveCancel = () => setConfirmRemove({ pkg: null, companyId: null, companyName: '' });
 

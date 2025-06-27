@@ -11,6 +11,7 @@ const navLinks = [
   { icon: '📊', text: 'Report', href: '/report', aria: 'Report' },
   { icon: '🔗', text: 'Link Buildings', href: '/link-buildings', aria: 'Link Buildings' },
   { icon: '🔖', text: 'Bookmarking', href: '/social-bookmarking', aria: 'Bookmarking' },
+  { icon: '📝', text: 'Site Audits', href: '/site-audits', aria: 'Site Audits' },
   { icon: '📄', text: 'Templates', href: '/templates', aria: 'Templates' },
   { icon: '🎫', text: 'Tickets', href: '/tickets', aria: 'Tickets' },
   { icon: '🗑️', text: 'Trash', href: '/trash', aria: 'Trash' },

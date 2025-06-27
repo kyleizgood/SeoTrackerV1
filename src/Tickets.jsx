@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { getTickets, saveTicket, deleteTicket } from './firestoreHelpers';
+import { getTickets, saveTicket, deleteTicket, getTrash, saveTrash } from './firestoreHelpers';
 
 const Tickets = () => {
   const [tickets, setTickets] = useState([]);
@@ -12,6 +12,8 @@ const Tickets = () => {
   const [copiedId, setCopiedId] = useState(null);
   const [showAlert, setShowAlert] = useState(true);
   const [search, setSearch] = useState('');
+  const [confirmRemoveId, setConfirmRemoveId] = useState(null);
+  const [confirmRemoveTicket, setConfirmRemoveTicket] = useState(null);
 
   useEffect(() => {
     getTickets().then(setTickets);
@@ -54,8 +56,22 @@ const Tickets = () => {
   };
 
   const handleDelete = async id => {
+    // Find the ticket to delete
+    const ticketToDelete = tickets.find(t => t.id === id);
+    if (!ticketToDelete) return;
+    // Optimistically update UI
+    setTickets(prev => prev.filter(t => t.id !== id));
+    // Optimistically update alerts
+    if (window.fetchAlerts) fetchAlerts();
+    // Add to trash
+    const trash = await getTrash();
+    trash.push({ ...ticketToDelete, type: 'ticket' });
+    await saveTrash(trash);
+    // Delete from tickets
     await deleteTicket(id);
     setTickets(await getTickets());
+    setConfirmRemoveId(null);
+    setConfirmRemoveTicket(null);
   };
 
   const handleCancel = () => {
@@ -354,7 +370,7 @@ const Tickets = () => {
                   <td>
                     <div style={{ display: 'inline-flex', gap: 8, background: '#f7f7fa', borderRadius: 8, padding: '0.2em 0.5em', border: '1.5px solid #ececec' }}>
                       <button className="edit-btn" style={{ marginRight: 0, background: '#1976d2', color: '#fff', fontWeight: 700, borderRadius: '5px', padding: '0.18em 0.6em', fontSize: '0.89em', border: 'none' }} onClick={() => handleEdit(t)}>Edit</button>
-                      <button className="remove-btn" style={{ background: '#ffeaea', color: '#c00', fontWeight: 700, borderRadius: '5px', padding: '0.18em 0.6em', fontSize: '0.89em', border: 'none', marginLeft: 2 }} onClick={() => handleDelete(t.id)}>×</button>
+                      <button className="remove-btn" style={{ background: '#ffeaea', color: '#c00', fontWeight: 700, borderRadius: '5px', padding: '0.18em 0.6em', fontSize: '0.89em', border: 'none', marginLeft: 2 }} onClick={() => { setConfirmRemoveId(t.id); setConfirmRemoveTicket(t); }}>×</button>
                     </div>
                   </td>
                 </tr>
@@ -363,6 +379,19 @@ const Tickets = () => {
           </table>
         </div>
       </div>
+      {/* Confirmation Modal for Remove in Tickets page */}
+      {confirmRemoveId && (
+        <div className="confirm-modal-overlay">
+          <div className="confirm-modal-box">
+            <div className="confirm-title">Remove Ticket?</div>
+            <div className="confirm-desc">Are you sure you want to remove ticket <b>{confirmRemoveTicket?.ticketId}</b> for <b>{confirmRemoveTicket?.company}</b>?<br/>It will be moved to Trash.</div>
+            <div className="confirm-btns">
+              <button className="confirm-btn delete" onClick={() => handleDelete(confirmRemoveId)}>Yes, Remove</button>
+              <button className="confirm-btn cancel" onClick={() => { setConfirmRemoveId(null); setConfirmRemoveTicket(null); }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

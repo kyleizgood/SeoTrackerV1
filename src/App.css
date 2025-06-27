@@ -1059,6 +1059,8 @@ body, #root {
 .header-content nav {
   display: flex;
   gap: 2.5rem;
+  justify-content: center;
+  align-items: center;
 }
 
 html, body, #root {
@@ -1566,4 +1568,66 @@ table {
 .company-form select:hover, .company-form .react-datepicker__input:hover, .company-form input[type='text']:hover {
   border: 2px solid #81c784;
   background: linear-gradient(90deg, #e0e7ef 60%, #f7f6f2 100%);
+}
+
+.gits-command-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f7f6f2;
+  border-radius: 10px;
+  padding: 1em 1.5em;
+  box-shadow: 0 1px 6px #ececec;
+  margin-bottom: 18px;
+}
+.gits-command-block code {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #232323;
+  flex: 1;
+}
+.gits-copy-btn {
+  background: #e0eaff;
+  color: #1976d2;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 1em;
+  padding: 0.4em 1.2em;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.gits-copy-btn:hover {
+  background: #b6b6d8;
+  color: #232323;
+}
+
+@media (min-width: 901px) {
+  .site-audits-table-row {
+    flex-direction: row !important;
+    gap: 2.5vw !important;
+    align-items: flex-start !important;
+  }
+  .site-audits-table-row > div {
+    width: 48% !important;
+    flex-basis: 48% !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+@media (max-width: 900px) {
+  .site-audits-table-row {
+    flex-direction: column !important;
+    gap: 2.5rem !important;
+    align-items: stretch !important;
+  }
+  .site-audits-table-row > div {
+    width: 100% !important;
+    flex-basis: 100% !important;
+    margin: 0 0 1.5rem 0 !important;
+    padding: 1.5em 0.7em !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
 }
