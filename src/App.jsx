@@ -19,6 +19,8 @@ import { onSnapshot, collection } from 'firebase/firestore';
 import { db } from './firebase';
 import GitsPage from './GitsPage';
 import SiteAuditsPage from './SiteAuditsPage';
+import { setSessionStartTime, getSessionStartTime, isSessionExpired, clearSession, getRemainingSessionTime, formatRemainingTime } from './sessionUtils';
+import ResourcesPage from './ResourcesPage';
 
 function HomeHero() {
   const navigate = useNavigate();
@@ -1575,12 +1577,19 @@ function TrashPage() {
                       <div><b>Follow Up:</b> {item.followUpDate ? new Date(item.followUpDate).toLocaleDateString() : ''}</div>
                     </>
                   )}
+                  {item.type === 'resource' && (
+                    <>
+                      <div><b>Resource Name:</b> {item.name}</div>
+                      <div><b>Section:</b> {item.section}</div>
+                      <div><b>Link:</b> <a href={item.url} target="_blank" rel="noopener noreferrer">{item.url}</a></div>
+                    </>
+                  )}
                   {(!item.type || item.type === 'company') && item.name}
                   {item.type === 'template' && (
                     <div style={{ fontWeight: 400, fontSize: '0.98em', color: '#888', marginTop: 4, whiteSpace: 'pre-wrap' }}>{item.content}</div>
                   )}
                 </td>
-                <td style={{ background: '#fff8f8' }}>{item.type === 'template' ? 'Template' : item.type === 'ticket' ? 'Ticket' : 'Company'}</td>
+                <td style={{ background: '#fff8f8' }}>{item.type === 'template' ? 'Template' : item.type === 'ticket' ? 'Ticket' : item.type === 'resource' ? 'Resource' : (!item.type || item.type === 'company') ? 'Company' : 'Unknown'}</td>
                 <td>
                   <button className="trash-action-btn restore" onClick={() => handleRestore(item)}>Restore</button>
                   <button className="trash-action-btn delete" onClick={() => handleDeleteForever(item)}>Delete Forever</button>
@@ -1631,6 +1640,7 @@ function App() {
   const [alerts, setAlerts] = useState([]);
   const [showAlerts, setShowAlerts] = useState(false);
   const [ticketsChanged, setTicketsChanged] = useState(0);
+  const [sessionTimeDisplay, setSessionTimeDisplay] = useState('');
   const bellRef = useRef();
   const dropdownRef = useRef();
   // Keep a ref to always have the latest packages and setAlerts
@@ -1808,9 +1818,71 @@ function App() {
   }, [packages, setAlerts]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // Set session start time if not already set
+        if (!getSessionStartTime()) {
+          setSessionStartTime();
+        }
+        // User is logged in - check if session is expired
+        if (isSessionExpired()) {
+          // Session expired, logout user
+          console.log('Session expired - logging out user');
+          signOut(auth);
+          clearSession();
+          setUser(null);
+        } else {
+          // Session is valid - set session start time if not already set
+          if (!getSessionStartTime()) {
+            setSessionStartTime();
+          }
+          setUser(user);
+        }
+      } else {
+        // User is logged out - clear session
+        clearSession();
+        setUser(null);
+      }
+    });
     return () => unsubscribe();
   }, []);
+
+  // Periodic session check - runs every minute
+  useEffect(() => {
+    if (!user) return;
+    
+    const sessionCheckInterval = setInterval(() => {
+      if (isSessionExpired()) {
+        console.log('Session expired during periodic check - logging out user');
+        clearSession();
+        signOut(auth);
+        setUser(null);
+      }
+    }, 60000); // Check every minute
+
+    return () => clearInterval(sessionCheckInterval);
+  }, [user]);
+
+  // Update session time display - runs every minute
+  useEffect(() => {
+    if (!user) {
+      setSessionTimeDisplay('');
+      return;
+    }
+    
+    const updateSessionDisplay = () => {
+      const remainingTime = getRemainingSessionTime();
+      setSessionTimeDisplay(formatRemainingTime(remainingTime));
+    };
+    
+    // Update immediately
+    updateSessionDisplay();
+    
+    // Then update every minute
+    const sessionDisplayInterval = setInterval(updateSessionDisplay, 60000);
+    
+    return () => clearInterval(sessionDisplayInterval);
+  }, [user]);
 
   useEffect(() => {
     if (location.pathname === '/company-tracker' && location.state && location.state.editData) {
@@ -1899,119 +1971,152 @@ function App() {
 
   return (
     <>
-      <button
-        onClick={() => signOut(auth)}
-        style={{
-          position: 'fixed',
-          top: 18,
-          right: 28,
-          zIndex: 2000,
-          background: 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 10,
-          fontWeight: 700,
-          fontSize: '1.08em',
-          padding: '0.6em 1.5em',
-          boxShadow: '0 2px 8px #e0e7ef',
-          cursor: 'pointer',
-          letterSpacing: '0.04em',
-          transition: 'background 0.18s, color 0.18s',
-        }}
-        title="Logout"
-      >
-        Logout
-      </button>
-      {/* Notification Icon */}
-      <div style={{ position: 'fixed', top: 18, right: 170, zIndex: 2000 }}>
-        <button
-          ref={bellRef}
-          onClick={() => setShowAlerts(v => !v)}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            position: 'relative',
-            fontSize: '2em',
+      {/* Top-right controls: Session Time, Notification Bell, Logout */}
+      <div style={{
+        position: 'fixed',
+        top: 18,
+        right: 28,
+        zIndex: 2000,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+      }}>
+        {/* Session Time Display */}
+        {sessionTimeDisplay && (
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.95)',
             color: '#1976d2',
-            padding: 0,
-            marginRight: 32,
+            border: '1px solid #e0e7ef',
+            borderRadius: 8,
+            fontWeight: 600,
+            fontSize: '0.9em',
+            padding: '0.4em 0.8em',
+            boxShadow: '0 2px 8px #e0e7ef',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            marginRight: 8,
           }}
-          title="Notifications"
-        >
-          <span role="img" aria-label="Notifications">🔔</span>
-          {alerts.length > 0 && (
-            <span style={{
-              position: 'absolute',
-              top: -8,
-              right: -8,
-              background: '#c00',
-              color: '#fff',
-              borderRadius: '50%',
-              fontSize: '0.68em',
-              fontWeight: 700,
-              minWidth: 16,
-              minHeight: 16,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 2px 8px #e0e7ef',
-              border: '2px solid #fff',
-            }}>{alerts.length}</span>
-          )}
-        </button>
-        {showAlerts && alerts.length > 0 && (
-          <div
-            ref={dropdownRef}
-            style={{
-              position: 'absolute',
-              top: 38,
-              right: 0,
-              background: '#fff',
-              border: '1.5px solid #e0e7ef',
-              borderRadius: 12,
-              boxShadow: '0 4px 24px #e0e7ef',
-              minWidth: 320,
-              maxWidth: 420,
-              padding: '0.7em 0.5em',
-              zIndex: 2001,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
+          title="Session Time Remaining"
           >
-            {alerts.map(alert => (
-              <div
-                key={alert.id}
-                style={{
-                  padding: '0.7em 1.2em',
-                  margin: '2px 0',
-                  borderRadius: 10,
-                  fontWeight: 600,
-                  color: alert.color,
-                  background: '#f7f6f2',
-                  cursor: 'pointer',
-                  fontSize: '1.08em',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  boxShadow: '0 1px 6px #ececec',
-                  borderLeft: `5px solid ${alert.color}`,
-                  transition: 'background 0.18s',
-                }}
-                onClick={() => {
-                  setShowAlerts(false);
-                  navigate(alert.link);
-                }}
-                tabIndex={0}
-                onKeyDown={e => { if (e.key === 'Enter') { setShowAlerts(false); navigate(alert.link); } }}
-              >
-                <span style={{fontSize:'1.3em',marginRight:4}}>{alert.icon}</span>
-                <span dangerouslySetInnerHTML={{__html: alert.message}} />
-              </div>
-            ))}
+            <span role="img" aria-label="clock">⏰</span>
+            {sessionTimeDisplay}
           </div>
         )}
+        {/* Notification Icon */}
+        <div>
+          <button
+            ref={bellRef}
+            onClick={() => setShowAlerts(v => !v)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              position: 'relative',
+              fontSize: '2em',
+              color: '#1976d2',
+              padding: 0,
+              marginRight: 16,
+            }}
+            title="Notifications"
+          >
+            <span role="img" aria-label="Notifications">🔔</span>
+            {alerts.length > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -8,
+                right: -8,
+                background: '#c00',
+                color: '#fff',
+                borderRadius: '50%',
+                fontSize: '0.68em',
+                fontWeight: 700,
+                minWidth: 16,
+                minHeight: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 8px #e0e7ef',
+                border: '2px solid #fff',
+              }}>{alerts.length}</span>
+            )}
+          </button>
+          {showAlerts && alerts.length > 0 && (
+            <div
+              ref={dropdownRef}
+              style={{
+                position: 'absolute',
+                top: 38,
+                right: 0,
+                background: '#fff',
+                border: '1.5px solid #e0e7ef',
+                borderRadius: 12,
+                boxShadow: '0 4px 24px #e0e7ef',
+                minWidth: 320,
+                maxWidth: 420,
+                padding: '0.7em 0.5em',
+                zIndex: 2001,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              {alerts.map(alert => (
+                <div
+                  key={alert.id}
+                  style={{
+                    padding: '0.7em 1.2em',
+                    margin: '2px 0',
+                    borderRadius: 10,
+                    fontWeight: 600,
+                    color: alert.color,
+                    background: '#f7f6f2',
+                    cursor: 'pointer',
+                    fontSize: '1.08em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    boxShadow: '0 1px 6px #ececec',
+                    borderLeft: `5px solid ${alert.color}`,
+                    transition: 'background 0.18s',
+                  }}
+                  onClick={() => {
+                    setShowAlerts(false);
+                    navigate(alert.link);
+                  }}
+                  tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter') { setShowAlerts(false); navigate(alert.link); } }}
+                >
+                  <span style={{fontSize:'1.3em',marginRight:4}}>{alert.icon}</span>
+                  <span dangerouslySetInnerHTML={{__html: alert.message}} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Logout Button */}
+        <button
+          onClick={() => {
+            clearSession();
+            signOut(auth);
+          }}
+          style={{
+            background: 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 10,
+            fontWeight: 700,
+            fontSize: '1.08em',
+            padding: '0.6em 1.5em',
+            boxShadow: '0 2px 8px #e0e7ef',
+            cursor: 'pointer',
+            letterSpacing: '0.04em',
+            transition: 'background 0.18s, color 0.18s',
+          }}
+          title="Logout"
+        >
+          Logout
+        </button>
       </div>
       <button
         className="hamburger"
@@ -2034,15 +2139,15 @@ function App() {
         </div>
         <div className="main-content-area" style={{ paddingLeft: mainContentMarginLeft, transition: 'padding-left 0.22s cubic-bezier(.4,0,.2,1)' }}>
           <div className="minimal-bg main-content">
-            <header className="minimal-header">
+      <header className="minimal-header">
               <div className="header-content">
                 <span className="header-title">SEO TRACKER</span>
-                <nav>
+        <nav>
                   <a href="#projects">Projects</a>
-                  <a href="#info">Info</a>
+                  <Link to="/resources">Resources</Link>
                   <Link to="/gits">Gits</Link>
-                </nav>
-              </div>
+        </nav>
+        </div>
             </header>
             <div className="minimalist-divider" />
             <main className="main-seo-content">
@@ -2062,17 +2167,18 @@ function App() {
                 <Route path="/tickets" element={<Tickets />} />
                 <Route path="/gits" element={<GitsPage />} />
                 <Route path="/site-audits" element={<SiteAuditsPage />} />
+                <Route path="/resources" element={<ResourcesPage />} />
               </Routes>
-            </main>
+      </main>
             <div className="minimalist-divider" />
-            <footer className="minimal-footer">
+      <footer className="minimal-footer">
               <div className="footer-content">
                 <span>&copy; 2025 OPPA JEWO</span>
                 <span className="footer-tagline">Kung ang bayot ma amnesia, bayot gihapon?</span>
                 <a href="https://talhub-smakdat-team.netlify.app/" className="footer-link" target="_blank" rel="noopener noreferrer">TalHub Smak Dat</a>
               </div>
-            </footer>
-          </div>
+      </footer>
+    </div>
         </div>
       </div>
     </>

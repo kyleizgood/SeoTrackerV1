@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 
 function GitsPage() {
+  // Git 3 and Git 4 with new IP for Git 4
   const gitServers = [
-    '47.128.64.60',
-    '13.212.52.247'
+    { label: 'Git 3', ip: '47.128.64.60' },
+    { label: 'Git 4', ip: '54.179.74.207' },
   ];
   const [copiedIdx, setCopiedIdx] = useState(null);
   const copyToClipboard = (ip, idx) => {
@@ -18,7 +19,7 @@ function GitsPage() {
         borderRadius: 24,
         boxShadow: '0 4px 32px #e0e7ef',
         padding: '2.5em 2.5em 2em 2.5em',
-        maxWidth: 520,
+        maxWidth: 700,
         width: '100%',
         margin: '0 auto',
         display: 'flex',
@@ -31,50 +32,51 @@ function GitsPage() {
           <span style={{ fontSize: '2.5em', color: '#1976d2' }}>🌐</span>
           <h1 className="fancy-title" style={{ fontSize: '2.2em', fontWeight: 800, letterSpacing: '0.04em', margin: 0 }}>Git servers for this week</h1>
         </div>
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 28 }}>
-          {gitServers.map((ip, i) => (
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'row', gap: 32, alignItems: 'center', justifyContent: 'center' }}>
+          {gitServers.map((server, i) => (
             <div key={i} className="gits-command-block" style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 18,
+              gap: 10,
               background: 'linear-gradient(90deg, #e0e7ef 60%, #f7f6f2 100%)',
               borderRadius: 16,
-              padding: '1.3em 2em',
+              padding: '0.8em 1.2em',
               boxShadow: '0 2px 12px #ececec',
-              fontSize: '1.35em',
+              fontSize: '1.15em',
               fontWeight: 700,
               color: '#232323',
               border: '1.5px solid #b6b6d8',
               position: 'relative',
+              minWidth: 260,
             }}>
-              <span style={{ fontSize: '1.5em', marginRight: 12, color: '#388e3c' }}>🖥️</span>
-              <code style={{ fontSize: '1.25em', fontWeight: 700, color: '#1976d2', letterSpacing: '0.04em', flex: 1 }}>{ip}</code>
+              <span style={{ fontWeight: 800, color: '#1976d2', marginRight: 8 }}>{server.label}:</span>
+              <code style={{ fontSize: '1.1em', fontWeight: 700, color: '#1976d2', letterSpacing: '0.04em', flex: 1 }}>{server.ip}</code>
               <button className="gits-copy-btn" style={{
                 background: 'linear-gradient(90deg, #b6b6d8 60%, #81c784 100%)',
                 color: '#fff',
                 border: 'none',
                 borderRadius: 10,
                 fontWeight: 700,
-                fontSize: '1.1em',
-                padding: '0.6em 1.6em',
+                fontSize: '1em',
+                padding: '0.4em 1.1em',
                 cursor: 'pointer',
                 boxShadow: '0 1px 6px #ececec',
                 transition: 'background 0.18s, color 0.18s',
-                marginLeft: 12,
-              }} onClick={() => copyToClipboard(ip, i)}>
-                <span style={{ fontSize: '1.2em', marginRight: 6 }}>📋</span>Copy
+                marginLeft: 8,
+              }} onClick={() => copyToClipboard(server.ip, i)}>
+                <span style={{ fontSize: '1.1em', marginRight: 4 }}>📋</span>Copy
               </button>
               {copiedIdx === i && (
                 <span style={{
                   position: 'absolute',
-                  right: 24,
-                  top: '-2.2em',
+                  right: 18,
+                  top: '-2em',
                   background: '#81c784',
                   color: '#fff',
                   borderRadius: 8,
-                  padding: '0.25em 1.1em',
+                  padding: '0.18em 0.8em',
                   fontWeight: 700,
-                  fontSize: '0.98em',
+                  fontSize: '0.95em',
                   boxShadow: '0 1px 6px #ececec',
                   letterSpacing: '0.03em',
                   zIndex: 2,

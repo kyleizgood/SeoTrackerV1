@@ -91,4 +91,39 @@ export async function updateCompanyAuditStatus(companyId, field, value) {
   if (!user) throw new Error('Not logged in');
   const companyRef = doc(db, 'users', user.uid, 'companies', companyId.toString());
   await setDoc(companyRef, { [field]: value }, { merge: true });
+}
+
+// --- RESOURCE HELPERS ---
+export async function getResources() {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  const snapshot = await getDocs(collection(db, 'users', user.uid, 'resources'));
+  return snapshot.docs.map(doc => doc.data());
+}
+
+export async function saveResource(resource) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  await setDoc(doc(db, 'users', user.uid, 'resources', resource.id), resource);
+}
+
+export async function deleteResource(resourceId) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  await deleteDoc(doc(db, 'users', user.uid, 'resources', resourceId));
+}
+
+// --- RESOURCE SECTION HELPERS ---
+export async function getResourceSections() {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  const snapshot = await getDocs(collection(db, 'users', user.uid, 'meta'));
+  const meta = snapshot.docs.find(d => d.id === 'resourceSections');
+  return meta ? meta.data().sections : ['Site Audit', 'Keyword Research', 'Other Sheets'];
+}
+
+export async function saveResourceSections(sections) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  await setDoc(doc(db, 'users', user.uid, 'meta', 'resourceSections'), { sections });
 } 
