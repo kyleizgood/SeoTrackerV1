@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getTrash, saveTrash, getResources, saveResource, deleteResource, getResourceSections, saveResourceSections } from './firestoreHelpers';
+import { getTrash, saveTrash, getResourcesPaginated, saveResource, deleteResource, getResourceSections, saveResourceSections } from './firestoreHelpers';
 
 const initialLinks = {
   'Site Audit': [
@@ -15,12 +15,14 @@ const initialLinks = {
 
 const sectionOrder = ['Site Audit', 'Keyword Research', 'Other Sheets'];
 
-export default function ResourcesPage() {
+export default function ResourcesPage({ darkMode, setDarkMode }) {
   const [links, setLinks] = useState({});
   const [sections, setSections] = useState(['Site Audit', 'Keyword Research', 'Other Sheets']);
   const [loading, setLoading] = useState(true);
   const [openLink, setOpenLink] = useState({});
   const [copied, setCopied] = useState({});
+  // Pagination state per section
+  const [pagination, setPagination] = useState({}); // { [section]: { lastDoc, hasMore, loadingMore } }
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalStep, setModalStep] = useState(1); // 1: enter, 2: choose section
@@ -33,24 +35,64 @@ export default function ResourcesPage() {
   const [newTableName, setNewTableName] = useState('');
   const [deleteTableModal, setDeleteTableModal] = useState({ open: false, section: null });
 
-  // Load resources from Firestore on mount
+  // LocalStorage cache key
+  const RESOURCES_CACHE_KEY = 'resources_cache_v1';
+
+  // Fetch paginated resources for a section
+  const fetchResources = async (section, loadMore = false) => {
+    setPagination(prev => ({
+      ...prev,
+      [section]: { ...(prev[section] || {}), loadingMore: true }
+    }));
+    try {
+      let startAfterDoc = loadMore && pagination[section]?.lastDoc ? pagination[section].lastDoc : null;
+      const { items, lastDoc, hasMore } = await getResourcesPaginated(20, startAfterDoc);
+      setLinks(prev => ({
+        ...prev,
+        [section]: loadMore ? [...(prev[section] || []), ...items.filter(i => i.section === section)] : items.filter(i => i.section === section)
+      }));
+      setPagination(prev => ({
+        ...prev,
+        [section]: { lastDoc, hasMore, loadingMore: false }
+      }));
+      // Cache in localStorage
+      if (!loadMore) {
+        const cache = JSON.parse(localStorage.getItem(RESOURCES_CACHE_KEY) || '{}');
+        cache[section] = { items: items.filter(i => i.section === section), lastDocId: lastDoc?.id || null, ts: Date.now() };
+        localStorage.setItem(RESOURCES_CACHE_KEY, JSON.stringify(cache));
+      }
+    } catch (e) {
+      setPagination(prev => ({ ...prev, [section]: { ...(prev[section] || {}), loadingMore: false } }));
+    }
+    setLoading(false);
+  };
+
+  // On mount: try cache, then fetch for each section
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
         const loadedSections = await getResourceSections();
         setSections(loadedSections);
-        // Initialize links object for all sections
         const grouped = {};
-        loadedSections.forEach(s => { grouped[s] = []; });
-        const resources = await getResources();
-        resources.forEach(r => {
-          if (grouped[r.section]) grouped[r.section].push(r);
-        });
+        const pag = {};
+        const cache = JSON.parse(localStorage.getItem(RESOURCES_CACHE_KEY) || '{}');
+        for (const s of loadedSections) {
+          if (cache[s] && Array.isArray(cache[s].items) && Date.now() - cache[s].ts < 1000 * 60 * 10) {
+            grouped[s] = cache[s].items;
+            pag[s] = { lastDoc: null, hasMore: true, loadingMore: false };
+            // Still fetch latest in background
+            fetchResources(s, false);
+          } else {
+            grouped[s] = [];
+            pag[s] = { lastDoc: null, hasMore: true, loadingMore: false };
+            fetchResources(s, false);
+          }
+        }
         setLinks(grouped);
+        setPagination(pag);
       } catch (e) {
-        // Optionally handle error
-        console.error('Failed to load resources or sections:', e);
+        setLoading(false);
       }
       setLoading(false);
     })();
@@ -226,7 +268,7 @@ export default function ResourcesPage() {
   };
 
   return (
-    <section style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #f7f6f2 60%, #e0e7ef 100%)', position: 'relative' }}>
+    <div className="resources-page" style={{ minHeight: '100vh', background: darkMode ? '#181a1b' : '#f7f6f2' }}>
       {loading && (
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 2000 }}>
           <div className="spinner" style={{
@@ -351,6 +393,7 @@ export default function ResourcesPage() {
                 <div style={{ fontWeight: 800, fontSize: '1.25em', color: '#1976d2', marginBottom: 4 }}>Add Resource Link</div>
                 <input
                   type="text"
+                  name="resourceTitle"
                   placeholder="Title"
                   value={modalTitle}
                   onChange={e => setModalTitle(e.target.value)}
@@ -364,6 +407,7 @@ export default function ResourcesPage() {
                 />
                 <input
                   type="text"
+                  name="resourceUrl"
                   placeholder="Paste link here"
                   value={modalUrl}
                   onChange={e => setModalUrl(e.target.value)}
@@ -439,6 +483,7 @@ export default function ResourcesPage() {
                   <div style={{ marginTop: 16, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                     <input
                       type="text"
+                      name="tableName"
                       placeholder="New table name"
                       value={newTableName}
                       onChange={e => setNewTableName(e.target.value)}
@@ -620,12 +665,21 @@ export default function ResourcesPage() {
                   ) : (
                     <div style={{ color: '#888', fontStyle: 'italic', padding: '0.5em 1em' }}>No links yet</div>
                   )}
+                  {/* Load more button for section */}
+                  {pagination[section]?.hasMore && !pagination[section]?.loadingMore && (
+                    <button onClick={() => fetchResources(section, true)} style={{ margin: 8, padding: '6px 18px', borderRadius: 8, background: '#1976d2', color: '#fff', fontWeight: 700, border: 'none', fontSize: 15, cursor: 'pointer' }}>
+                      Load more
+                    </button>
+                  )}
+                  {pagination[section]?.loadingMore && (
+                    <div style={{ color: '#888', fontStyle: 'italic', padding: '0.5em 1em' }}>Loading more...</div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 } 

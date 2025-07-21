@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function DApaChecker() {
+function DApaChecker({ darkMode, setDarkMode }) {
   const [url, setUrl] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -38,7 +38,7 @@ function DApaChecker() {
   };
 
   return (
-    <section className="dapachecker-page">
+    <section className="dapachecker-page" style={{ background: darkMode ? '#181a1b' : '#f7f6f2', minHeight: '100vh' }}>
       <h1>PageRank Checker (Open PageRank)</h1>
       <form className="dapachecker-form" onSubmit={handleSubmit}>
         <input

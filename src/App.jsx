@@ -2,27 +2,34 @@ import { useState, useEffect, useRef } from 'react';
 import './App.css'
 import Sidebar from './Sidebar';
 import TemplateManager from './TemplateManager';
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import DApaChecker from './DApaChecker';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import Tickets from './Tickets';
 import LinkBuildings from './LinkBuildings';
 import { auth } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, getAuth } from 'firebase/auth';
 import AuthPage from './AuthPage';
 import Login from './Login';
 import Register from './Register';
 import { getCompanies, saveCompany, deleteCompany } from './firestoreHelpers';
 import { getPackages, savePackages, getTrash, saveTrash, getTemplates, saveTemplate, deleteTemplate, getTickets, saveTicket, deleteTicket } from './firestoreHelpers';
-import { onSnapshot, collection } from 'firebase/firestore';
+import { onSnapshot, collection, doc as firestoreDoc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import GitsPage from './GitsPage';
 import SiteAuditsPage from './SiteAuditsPage';
-import { setSessionStartTime, getSessionStartTime, isSessionExpired, clearSession, getRemainingSessionTime, formatRemainingTime } from './sessionUtils';
+import { setSessionStartTime, getSessionStartTime, isSessionExpired, clearSessionStartTime, getRemainingSessionTime, formatRemainingTime } from './sessionUtils';
 import ResourcesPage from './ResourcesPage';
+import CompanyOverview from './CompanyOverview';
+import NotesPage from './NotesPage';
+import TemplateTrash from './TemplateTrash';
+import ProfilePage from './ProfilePage';
+import ChatManager from './ChatSystem/ChatManager';
+import ChatUsersPage from './ChatSystem/ChatUsersPage';
+import { useChat } from './ChatSystem/ChatManager';
 
-function HomeHero() {
+function HomeHero({ userEmail }) {
   const navigate = useNavigate();
   // Motivational quotes for daily rotation
   const quotes = [
@@ -140,27 +147,29 @@ function HomeHero() {
   const dayOfYear = Math.floor(diff / oneDay);
   const quote = quotes[dayOfYear % quotes.length];
   return (
-    <section className="hero" style={{ position: 'relative', overflow: 'hidden' }}>
-      {/* Animated Blobs for Fancy Background */}
-      <div className="bg-blob bg-blob1" />
-      <div className="bg-blob bg-blob2" />
-      <div className="bg-blob bg-blob3" />
-      {/* Alien/Space Theme */}
-      <h1 className="fancy-title" style={{ fontFamily: 'Orbitron, Inter, sans-serif', fontSize: '2.7rem', display: 'flex', alignItems: 'center', gap: '0.5em', zIndex: 2 }}>
-        <span role="img" aria-label="alien">👽</span> Welcome Kupal
-      </h1>
-      <p style={{ fontSize: '0.92rem', color: '#888', fontWeight: 400, marginTop: -10, marginBottom: 10, fontStyle: 'italic', letterSpacing: '0.01em' }}>
-        Mangutana asa ka padung? Sakay naka jeep? Gikan paka school?
-      </p>
-      <p className="hero-desc" style={{ fontSize: '1.25rem', color: '#1976d2', fontWeight: 600, marginBottom: 18, zIndex: 2 }}>
-        You have landed on your <span style={{ color: '#81c784' }}>Personal SEO Tracker</span>.
-      </p>
-      <p className="hero-desc" style={{ fontSize: '1.08rem', color: '#444', marginBottom: 18, zIndex: 2, whiteSpace: 'pre-line' }}>
-        {quote}
-      </p>
-      <button className="hero-cta" style={{ zIndex: 2 }} onClick={() => navigate('/company-tracker')}>
-        🚀 Go to Company Tracker
-      </button>
+    <section className="hero">
+      <div className="confetti">
+        <span className="c1"></span>
+        <span className="c2"></span>
+        <span className="c3"></span>
+        <span className="c4"></span>
+        <span className="c5"></span>
+      </div>
+      <div className="welcome-card">
+        <span className="animated-emoji" role="img" aria-label="fire">🔥</span>
+        <h1 className="fancy-title">
+          Welcome {userEmail ? userEmail : 'Kupal'}
+        </h1>
+        <p className="hero-desc" style={{ fontSize: '1.25rem', color: '#1976d2', fontWeight: 600, marginBottom: 18, zIndex: 2 }}>
+          You have landed on your <span style={{ color: '#81c784' }}>Personal SEO Tracker</span>.
+        </p>
+        <p className="hero-desc" style={{ fontSize: '1.08rem', color: '#444', marginBottom: 18, zIndex: 2, whiteSpace: 'pre-line' }}>
+          {quote}
+        </p>
+        <button className="hero-cta" style={{ zIndex: 2 }} onClick={() => navigate('/company-tracker')}>
+          🚀 Go to Company Tracker
+        </button>
+      </div>
     </section>
   );
 }
@@ -174,7 +183,7 @@ const months = [
 const days = Array.from({ length: 31 }, (_, i) => i + 1);
 const years = Array.from({ length: 20 }, (_, i) => new Date().getFullYear() - 10 + i);
 
-function getEOC(start) {
+export function getEOC(start) {
   // start: e.g. 'February 4, 2017'
   if (!start) return '';
   const match = start.match(/^(\w+) (\d{1,2}), (\d{4})$/);
@@ -196,24 +205,42 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
   const [editId, setEditId] = useState(null);
   const [showAddToPackage, setShowAddToPackage] = useState(null); // company id
 
-  // Load companies from Firestore on mount
+  // Always fetch companies from Firestore on mount
   useEffect(() => {
-    getCompanies().then(async (all) => {
+    getCompanies().then(all => {
+      setCompanies(all.filter(c => c.name && c.name.trim() !== ''));
+    });
+  }, []);
+
+  // Load companies from Firestore on mount and whenever packages change
+  useEffect(() => {
+    async function loadUnassignedCompanies() {
+      const all = await getCompanies();
       // One-time cleanup: delete companies with blank names
       const blanks = all.filter(c => !c.name || c.name.trim() === '');
       for (const c of blanks) {
-        await deleteCompany(c.id);
+        if (c.id) {
+          await deleteCompany(c.id);
+        }
       }
       // One-time migration: add missing audit status fields
       const needsMigration = all.filter(c => !('siteAuditBStatus' in c) || !('siteAuditCStatus' in c));
       for (const c of needsMigration) {
-        await saveCompany({ ...c, siteAuditBStatus: c.siteAuditBStatus || 'Pending', siteAuditCStatus: c.siteAuditCStatus || 'Pending' });
+        if (c.id) {
+          await saveCompany({ ...c, siteAuditBStatus: c.siteAuditBStatus || 'Pending', siteAuditCStatus: c.siteAuditCStatus || 'Pending' });
+        }
       }
       // Now reload with all fields present
       const updated = await getCompanies();
-      setCompanies(updated.filter(c => c.name && c.name.trim() !== ''));
-    });
-  }, []);
+      // Get all companies in all packages
+      const pkgs = await getPackages();
+      const packagedIds = new Set();
+      Object.values(pkgs).forEach(arr => arr.forEach(c => packagedIds.add(c.id)));
+      // Only show companies not in any package
+      setCompanies(updated.filter(c => c.name && c.name.trim() !== '' && !packagedIds.has(c.id)));
+    }
+    loadUnassignedCompanies();
+  }, [packages]);
 
   // If editData is provided (from package page), load it into the form
   useEffect(() => {
@@ -241,7 +268,9 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
       // One-time cleanup: delete companies with blank names
       const blanks = all.filter(c => !c.name || c.name.trim() === '');
       for (const c of blanks) {
-        await deleteCompany(c.id);
+        if (c.id) {
+          await deleteCompany(c.id);
+        }
       }
       setCompanies(all.filter(c => c.name && c.name.trim() !== ''));
     });
@@ -283,9 +312,14 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
   };
 
   const handleDelete = async id => {
+    // Find the company to delete
+    const companyToDelete = companies.find(c => c.id === id);
+    if (!companyToDelete) return;
+    // Add to trash before deleting
+    const trash = await getTrash();
+    await saveTrash([...(trash || []), { ...companyToDelete, type: 'company' }]);
     // Optimistically update UI
     setCompanies(prev => prev.filter(c => c.id !== id));
-    // Optimistically update alerts
     if (window.fetchAlerts) fetchAlerts();
     await deleteCompany(id);
     setCompanies(await getCompanies());
@@ -295,7 +329,6 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
     }
     // Remove from all package pages
     getPackages().then(packages => {
-      const saved = packages ? JSON.stringify(packages) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
       Object.keys(packages).forEach(pkg => {
         packages[pkg] = packages[pkg].filter(c => c.id !== id);
       });
@@ -494,6 +527,8 @@ function PackagePage({ pkg, packages, setPackages }) {
   const [filterRA, setFilterRA] = useState('');
   const [filterDistribution, setFilterDistribution] = useState('');
   const [filterBusinessProfileClaiming, setFilterBusinessProfileClaiming] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 15;
   const navigate = useNavigate();
 
   // Task columns
@@ -609,7 +644,7 @@ function PackagePage({ pkg, packages, setPackages }) {
     // Add to trash
     if (companyToRemove) {
       const trash = await getTrash();
-      trash.push({ ...companyToRemove, originalPackage: pkg });
+      trash.push({ ...companyToRemove, originalPackage: pkg, type: 'company' });
       await saveTrash(trash);
     }
     setConfirmRemoveId(null);
@@ -618,24 +653,18 @@ function PackagePage({ pkg, packages, setPackages }) {
     setConfirmRemoveId(null);
   };
 
-  // Filter companies by search and dropdowns
-  const filteredCompanies = companies.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = !filterStatus || c.status === filterStatus;
-    const matchesVSO = !filterVSO || (c.tasks?.forVSO || 'Pending') === filterVSO;
-    const matchesRevision = !filterRevision || (c.tasks?.forRevision || 'Pending') === filterRevision;
-    const matchesRA = !filterRA || (c.tasks?.ra || 'Pending') === filterRA;
-    const matchesDistribution = !filterDistribution || (c.tasks?.distribution || 'Pending') === filterDistribution;
-    let matchesBusinessProfileClaiming;
-    if (!filterBusinessProfileClaiming) {
-      matchesBusinessProfileClaiming = true;
-    } else if (filterBusinessProfileClaiming === 'Ticket') {
-      matchesBusinessProfileClaiming = c.tasks?.businessProfileClaiming === 'Ticket' || c.tasks?.businessProfileClaiming === 'Pending';
-    } else {
-      matchesBusinessProfileClaiming = c.tasks?.businessProfileClaiming === filterBusinessProfileClaiming;
-    }
-    return matchesSearch && matchesStatus && matchesVSO && matchesRevision && matchesRA && matchesDistribution && matchesBusinessProfileClaiming;
-  });
+  // Filtered companies for this package
+  const filteredCompanies = (packages[pkg] || [])
+    .filter(c => c.name && c.name.toLowerCase().includes(search.toLowerCase()))
+    .filter(c => !filterStatus || c.status === filterStatus)
+    .filter(c => !filterVSO || (c.tasks?.forVSO || 'Pending') === filterVSO)
+    .filter(c => !filterRevision || (c.tasks?.forRevision || 'Pending') === filterRevision)
+    .filter(c => !filterRA || (c.tasks?.ra || 'Pending') === filterRA)
+    .filter(c => !filterDistribution || (c.tasks?.distribution || 'Pending') === filterDistribution)
+    .filter(c => !filterBusinessProfileClaiming || (c.tasks?.businessProfileClaiming || 'Ticket') === filterBusinessProfileClaiming);
+
+  const pageCount = Math.ceil(filteredCompanies.length / PAGE_SIZE);
+  const paginatedCompanies = filteredCompanies.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <section className="company-tracker-page">
@@ -698,6 +727,7 @@ function PackagePage({ pkg, packages, setPackages }) {
               ))}
               <th className="package-search-th">
                 <input
+                  name="companySearch"
                   type="text"
                   className="package-search-input"
                   placeholder="Search company..."
@@ -709,16 +739,17 @@ function PackagePage({ pkg, packages, setPackages }) {
             </tr>
           </thead>
           <tbody>
-            {filteredCompanies.length === 0 && (
+            {paginatedCompanies.length === 0 && (
               <tr>
                 <td className="no-companies" colSpan={6 + taskLabels.length + 2}>No companies found.</td>
               </tr>
             )}
-            {filteredCompanies.map(c => (
+            {paginatedCompanies.map(c => (
               <tr key={c.id}>
                 <td className="company-name">
                   {editId === c.id ? (
                     <input
+                      name="editCompanyName"
                       value={editName}
                       onChange={e => setEditName(e.target.value)}
                       style={{ padding: '0.5em 1em', borderRadius: 8, border: '1.5px solid #b6b6d8', fontSize: '1rem', minWidth: 120 }}
@@ -820,6 +851,14 @@ function PackagePage({ pkg, packages, setPackages }) {
             ))}
           </tbody>
         </table>
+        {/* Pagination controls */}
+        {pageCount > 1 && (
+          <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8 }}>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
+            <span>Page {page} of {pageCount}</span>
+            <button onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount}>Next</button>
+          </div>
+        )}
       </div>
       {confirmRemoveId && (
         <div className="confirm-modal-overlay">
@@ -852,8 +891,7 @@ function Report({ packages, setPackages }) {
   const currentMonth = monthNames[new Date().getMonth()];
 
   useEffect(() => {
-    getPackages().then(setPackages);
-    // Monthly reset logic
+    // Monthly reset logic only
     const today = new Date();
     const firstOfMonth = today.getDate() === 1;
     const thisMonth = today.getFullYear() + '-' + (today.getMonth() + 1);
@@ -963,6 +1001,7 @@ function Report({ packages, setPackages }) {
               <div className="company-total-badge"><span className="total-icon" role="img" aria-label="Total">👥</span>Total: {filtered.length}</div>
               <h2 className="fancy-subtitle">{pkg}</h2>
               <input
+                name={`companySearch_${pkg}`}
                 type="text"
                 className="package-search-input"
                 style={{ minWidth: 180, marginLeft: 16, marginBottom: 0, fontSize: '1em' }}
@@ -1290,6 +1329,7 @@ function Bookmarking({ packages, setPackages }) {
               <div className="company-total-badge"><span className="total-icon" role="img" aria-label="Total">👥</span>Total: {filtered.length}</div>
               <h2 className="fancy-subtitle">{pkg}</h2>
               <input
+                name={`companySearch_${pkg}`}
                 type="text"
                 className="package-search-input"
                 style={{ minWidth: 180, marginLeft: 16, marginBottom: 0, fontSize: '1em' }}
@@ -1497,6 +1537,16 @@ function TrashPage() {
         ticketId: item.ticketId,
         followUpDate: item.followUpDate
       });
+    } else if (item.type === 'note') {
+      // Restore to notes collection
+      const user = getAuth().currentUser;
+      if (user) {
+        await setDoc(firestoreDoc(db, 'users', user.uid, 'notes', item.id), item);
+        // Remove from trash subcollection if exists (legacy)
+        try {
+          await deleteDoc(firestoreDoc(db, 'users', user.uid, 'trash', item.id));
+        } catch (e) {}
+      }
     } else {
       // Restore to original package in Firestore
       getPackages().then(packages => {
@@ -1511,6 +1561,15 @@ function TrashPage() {
     const updatedTrash = trash.filter(c => c.id !== item.id);
     setTrash(updatedTrash);
     await saveTrash(updatedTrash);
+    // Extra cleanup for notes: remove from trash subcollection if exists
+    if (item.type === 'note') {
+      try {
+        const user = getAuth().currentUser;
+        if (user) {
+          await deleteDoc(firestoreDoc(db, 'users', user.uid, 'trash', item.id));
+        }
+      } catch (e) {}
+    }
   };
   // Delete all logic
   const handleDeleteAll = () => {
@@ -1542,6 +1601,7 @@ function TrashPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                   <span>Item</span>
                   <input
+                    name="trashSearch"
                     type="text"
                     className="package-search-input"
                     style={{ minWidth: 180, marginTop: 6 }}
@@ -1569,6 +1629,12 @@ function TrashPage() {
               <tr key={item.id}>
                 <td style={{ fontWeight: 700, fontSize: '1.13rem', color: '#232323', background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #4e342e', letterSpacing: '0.02em' }}>
                   {item.type === 'template' && item.title}
+                  {item.type === 'note' && (
+                    <>
+                      <div>{item.title}</div>
+                      <div style={{ fontWeight: 400, fontSize: '0.98em', color: '#888', marginTop: 4, whiteSpace: 'pre-wrap' }}>{item.content}</div>
+                    </>
+                  )}
                   {item.type === 'ticket' && (
                     <>
                       <div><b>Company:</b> {item.company}</div>
@@ -1589,7 +1655,7 @@ function TrashPage() {
                     <div style={{ fontWeight: 400, fontSize: '0.98em', color: '#888', marginTop: 4, whiteSpace: 'pre-wrap' }}>{item.content}</div>
                   )}
                 </td>
-                <td style={{ background: '#fff8f8' }}>{item.type === 'template' ? 'Template' : item.type === 'ticket' ? 'Ticket' : item.type === 'resource' ? 'Resource' : (!item.type || item.type === 'company') ? 'Company' : 'Unknown'}</td>
+                <td style={{ background: '#fff8f8' }}>{item.type === 'template' ? 'Template' : item.type === 'note' ? 'Note' : item.type === 'ticket' ? 'Ticket' : item.type === 'resource' ? 'Resource' : (!item.type || item.type === 'company') ? 'Company' : 'Unknown'}</td>
                 <td>
                   <button className="trash-action-btn restore" onClick={() => handleRestore(item)}>Restore</button>
                   <button className="trash-action-btn delete" onClick={() => handleDeleteForever(item)}>Delete Forever</button>
@@ -1624,7 +1690,13 @@ export function setFetchAlertsImpl(fn) {
 
 export async function fetchAlerts() {
   if (!fetchAlertsRef.current) return;
-  await fetchAlertsRef.current();
+  try {
+    if (auth.currentUser) {
+      await fetchAlertsRef.current();
+    }
+  } catch (e) {
+    // Optionally log or handle the error
+  }
 }
 
 function App() {
@@ -1671,9 +1743,9 @@ function App() {
         const date = new Date(d);
         return date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
       };
-      const todayFollowUps = tickets.filter(t => isToday(t.followUpDate));
-      const yesterdayFollowUps = tickets.filter(t => isYesterday(t.followUpDate));
-      const overdueFollowUps = tickets.filter(t => isOverdue(t.followUpDate));
+      const todayFollowUps = tickets.filter(t => isToday(t.followUpDate) && (t.status || 'open') !== 'closed');
+      const yesterdayFollowUps = tickets.filter(t => isYesterday(t.followUpDate) && (t.status || 'open') !== 'closed');
+      const overdueFollowUps = tickets.filter(t => isOverdue(t.followUpDate) && (t.status || 'open') !== 'closed');
       if (yesterdayFollowUps.length > 0) {
         allAlerts.push({
           id: 'tickets-yesterday',
@@ -1818,31 +1890,11 @@ function App() {
   }, [packages, setAlerts]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        // Set session start time if not already set
-        if (!getSessionStartTime()) {
-          setSessionStartTime();
-        }
-        // User is logged in - check if session is expired
-        if (isSessionExpired()) {
-          // Session expired, logout user
-          console.log('Session expired - logging out user');
-          signOut(auth);
-          clearSession();
-          setUser(null);
-        } else {
-          // Session is valid - set session start time if not already set
-          if (!getSessionStartTime()) {
-            setSessionStartTime();
-          }
-          setUser(user);
-        }
-      } else {
-        // User is logged out - clear session
-        clearSession();
-        setUser(null);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setSessionStartTime(); // Reset session timer for the current user
       }
+      setUser(firebaseUser);
     });
     return () => unsubscribe();
   }, []);
@@ -1854,7 +1906,7 @@ function App() {
     const sessionCheckInterval = setInterval(() => {
       if (isSessionExpired()) {
         console.log('Session expired during periodic check - logging out user');
-        clearSession();
+        clearSessionStartTime();
         signOut(auth);
         setUser(null);
       }
@@ -1893,7 +1945,17 @@ function App() {
   }, [location]);
 
   useEffect(() => {
-    getPackages().then(setPackages);
+    const fetchPackages = async () => {
+      try {
+        if (auth.currentUser) {
+          const pkgs = await getPackages();
+          setPackages(pkgs);
+        }
+      } catch (e) {
+        setPackages({ 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] });
+      }
+    };
+    fetchPackages();
   }, []);
 
   // Real-time listener for packages
@@ -1939,8 +2001,8 @@ function App() {
   let mainContentMarginLeft = 220;
   if (windowWidth <= 700) {
     mainContentMarginLeft = 0;
-  } else if (sidebarCollapsed) {
-    mainContentMarginLeft = 56;
+  } else {
+    mainContentMarginLeft = sidebarCollapsed ? 56 : 220;
   }
 
   // Close alerts dropdown when clicking outside
@@ -1965,224 +2027,496 @@ function App() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showAlerts]);
 
-  if (!user) {
-    return <AuthPage />;
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('darkMode') === 'true';
+  });
+  useEffect(() => {
+    if (darkMode) {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+    localStorage.setItem('darkMode', darkMode);
+  }, [darkMode]);
+
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const profileBtnRef = useRef();
+  const profileDropdownRef = useRef();
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (
+        profileDropdownRef.current &&
+        !profileDropdownRef.current.contains(e.target) &&
+        profileBtnRef.current &&
+        !profileBtnRef.current.contains(e.target)
+      ) {
+        setShowProfileDropdown(false);
+      }
+    }
+    if (showProfileDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showProfileDropdown]);
+
+  // Helper for greeting
+  function getGreeting(name) {
+    const hour = new Date().getHours();
+    let greet = 'Hello';
+    if (hour < 12) greet = 'Good morning';
+    else if (hour < 18) greet = 'Good afternoon';
+    else greet = 'Good evening';
+    return `${greet}${name ? ', ' + name : ''}!`;
+  }
+
+  // --- User join notification state ---
+  const [userJoinNotification, setUserJoinNotification] = useState(null);
+  const loadedUserIds = useRef(new Set());
+
+  useEffect(() => {
+    // Listen for new users in real-time
+    const usersRef = collection(db, 'users');
+    const unsubscribe = onSnapshot(usersRef, (snapshot) => {
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added') {
+          const newUser = { id: change.doc.id, ...change.doc.data() };
+          // Only notify if this user wasn't already loaded
+          if (!loadedUserIds.current.has(newUser.id)) {
+            loadedUserIds.current.add(newUser.id);
+            // Don't notify for yourself
+            if (user && newUser.id !== user.uid) {
+              setUserJoinNotification(`${newUser.displayName || newUser.email || 'A new user'} has joined!`);
+              setTimeout(() => setUserJoinNotification(null), 3500);
+            }
+          }
+        }
+      });
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  if (!user && location.pathname === '/login') {
+    return <Login />;
+  }
+
+  if (!user && location.pathname === '/') {
+    return <Navigate to="/login" replace />;
   }
 
   return (
     <>
-      {/* Top-right controls: Session Time, Notification Bell, Logout */}
-      <div style={{
-        position: 'fixed',
-        top: 18,
-        right: 28,
-        zIndex: 2000,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 16,
-      }}>
-        {/* Session Time Display */}
-        {sessionTimeDisplay && (
+      {/* User join notification banner */}
+      {userJoinNotification && (
+        <div style={{
+          position: 'fixed',
+          top: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#1976d2',
+          color: '#fff',
+          padding: '12px 32px',
+          borderRadius: 12,
+          fontWeight: 600,
+          fontSize: '1.1em',
+          zIndex: 3000,
+          boxShadow: '0 2px 12px #1976d244',
+          letterSpacing: '0.02em',
+          textAlign: 'center',
+        }}>
+          {userJoinNotification}
+        </div>
+      )}
+      {user ? (
+        <ChatManager sidebarCollapsed={sidebarCollapsed} mainContentMarginLeft={mainContentMarginLeft}>
+          {/* Top-right controls: Session Time, Notification Bell, Logout, Dark Mode Toggle */}
           <div style={{
-            background: 'rgba(255, 255, 255, 0.95)',
-            color: '#1976d2',
-            border: '1px solid #e0e7ef',
-            borderRadius: 8,
-            fontWeight: 600,
-            fontSize: '0.9em',
-            padding: '0.4em 0.8em',
-            boxShadow: '0 2px 8px #e0e7ef',
+            position: 'fixed',
+            top: 18,
+            right: 28,
+            zIndex: 2000,
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
-            marginRight: 8,
-          }}
-          title="Session Time Remaining"
-          >
-            <span role="img" aria-label="clock">⏰</span>
-            {sessionTimeDisplay}
-          </div>
-        )}
-        {/* Notification Icon */}
-        <div>
-          <button
-            ref={bellRef}
-            onClick={() => setShowAlerts(v => !v)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              position: 'relative',
-              fontSize: '2em',
-              color: '#1976d2',
-              padding: 0,
-              marginRight: 16,
-            }}
-            title="Notifications"
-          >
-            <span role="img" aria-label="Notifications">🔔</span>
-            {alerts.length > 0 && (
-              <span style={{
-                position: 'absolute',
-                top: -8,
-                right: -8,
-                background: '#c00',
-                color: '#fff',
+            gap: 16,
+          }}>
+            {/* Dark Mode Toggle - round icon button */}
+            <button
+              onClick={() => setDarkMode(dm => !dm)}
+              aria-label={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              style={{
+                background: darkMode ? 'var(--bg-card)' : 'var(--bg-main)',
+                color: darkMode ? 'var(--accent)' : 'var(--accent)',
+                border: '2px solid var(--accent)',
                 borderRadius: '50%',
-                fontSize: '0.68em',
-                fontWeight: 700,
-                minWidth: 16,
-                minHeight: 16,
+                width: 40,
+                height: 40,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 2px 8px #e0e7ef',
-                border: '2px solid #fff',
-              }}>{alerts.length}</span>
-            )}
-          </button>
-          {showAlerts && alerts.length > 0 && (
-            <div
-              ref={dropdownRef}
-              style={{
-                position: 'absolute',
-                top: 38,
-                right: 0,
-                background: '#fff',
-                border: '1.5px solid #e0e7ef',
-                borderRadius: 12,
-                boxShadow: '0 4px 24px #e0e7ef',
-                minWidth: 320,
-                maxWidth: 420,
-                padding: '0.7em 0.5em',
-                zIndex: 2001,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
+                fontSize: '1.5em',
+                boxShadow: '0 2px 8px var(--shadow)',
+                cursor: 'pointer',
+                transition: 'background 0.18s, color 0.18s, border 0.18s',
               }}
+              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
-              {alerts.map(alert => (
-                <div
-                  key={alert.id}
-                  style={{
-                    padding: '0.7em 1.2em',
-                    margin: '2px 0',
-                    borderRadius: 10,
-                    fontWeight: 600,
-                    color: alert.color,
-                    background: '#f7f6f2',
-                    cursor: 'pointer',
-                    fontSize: '1.08em',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    boxShadow: '0 1px 6px #ececec',
-                    borderLeft: `5px solid ${alert.color}`,
-                    transition: 'background 0.18s',
-                  }}
-                  onClick={() => {
-                    setShowAlerts(false);
-                    navigate(alert.link);
-                  }}
-                  tabIndex={0}
-                  onKeyDown={e => { if (e.key === 'Enter') { setShowAlerts(false); navigate(alert.link); } }}
-                >
-                  <span style={{fontSize:'1.3em',marginRight:4}}>{alert.icon}</span>
-                  <span dangerouslySetInnerHTML={{__html: alert.message}} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        {/* Logout Button */}
-        <button
-          onClick={() => {
-            clearSession();
-            signOut(auth);
-          }}
-          style={{
-            background: 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 10,
-            fontWeight: 700,
-            fontSize: '1.08em',
-            padding: '0.6em 1.5em',
-            boxShadow: '0 2px 8px #e0e7ef',
-            cursor: 'pointer',
-            letterSpacing: '0.04em',
-            transition: 'background 0.18s, color 0.18s',
-          }}
-          title="Logout"
-        >
-          Logout
-        </button>
-      </div>
-      <button
-        className="hamburger"
-        aria-label="Open sidebar"
-        onClick={() => setSidebarOpen((v) => !v)}
-        style={{ alignItems: 'center', justifyContent: 'center' }}
-      >
-        <span />
-      </button>
-      {sidebarOpen && (
-        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
-      )}
-      <div className="app-layout">
-        <div
-          onMouseEnter={() => windowWidth > 700 && setSidebarCollapsed(false)}
-          onMouseLeave={() => windowWidth > 700 && setSidebarCollapsed(true)}
-          style={{ height: '100vh' }}
-        >
-          <Sidebar className={sidebarClass} />
-        </div>
-        <div className="main-content-area" style={{ paddingLeft: mainContentMarginLeft, transition: 'padding-left 0.22s cubic-bezier(.4,0,.2,1)' }}>
-          <div className="minimal-bg main-content">
-      <header className="minimal-header">
-              <div className="header-content">
-                <span className="header-title">SEO TRACKER</span>
-        <nav>
-                  <a href="#projects">Projects</a>
-                  <Link to="/resources">Resources</Link>
-                  <Link to="/gits">Gits</Link>
-        </nav>
-        </div>
-            </header>
-            <div className="minimalist-divider" />
-            <main className="main-seo-content">
-              <Routes>
-                <Route path="/" element={<HomeHero />} />
-                <Route path="/da-pa-checker" element={<DApaChecker />} />
-                <Route path="/company-tracker" element={<CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} packages={packages} setPackages={setPackages} />} />
-                <Route path="/seo-basic" element={<PackagePage pkg="SEO - BASIC" packages={packages} setPackages={setPackages} />} />
-                <Route path="/seo-premium" element={<PackagePage pkg="SEO - PREMIUM" packages={packages} setPackages={setPackages} />} />
-                <Route path="/seo-pro" element={<PackagePage pkg="SEO - PRO" packages={packages} setPackages={setPackages} />} />
-                <Route path="/seo-ultimate" element={<PackagePage pkg="SEO - ULTIMATE" packages={packages} setPackages={setPackages} />} />
-                <Route path="/report" element={<Report packages={packages} setPackages={setPackages} />} />
-                <Route path="/link-buildings" element={<LinkBuildings packages={packages} setPackages={setPackages} />} />
-                <Route path="/templates" element={<Templates />} />
-                <Route path="/social-bookmarking" element={<Bookmarking packages={packages} setPackages={setPackages} />} />
-                <Route path="/trash" element={<TrashPage />} />
-                <Route path="/tickets" element={<Tickets />} />
-                <Route path="/gits" element={<GitsPage />} />
-                <Route path="/site-audits" element={<SiteAuditsPage />} />
-                <Route path="/resources" element={<ResourcesPage />} />
-              </Routes>
-      </main>
-            <div className="minimalist-divider" />
-      <footer className="minimal-footer">
-              <div className="footer-content">
-                <span>&copy; 2025 OPPA JEWO</span>
-                <span className="footer-tagline">Kung ang bayot ma amnesia, bayot gihapon?</span>
-                <a href="https://talhub-smakdat-team.netlify.app/" className="footer-link" target="_blank" rel="noopener noreferrer">TalHub Smak Dat</a>
+              {darkMode ? '🌙' : '☀️'}
+            </button>
+            {/* Session Time Display */}
+            {sessionTimeDisplay && (
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.95)',
+                color: '#1976d2',
+                border: '1px solid #e0e7ef',
+                borderRadius: 8,
+                fontWeight: 600,
+                fontSize: '0.9em',
+                padding: '0.4em 0.8em',
+                boxShadow: '0 2px 8px #e0e7ef',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                marginRight: 8,
+              }}
+              title="Session Time Remaining"
+              >
+                <span role="img" aria-label="clock">⏰</span>
+                {sessionTimeDisplay}
               </div>
-      </footer>
-    </div>
-        </div>
-      </div>
+            )}
+            {/* Notification Bell Icon/Button (restored) */}
+            <button
+              aria-label="Notifications"
+              onClick={() => setShowAlerts(v => !v)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#1976d2',
+                fontSize: 28,
+                marginRight: 18,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                width: 40,
+                height: 40,
+                padding: 0,
+              }}
+              ref={bellRef}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1976d2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              {alerts && alerts.length > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: -6,
+                  right: -6,
+                  background: '#ff4757',
+                  color: '#fff',
+                  borderRadius: '50%',
+                  minWidth: 18,
+                  height: 18,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  border: '2px solid #fff',
+                  zIndex: 2,
+                  boxShadow: '0 2px 8px #e0e7ef',
+                  padding: '0 4px',
+                }}>{alerts.length}</span>
+              )}
+            </button>
+            {showAlerts && alerts.length > 0 && (
+              <div
+                ref={dropdownRef}
+                style={{
+                  position: 'absolute',
+                  top: 58,
+                  right: 0,
+                  background: '#fff',
+                  border: '1.5px solid #e0e7ef',
+                  borderRadius: 12,
+                  boxShadow: '0 4px 24px #e0e7ef',
+                  minWidth: 320,
+                  maxWidth: 420,
+                  padding: '0.7em 0.5em',
+                  zIndex: 2001,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                {alerts.map(alert => (
+                  <div
+                    key={alert.id}
+                    style={{
+                      padding: '0.7em 1.2em',
+                      margin: '2px 0',
+                      borderRadius: 10,
+                      fontWeight: 600,
+                      color: alert.color,
+                      background: '#f7f6f2',
+                      cursor: 'pointer',
+                      fontSize: '1.08em',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      boxShadow: '0 1px 6px #ececec',
+                      borderLeft: `5px solid ${alert.color}`,
+                      transition: 'background 0.18s',
+                    }}
+                    onClick={() => {
+                      setShowAlerts(false);
+                      navigate(alert.link);
+                    }}
+                    tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter') { setShowAlerts(false); navigate(alert.link); } }}
+                  >
+                    <span style={{fontSize:'1.3em',marginRight:4}}>{alert.icon}</span>
+                    <span dangerouslySetInnerHTML={{__html: alert.message}} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Profile Icon with Mini Dropdown */}
+            <div style={{ position: 'relative' }}>
+              <button
+                ref={profileBtnRef}
+                onClick={() => setShowProfileDropdown(v => !v)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  marginRight: 16,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                title="Profile"
+              >
+                <div style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: '50%',
+                  background: '#2196f3',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 18,
+                  color: '#fff',
+                  overflow: 'hidden',
+                }}>
+                  {user?.photoURL ? (
+                    <img src={user.photoURL} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span>{user?.displayName ? user.displayName.split(' ').map(n => n[0]).join('').toUpperCase() : user?.email?.slice(0,2).toUpperCase()}</span>
+                  )}
+                </div>
+              </button>
+              {showProfileDropdown && (
+                <div
+                  ref={profileDropdownRef}
+                  style={{
+                    position: 'absolute',
+                    top: 48,
+                    right: 0,
+                    background: '#fff',
+                    border: '1.5px solid #e0e7ef',
+                    borderRadius: 12,
+                    boxShadow: '0 4px 24px #e0e7ef',
+                    minWidth: 240,
+                    padding: '1.2em 1.2em 1em 1.2em',
+                    zIndex: 2002,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 10,
+                    animation: 'fadeSlideIn 0.35s cubic-bezier(.4,0,.2,1)',
+                  }}
+                >
+                  <style>{`
+                    @keyframes fadeSlideIn {
+                      from { opacity: 0; transform: translateY(-16px); }
+                      to { opacity: 1; transform: translateY(0); }
+                    }
+                    .avatar-anim:hover {
+                      box-shadow: 0 0 0 4px #1976d2aa, 0 2px 8px #e0e7ef;
+                      transition: box-shadow 0.25s;
+                    }
+                    .divider-line { width: 100%; height: 1px; background: #e0e7ef; margin: 10px 0; border-radius: 2px; }
+                  `}</style>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 8 }}>
+                    <div className="avatar-anim" style={{ width: 54, height: 54, borderRadius: '50%', background: '#2196f3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: '#fff', overflow: 'hidden', marginBottom: 6, boxShadow: '0 2px 8px #e0e7ef', transition: 'box-shadow 0.25s' }}>
+                      {user?.photoURL ? (
+                        <img src={user.photoURL} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span>{user?.displayName ? user.displayName.split(' ').map(n => n[0]).join('').toUpperCase() : user?.email?.slice(0,2).toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>{getGreeting(user?.displayName || user?.email?.split('@')[0])}</div>
+                    <div style={{ fontSize: 13, color: '#888', marginBottom: 2 }}>{user?.email}</div>
+                  </div>
+                  <div className="divider-line" />
+                  <button
+                    onClick={() => { setShowProfileDropdown(false); navigate('/profile'); }}
+                    style={{ width: '100%', background: '#1976d2', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: '1em', marginBottom: 6, cursor: 'pointer' }}
+                  >Profile</button>
+                  <div className="divider-line" />
+                  <button
+                    onClick={async () => {
+                      setShowProfileDropdown(false);
+                      clearSessionStartTime();
+                      try {
+                        // Set user status to offline in Firestore
+                        const auth = getAuth();
+                        const user = auth.currentUser;
+                        if (user) {
+                          await setDoc(firestoreDoc(db, 'users', user.uid), { status: 'offline' }, { merge: true });
+                        }
+                        // Clear chat user cache
+                        localStorage.removeItem('chat_user_cache_v1');
+                        await signOut(auth);
+                        navigate('/login', { replace: true });
+                      } catch (err) {
+                        console.error('Logout failed:', err);
+                        alert('Logout failed. Please try again.');
+                      }
+                    }}
+                    style={{ width: '100%', background: '#fff', color: '#d32f2f', border: '1.5px solid #e0e7ef', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: '1em', cursor: 'pointer' }}
+                  >Logout</button>
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            className="hamburger"
+            aria-label="Open sidebar"
+            onClick={() => setSidebarOpen((v) => !v)}
+            style={{ alignItems: 'center', justifyContent: 'center' }}
+          >
+            <span />
+          </button>
+          {sidebarOpen && (
+            <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+          )}
+          <div className="app-layout">
+            <div
+              onMouseEnter={() => windowWidth > 700 && setSidebarCollapsed(false)}
+              onMouseLeave={() => windowWidth > 700 && setSidebarCollapsed(true)}
+              style={{ height: '100vh' }}
+            >
+              <Sidebar className={sidebarClass} />
+            </div>
+            <div className="main-content-area" style={{ paddingLeft: mainContentMarginLeft, transition: 'padding-left 0.22s cubic-bezier(.4,0,.2,1)' }}>
+              <div className="minimal-bg main-content">
+                <header className="minimal-header">
+                  <div className="header-content">
+                    <span className="header-title">SEO TRACKER</span>
+                    <nav>
+                      <a href="#projects">Projects</a>
+                      <Link to="/resources">Resources</Link>
+                      <Link to="/gits">Gits</Link>
+                    </nav>
+                  </div>
+                </header>
+                <div className="minimalist-divider" />
+                <main className="main-seo-content">
+                  <Routes>
+                    <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
+                    <Route path="/" element={user ? <HomeHero userEmail={user && user.email ? user.email.split('@')[0] : undefined} /> : <Navigate to="/login" replace />} />
+                    <Route path="/da-pa-checker" element={user ? <DApaChecker darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
+                    <Route path="/company-tracker" element={user ? <CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/seo-basic" element={user ? <PackagePage pkg="SEO - BASIC" packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/seo-premium" element={user ? <PackagePage pkg="SEO - PREMIUM" packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/seo-pro" element={user ? <PackagePage pkg="SEO - PRO" packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/seo-ultimate" element={user ? <PackagePage pkg="SEO - ULTIMATE" packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/report" element={user ? <Report packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/link-buildings" element={user ? <LinkBuildings darkMode={darkMode} setDarkMode={setDarkMode} packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/templates" element={user ? <TemplateManager darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
+                    <Route path="/social-bookmarking" element={user ? <Bookmarking packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/trash" element={user ? <TemplateTrash darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
+                    <Route path="/tickets" element={user ? <Tickets darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
+                    <Route path="/gits" element={user ? <GitsPage darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
+                    <Route path="/site-audits" element={user ? <SiteAuditsPage darkMode={darkMode} setDarkMode={setDarkMode} packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/resources" element={user ? <ResourcesPage darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
+                    <Route path="/company-overview" element={user ? <CompanyOverview darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
+                    <Route path="/notes" element={user ? <NotesPage darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
+                    <Route path="/profile" element={user ? <ProfilePage onProfileUpdate={u => setUser(prev => ({ ...prev, ...u }))} /> : <Navigate to="/login" replace />} />
+                    <Route path="/chat-users" element={<ChatUsersPage />} />
+                  </Routes>
+                </main>
+                <div className="minimalist-divider" />
+                <footer className="minimal-footer">
+                  <div className="footer-content">
+                    <span>&copy; 2025 OPPA JEWO</span>
+                    <span className="footer-tagline">Kung ang bayot ma amnesia, bayot gihapon?</span>
+                    <a href="https://talhub-smakdat-team.netlify.app/" className="footer-link" target="_blank" rel="noopener noreferrer">TalHub Smak Dat</a>
+                  </div>
+                </footer>
+              </div>
+            </div>
+          </div>
+          {/* Floating Chat Users Button with online count */}
+          <ChatUsersFloatingButton />
+        </ChatManager>
+      ) : null}
     </>
-  )
+  );
+}
+
+// Floating chat button with online user count
+function ChatUsersFloatingButton() {
+  const navigate = useNavigate();
+  const { userList } = useChat();
+  const currentUser = getAuth().currentUser;
+  const onlineUsers = Array.isArray(userList)
+    ? userList.filter(u => u.status === 'online' && (!currentUser || u.id !== currentUser.uid))
+    : [];
+  const onlineCount = onlineUsers.length;
+  let onlineText = '';
+  if (onlineCount === 0) onlineText = 'No Users Online';
+  else if (onlineCount === 1) onlineText = '1 User Online';
+  else onlineText = `${onlineCount} Users Online`;
+  return (
+    <div style={{ position: 'fixed', right: 32, bottom: 32, zIndex: 3000, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <button
+        onClick={() => navigate('/chat-users')}
+        aria-label="Chat Users"
+        style={{
+          background: 'none',
+          color: '#1976d2',
+          border: 'none',
+          borderRadius: 0,
+          width: 60,
+          height: 60,
+          boxShadow: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 48,
+          fontWeight: 700,
+          cursor: 'pointer',
+          transition: 'color 0.18s',
+          padding: 0,
+        }}
+      >
+        {/* Feather MessageCircle icon, larger size */}
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1976d2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 11.5a8.38 8.38 0 0 1-1.9 5.4 8.5 8.5 0 0 1-6.6 3.1c-1.6 0-3.1-.4-4.4-1.2L3 21l1.2-4.1A8.5 8.5 0 1 1 21 11.5z"/>
+        </svg>
+      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 16, color: '#43a047', background: '#fff', borderRadius: 16, padding: '4px 12px', boxShadow: '0 2px 8px #e0e7ef', border: '1.5px solid #e0e7ef' }}>
+        <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#43a047', display: 'inline-block', marginRight: 6, border: '2px solid #fff', boxShadow: '0 1px 4px #e0e7ef' }} />
+        {onlineText}
+      </div>
+    </div>
+  );
 }
 
 export default App

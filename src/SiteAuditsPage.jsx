@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { getPackages, updateCompanyAuditStatus, savePackages } from './firestoreHelpers';
 import { useLocation } from 'react-router-dom';
 
 const AUDIT_STATUS_KEY = 'siteAuditStatus';
@@ -39,29 +38,26 @@ function getPackageClass(pkg) {
   return '';
 }
 
-function SiteAuditsPage() {
+function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
   const location = useLocation();
-  const [companies, setCompanies] = useState([]);
   const [auditStatus, setAuditStatus] = useState({}); // { [companyId]: 'Pending' | 'Completed' }
   const [preEOCStatus, setPreEOCStatus] = useState({}); // { [companyId]: 'Pending' | 'Completed' }
 
   useEffect(() => {
-    getPackages().then(pkgs => {
-      const all = Object.values(pkgs).flat();
-      setCompanies(all);
-      // Build status maps from company fields
-      const auditB = {};
-      const auditC = {};
-      all.forEach(c => {
-        auditB[c.id] = c.siteAuditBStatus || 'Pending';
-        auditC[c.id] = c.siteAuditCStatus || 'Pending';
-      });
-      setAuditStatus(auditB);
-      setPreEOCStatus(auditC);
+    const all = Object.values(packages).flat();
+    // Build status maps from company fields
+    const auditB = {};
+    const auditC = {};
+    all.forEach(c => {
+      auditB[c.id] = c.siteAuditBStatus || 'Pending';
+      auditC[c.id] = c.siteAuditCStatus || 'Pending';
     });
-  }, [location]);
+    setAuditStatus(auditB);
+    setPreEOCStatus(auditC);
+  }, [packages]);
 
   const today = new Date();
+  const companies = Object.values(packages).flat();
 
   // Table 1: Half-year since start (183 days or more, Pending only)
   const table1 = companies.filter(c => {
@@ -90,7 +86,10 @@ function SiteAuditsPage() {
     setAuditStatus(prev => ({ ...prev, [id]: value }));
     // Remove from companies in UI if completed
     if (value === 'Completed') {
-      setCompanies(prev => prev.map(c => c.id === id ? { ...c, siteAuditBStatus: value } : c));
+      setPackages(prev => ({
+        ...prev,
+        [c.package]: prev[c.package].map(c => c.id === id ? { ...c, siteAuditBStatus: value } : c)
+      }));
     }
     try {
       await updateCompanyAuditStatus(id, 'siteAuditBStatus', value);
@@ -109,7 +108,10 @@ function SiteAuditsPage() {
       if (updated) await savePackages(pkgs);
       // Now reload
       const all = Object.values(pkgs).flat();
-      setCompanies(all);
+      setPackages(prev => ({
+        ...prev,
+        [c.package]: all.filter(c => c.package === c.package)
+      }));
       const auditB = {};
       const auditC = {};
       all.forEach(c => {
@@ -127,7 +129,10 @@ function SiteAuditsPage() {
   const handlePreEOCStatusChange = async (id, value) => {
     setPreEOCStatus(prev => ({ ...prev, [id]: value }));
     if (value === 'Completed') {
-      setCompanies(prev => prev.map(c => c.id === id ? { ...c, siteAuditCStatus: value } : c));
+      setPackages(prev => ({
+        ...prev,
+        [c.package]: prev[c.package].map(c => c.id === id ? { ...c, siteAuditCStatus: value } : c)
+      }));
     }
     try {
       await updateCompanyAuditStatus(id, 'siteAuditCStatus', value);
@@ -146,7 +151,10 @@ function SiteAuditsPage() {
       if (updated) await savePackages(pkgs);
       // Now reload
       const all = Object.values(pkgs).flat();
-      setCompanies(all);
+      setPackages(prev => ({
+        ...prev,
+        [c.package]: all.filter(c => c.package === c.package)
+      }));
       const auditB = {};
       const auditC = {};
       all.forEach(c => {
@@ -162,7 +170,7 @@ function SiteAuditsPage() {
   };
 
   return (
-    <section className="company-tracker-page" style={{ width: '100%', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '2.5rem', paddingBottom: '3.5rem' }}>
+    <section className="company-tracker-page" style={{ width: '100%', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '2.5rem', paddingBottom: '3.5rem', background: darkMode ? '#181a1b' : '#f7f6f2' }}>
       {/* Alerts */}
       {showAuditBAlert && (
         <div style={{

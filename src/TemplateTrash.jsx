@@ -1,43 +1,69 @@
 import React, { useState, useEffect } from 'react';
+import { getTrash, saveTrash, saveTemplate, saveTicket, saveCompany, getPackages, savePackages, getCategories, saveCategories } from './firestoreHelpers';
 
-const TEMPLATE_KEY = 'templates';
-const TEMPLATE_TRASH_KEY = 'template-trash';
-
-const TemplateTrash = () => {
-  const [trash, setTrash] = useState(() => {
-    return JSON.parse(localStorage.getItem(TEMPLATE_TRASH_KEY) || '[]');
-  });
+const TemplateTrash = ({ darkMode, setDarkMode }) => {
+  const [trash, setTrash] = useState([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [search, setSearch] = useState('');
   const [showDeleteAll, setShowDeleteAll] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem(TEMPLATE_TRASH_KEY, JSON.stringify(trash));
-  }, [trash]);
+    // Fetch trash from Firestore
+    getTrash()
+      .then(data => setTrash(Array.isArray(data) ? data : []))
+      .catch(() => setTrash([]));
+  }, []);
 
-  const handleRestore = (template) => {
-    // Remove from trash
-    const updatedTrash = trash.filter(t => t.id !== template.id);
-    setTrash(updatedTrash);
-    localStorage.setItem(TEMPLATE_TRASH_KEY, JSON.stringify(updatedTrash));
-    // Restore to templates
-    const saved = localStorage.getItem(TEMPLATE_KEY);
-    const templates = saved ? JSON.parse(saved) : [];
-    if (!templates.some(t => t.id === template.id)) {
-      templates.push(template);
-      localStorage.setItem(TEMPLATE_KEY, JSON.stringify(templates));
+  // Helper to refresh trash from Firestore
+  const refreshTrash = async () => {
+    try {
+      const data = await getTrash();
+      setTrash(Array.isArray(data) ? data : []);
+    } catch {
+      setTrash([]);
     }
+  };
+
+  const handleRestore = async (item) => {
+    // Remove from trash
+    const updatedTrash = trash.filter(t => t.id !== item.id && t.name !== item.name);
+    await saveTrash(updatedTrash);
+    // Restore to the correct collection
+    if (item.type === 'template') {
+      await saveTemplate({ ...item });
+    } else if (item.type === 'ticket') {
+      await saveTicket({ ...item });
+    } else if (item.type === 'company') {
+      if (item.originalPackage) {
+        const packages = await getPackages();
+        if (!packages[item.originalPackage]) packages[item.originalPackage] = [];
+        if (!packages[item.originalPackage].some(c => c.id === item.id)) {
+          packages[item.originalPackage].push({ ...item });
+          await savePackages(packages);
+        }
+      } else {
+        await saveCompany({ ...item });
+      }
+    } else if (item.type === 'category') {
+      // Restore category to categories list
+      const categories = await getCategories();
+      if (!categories.includes(item.name)) {
+        const updated = [item.name, ...categories];
+        await saveCategories(updated);
+      }
+    }
+    refreshTrash();
   };
 
   const handleDeleteForever = (template) => {
     setConfirmDeleteId(template.id);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     const updatedTrash = trash.filter(t => t.id !== confirmDeleteId);
-    setTrash(updatedTrash);
-    localStorage.setItem(TEMPLATE_TRASH_KEY, JSON.stringify(updatedTrash));
+    await saveTrash(updatedTrash);
     setConfirmDeleteId(null);
+    refreshTrash();
   };
 
   const handleDeleteCancel = () => {
@@ -48,24 +74,29 @@ const TemplateTrash = () => {
   const handleDeleteAll = () => {
     setShowDeleteAll(true);
   };
-  const handleDeleteAllConfirm = () => {
-    setTrash([]);
-    localStorage.setItem(TEMPLATE_TRASH_KEY, JSON.stringify([]));
+  const handleDeleteAllConfirm = async () => {
+    await saveTrash([]);
     setShowDeleteAll(false);
+    refreshTrash();
   };
   const handleDeleteAllCancel = () => {
     setShowDeleteAll(false);
   };
 
   // Filtered trash based on search
-  const filteredTrash = trash.filter(t =>
-    t.title.toLowerCase().includes(search.toLowerCase()) ||
-    t.content.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredTrash = Array.isArray(trash) ? trash.filter(t =>
+    (t?.title?.toLowerCase?.() || '').includes(search.toLowerCase()) ||
+    (t?.content?.toLowerCase?.() || '').includes(search.toLowerCase())
+  ) : [];
 
   return (
-    <section className="company-tracker-page">
+    <section className="company-tracker-page" style={{ background: darkMode ? '#181a1b' : '#f7f6f2', minHeight: '100vh' }}>
       <h1 className="trash-header">Template Trash</h1>
+      {(!Array.isArray(trash) || trash.length === 0) && (
+        <div style={{ color: '#b00', margin: '1em 0', fontWeight: 600 }}>
+          {trash.length === 0 ? 'Trash is empty or you are not logged in.' : 'Unable to load trash. Please log in.'}
+        </div>
+      )}
       <div className="table-scroll-container table-responsive">
         <table className="company-table trash-table">
           <thead>
@@ -97,10 +128,14 @@ const TemplateTrash = () => {
             {filteredTrash.length === 0 && (
               <tr><td colSpan={3} className="trash-empty">Trash is empty.</td></tr>
             )}
-            {filteredTrash.map(template => (
-              <tr key={template.id}>
-                <td style={{ fontWeight: 700, fontSize: '1.13rem', color: '#232323', background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #4e342e', letterSpacing: '0.02em' }}>{template.title}</td>
-                <td style={{ maxWidth: 400, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fff8f8' }}>{template.content}</td>
+            {filteredTrash.map((template, idx) => (
+              <tr key={template.id || idx}>
+                <td style={{ fontWeight: 700, fontSize: '1.13rem', color: '#232323', background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #4e342e', letterSpacing: '0.02em' }}>
+                  {template.title || template.subject || template.name || 'No Title'}
+                </td>
+                <td style={{ maxWidth: 400, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fff8f8' }}>
+                  {template.content || template.company || template.ticketId || template.package || template.status || 'No Content'}
+                </td>
                 <td>
                   <button className="trash-action-btn restore" onClick={() => handleRestore(template)}>Restore</button>
                   <button className="trash-action-btn delete" onClick={() => handleDeleteForever(template)}>Delete Forever</button>

@@ -1,19 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getGits, saveGits } from './firestoreHelpers';
 
-function GitsPage() {
-  // Git 3 and Git 4 with new IP for Git 4
-  const gitServers = [
+function GitsPage({ darkMode, setDarkMode }) {
+  const [gitServers, setGitServers] = useState([
     { label: 'Git 3', ip: '47.128.64.60' },
     { label: 'Git 4', ip: '54.179.74.207' },
-  ];
+  ]);
+  const [loading, setLoading] = useState(true);
   const [copiedIdx, setCopiedIdx] = useState(null);
+  const [editIdx, setEditIdx] = useState(null);
+  const [editIp, setEditIp] = useState('');
+
+  useEffect(() => {
+    getGits().then(gits => {
+      setGitServers(gits);
+      setLoading(false);
+    });
+  }, []);
+
   const copyToClipboard = (ip, idx) => {
     navigator.clipboard.writeText(ip);
     setCopiedIdx(idx);
     setTimeout(() => setCopiedIdx(null), 1200);
   };
+
+  const handleEdit = (idx) => {
+    setEditIdx(idx);
+    setEditIp(gitServers[idx].ip);
+  };
+  const handleEditSave = async (idx) => {
+    const updated = [...gitServers];
+    updated[idx].ip = editIp;
+    setGitServers(updated);
+    setEditIdx(null);
+    setEditIp('');
+    await saveGits(updated);
+  };
+  const handleEditCancel = () => {
+    setEditIdx(null);
+    setEditIp('');
+  };
+
+  if (loading) {
+    return <div style={{ textAlign: 'center', marginTop: 60, fontSize: '1.3em', color: '#888' }}>Loading Gits...</div>;
+  }
+
   return (
-    <section className="company-tracker-page" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #f7f6f2 60%, #e0e7ef 100%)' }}>
+    <section className="company-tracker-page" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: darkMode ? '#181a1b' : 'linear-gradient(135deg, #f7f6f2 60%, #e0e7ef 100%)' }}>
       <div style={{
         background: 'linear-gradient(120deg, #fff 60%, #e0e7ef 100%)',
         borderRadius: 24,
@@ -32,57 +65,75 @@ function GitsPage() {
           <span style={{ fontSize: '2.5em', color: '#1976d2' }}>🌐</span>
           <h1 className="fancy-title" style={{ fontSize: '2.2em', fontWeight: 800, letterSpacing: '0.04em', margin: 0 }}>Git servers for this week</h1>
         </div>
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'row', gap: 32, alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'row', gap: 32, alignItems: 'flex-start', justifyContent: 'center' }}>
           {gitServers.map((server, i) => (
-            <div key={i} className="gits-command-block" style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              background: 'linear-gradient(90deg, #e0e7ef 60%, #f7f6f2 100%)',
-              borderRadius: 16,
-              padding: '0.8em 1.2em',
-              boxShadow: '0 2px 12px #ececec',
-              fontSize: '1.15em',
-              fontWeight: 700,
-              color: '#232323',
-              border: '1.5px solid #b6b6d8',
-              position: 'relative',
-              minWidth: 260,
-            }}>
-              <span style={{ fontWeight: 800, color: '#1976d2', marginRight: 8 }}>{server.label}:</span>
-              <code style={{ fontSize: '1.1em', fontWeight: 700, color: '#1976d2', letterSpacing: '0.04em', flex: 1 }}>{server.ip}</code>
-              <button className="gits-copy-btn" style={{
-                background: 'linear-gradient(90deg, #b6b6d8 60%, #81c784 100%)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 10,
+            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <button style={{ marginBottom: 8, background: '#fff0b2', color: '#b68c00', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '1em', padding: '0.2em 0.7em', cursor: 'pointer' }} onClick={() => handleEdit(i)} title="Edit IP">✏️</button>
+              <div className="gits-command-block" style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                background: 'linear-gradient(90deg, #e0e7ef 60%, #f7f6f2 100%)',
+                borderRadius: 16,
+                padding: '0.8em 1.2em',
+                boxShadow: '0 2px 12px #ececec',
+                fontSize: '1.15em',
                 fontWeight: 700,
-                fontSize: '1em',
-                padding: '0.4em 1.1em',
-                cursor: 'pointer',
-                boxShadow: '0 1px 6px #ececec',
-                transition: 'background 0.18s, color 0.18s',
-                marginLeft: 8,
-              }} onClick={() => copyToClipboard(server.ip, i)}>
-                <span style={{ fontSize: '1.1em', marginRight: 4 }}>📋</span>Copy
-              </button>
-              {copiedIdx === i && (
-                <span style={{
-                  position: 'absolute',
-                  right: 18,
-                  top: '-2em',
-                  background: '#81c784',
-                  color: '#fff',
-                  borderRadius: 8,
-                  padding: '0.18em 0.8em',
-                  fontWeight: 700,
-                  fontSize: '0.95em',
-                  boxShadow: '0 1px 6px #ececec',
-                  letterSpacing: '0.03em',
-                  zIndex: 2,
-                  transition: 'opacity 0.18s',
-                }}>Copied!</span>
-              )}
+                color: '#232323',
+                border: '1.5px solid #b6b6d8',
+                position: 'relative',
+                minWidth: 260,
+              }}>
+                <span style={{ fontWeight: 800, color: '#1976d2', marginRight: 8 }}>{server.label}:</span>
+                {editIdx === i ? (
+                  <>
+                    <input
+                      type="text"
+                      value={editIp}
+                      onChange={e => setEditIp(e.target.value)}
+                      style={{ fontSize: '1.1em', fontWeight: 700, color: '#1976d2', letterSpacing: '0.04em', flex: 1, border: '1px solid #b6b6d8', borderRadius: 6, padding: '0.2em 0.6em', marginRight: 8 }}
+                    />
+                    <button style={{ marginRight: 4, background: '#81c784', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '1em', padding: '0.2em 0.7em', cursor: 'pointer' }} onClick={() => handleEditSave(i)}>Save</button>
+                    <button style={{ background: '#eee', color: '#232323', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '1em', padding: '0.2em 0.7em', cursor: 'pointer' }} onClick={handleEditCancel}>Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <code style={{ fontSize: '1.1em', fontWeight: 700, color: '#1976d2', letterSpacing: '0.04em', flex: 1 }}>{server.ip}</code>
+                    <button className="gits-copy-btn" style={{
+                      background: 'linear-gradient(90deg, #b6b6d8 60%, #81c784 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 10,
+                      fontWeight: 700,
+                      fontSize: '1em',
+                      padding: '0.4em 1.1em',
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 6px #ececec',
+                      transition: 'background 0.18s, color 0.18s',
+                      marginLeft: 8,
+                    }} onClick={() => copyToClipboard(server.ip, i)}>
+                      <span style={{ fontSize: '1.1em', marginRight: 4 }}>📋</span>Copy
+                    </button>
+                  </>
+                )}
+                {copiedIdx === i && (
+                  <span style={{
+                    position: 'absolute',
+                    right: 18,
+                    top: '-2em',
+                    background: '#81c784',
+                    color: '#fff',
+                    borderRadius: 8,
+                    padding: '0.18em 0.8em',
+                    fontWeight: 700,
+                    fontSize: '0.95em',
+                    boxShadow: '0 1px 6px #ececec',
+                    letterSpacing: '0.03em',
+                    zIndex: 2,
+                    transition: 'opacity 0.18s',
+                  }}>Copied!</span>
+                )}
+              </div>
             </div>
           ))}
         </div>

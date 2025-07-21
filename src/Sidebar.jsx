@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 // You can use emoji or replace with SVG/icon components
 const navLinks = [
+  { icon: '🏢', text: 'Company Overview', href: '/company-overview', aria: 'Company Overview' },
   { icon: '📦', text: 'SEO - BASIC', href: '/seo-basic', aria: 'SEO - BASIC' },
   { icon: '\u2b50', text: 'SEO - PREMIUM', href: '/seo-premium', aria: 'SEO - PREMIUM' },
   { icon: '🚀', text: 'SEO - PRO', href: '/seo-pro', aria: 'SEO - PRO' },
@@ -14,6 +15,7 @@ const navLinks = [
   { icon: '📝', text: 'Site Audits', href: '/site-audits', aria: 'Site Audits' },
   { icon: '📄', text: 'Templates', href: '/templates', aria: 'Templates' },
   { icon: '🎫', text: 'Tickets', href: '/tickets', aria: 'Tickets' },
+  { icon: '🗒️', text: 'Notes & Reminders', href: '/notes', aria: 'Notes & Reminders' },
   { icon: '🗑️', text: 'Trash', href: '/trash', aria: 'Trash' },
 ];
 
@@ -28,9 +30,14 @@ const Sidebar = ({ className = 'sidebar' }) => {
       </Link>
       <nav className="sidebar-nav">
         {navLinks.map(link => (
-          <Link to={link.href} key={link.text} aria-label={link.aria} className="sidebar-link">
+          <Link
+            to={link.href}
+            key={link.text}
+            aria-label={link.aria}
+            className="sidebar-link"
+          >
             <span className="sidebar-link-icon">{link.icon}</span>
-            <span className="sidebar-link-text">{link.text}</span>
+            <span className="sidebar-link-text" style={{ whiteSpace: 'normal', overflow: 'visible', textOverflow: 'unset', width: '100%' }}>{link.text}</span>
           </Link>
         ))}
       </nav>

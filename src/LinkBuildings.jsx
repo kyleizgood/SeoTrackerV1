@@ -11,7 +11,7 @@ const linksPerPackage = {
   'SEO - ULTIMATE': '42 Links',
 };
 
-export default function LinkBuildings({ packages, setPackages }) {
+export default function LinkBuildings({ packages, setPackages, darkMode, setDarkMode }) {
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -78,7 +78,7 @@ export default function LinkBuildings({ packages, setPackages }) {
   const handleRemoveCancel = () => setConfirmRemove({ pkg: null, companyId: null, companyName: '' });
 
   return (
-    <section className="company-tracker-page" style={{paddingTop: 12}}>
+    <section className="company-tracker-page" style={{paddingTop: 12, background: darkMode ? '#181a1b' : '#f7f6f2'}}>
       <h1 className="fancy-title">Link Building for {currentMonth}</h1>
       <p className="hero-desc" style={{marginBottom: 10}}>All companies, grouped by SEO package for link building.</p>
       {packageNames.map(pkg => {
