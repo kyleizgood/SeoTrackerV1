@@ -730,7 +730,7 @@ function PackagePage({ pkg, packages, setPackages }) {
               <th>Status
                 <select
                   value={filterStatus}
-                  onChange={e => setFilterStatus(e.target.value)}
+                  onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
                   style={{ marginTop: 4, width: '100%', borderRadius: 8, border: '1.5px solid #e0e0e0', fontSize: '0.95rem', background: '#faf9f6', color: '#232323' }}
                 >
                   <option value="">All</option>
@@ -756,6 +756,7 @@ function PackagePage({ pkg, packages, setPackages }) {
                       else if (i === 2) setFilterRA(e.target.value);
                       else if (i === 3) setFilterDistribution(e.target.value);
                       else if (i === 4) setFilterBusinessProfileClaiming(e.target.value);
+                      setPage(1);
                     }}
                     style={{ marginTop: 4, width: '100%', borderRadius: 8, border: '1.5px solid #e0e0e0', fontSize: '0.95rem', background: '#faf9f6', color: '#232323' }}
                   >
@@ -781,7 +782,7 @@ function PackagePage({ pkg, packages, setPackages }) {
                   className="package-search-input"
                   placeholder="Search company..."
                   value={search}
-                  onChange={e => setSearch(e.target.value)}
+                  onChange={e => { setSearch(e.target.value); setPage(1); }}
                 />
               </th>
               <th></th>
