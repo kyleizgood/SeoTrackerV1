@@ -511,9 +511,39 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
       </table>
       {/* Pagination controls */}
       <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8 }}>
-        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
+        <button
+          onClick={() => setPage(p => Math.max(1, p - 1))}
+          disabled={page === 1}
+          style={{
+            background: page === 1 ? '#f0f0f0' : 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
+            color: page === 1 ? '#bbb' : '#fff',
+            border: page === 1 ? '1.5px solid #e0e0e0' : 'none',
+            borderRadius: 8,
+            fontWeight: 700,
+            fontSize: '1em',
+            padding: '0.5em 1.5em',
+            cursor: page === 1 ? 'not-allowed' : 'pointer',
+            opacity: page === 1 ? 0.7 : 1,
+            transition: 'background 0.18s, color 0.18s',
+          }}
+        >Prev</button>
         <span>Page {page} of {pageCount || 1}</span>
-        <button onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount || pageCount === 0}>Next</button>
+        <button
+          onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+          disabled={page === pageCount || pageCount === 0}
+          style={{
+            background: (page === pageCount || pageCount === 0) ? '#f0f0f0' : 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
+            color: (page === pageCount || pageCount === 0) ? '#bbb' : '#fff',
+            border: (page === pageCount || pageCount === 0) ? '1.5px solid #e0e0e0' : 'none',
+            borderRadius: 8,
+            fontWeight: 700,
+            fontSize: '1em',
+            padding: '0.5em 1.5em',
+            cursor: (page === pageCount || pageCount === 0) ? 'not-allowed' : 'pointer',
+            opacity: (page === pageCount || pageCount === 0) ? 0.7 : 1,
+            transition: 'background 0.18s, color 0.18s',
+          }}
+        >Next</button>
       </div>
       {selectedRow && (
         <div className="company-details-modal-overlay" onClick={e => { if (e.target.classList.contains('company-details-modal-overlay')) setSelectedRow(null); }}>

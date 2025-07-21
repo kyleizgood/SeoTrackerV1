@@ -60,7 +60,7 @@ export default function AuthPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(120deg, #e0e7ef 0%, #f7f6f2 100%)' }}>
+    <div style={{ minHeight: '100vh', display: 'block', background: 'linear-gradient(120deg, #e0e7ef 0%, #f5f7fa 100%)', padding: '48px 0 48px 0', overflowY: 'auto' }}>
       <div style={{ background: '#fff', borderRadius: 18, boxShadow: '0 4px 32px #e0e7ef', padding: '2.5em 2.2em 2em 2.2em', minWidth: 340, maxWidth: 380, width: '100%' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <img src="/public/vite.svg" alt="Logo" style={{ width: 48, marginBottom: 8 }} />

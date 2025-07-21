@@ -15,7 +15,7 @@ import Login from './Login';
 import Register from './Register';
 import { getCompanies, saveCompany, deleteCompany } from './firestoreHelpers';
 import { getPackages, savePackages, getTrash, saveTrash, getTemplates, saveTemplate, deleteTemplate, getTickets, saveTicket, deleteTicket } from './firestoreHelpers';
-import { onSnapshot, collection, doc as firestoreDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import { onSnapshot, collection, doc as firestoreDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import GitsPage from './GitsPage';
 import SiteAuditsPage from './SiteAuditsPage';
@@ -147,26 +147,75 @@ function HomeHero({ userEmail }) {
   const dayOfYear = Math.floor(diff / oneDay);
   const quote = quotes[dayOfYear % quotes.length];
   return (
-    <section className="hero">
-      <div className="confetti">
-        <span className="c1"></span>
-        <span className="c2"></span>
-        <span className="c3"></span>
-        <span className="c4"></span>
-        <span className="c5"></span>
-      </div>
-      <div className="welcome-card">
-        <span className="animated-emoji" role="img" aria-label="fire">🔥</span>
-        <h1 className="fancy-title">
-          Welcome {userEmail ? userEmail : 'Kupal'}
+    <section style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #e0e7ef 0%, #f5f7fa 100%)',
+      fontFamily: 'Inter, Nunito, Poppins, Arial, sans-serif',
+      padding: '0',
+    }}>
+      <div style={{
+        background: '#fff',
+        borderRadius: '2.2rem',
+        boxShadow: '0 4px 32px #e0e7ef',
+        padding: '3.2rem 2.5rem 2.5rem 2.5rem',
+        maxWidth: 420,
+        width: '100%',
+        textAlign: 'center',
+        position: 'relative',
+        zIndex: 2,
+        margin: '2rem auto',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '1.2rem',
+      }}>
+        <span style={{
+          background: '#f7f7fa',
+          borderRadius: '50%',
+          boxShadow: '0 2px 8px #e0e7ef',
+          padding: '0.5em',
+          fontSize: '2.7rem',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: '0.7em',
+        }} role="img" aria-label="fire">🔥</span>
+        <h1 style={{
+          fontFamily: 'Poppins, Inter, Nunito, Arial, sans-serif',
+          fontWeight: 800,
+          fontSize: '2.3rem',
+          color: '#1976d2',
+          letterSpacing: '0.04em',
+          margin: 0,
+          background: 'none',
+        }}>
+          Welcome <span style={{ color: '#232323', fontWeight: 700 }}>{userEmail ? userEmail : 'Kupal'}</span>
         </h1>
-        <p className="hero-desc" style={{ fontSize: '1.25rem', color: '#1976d2', fontWeight: 600, marginBottom: 18, zIndex: 2 }}>
-          You have landed on your <span style={{ color: '#81c784' }}>Personal SEO Tracker</span>.
+        <p style={{ fontSize: '1.18rem', color: '#1976d2', fontWeight: 600, margin: 0 }}>
+          You have landed on your <span style={{ color: '#43a047', fontWeight: 700 }}>Personal SEO Tracker</span>.
         </p>
-        <p className="hero-desc" style={{ fontSize: '1.08rem', color: '#444', marginBottom: 18, zIndex: 2, whiteSpace: 'pre-line' }}>
+        <p style={{ fontSize: '1.08rem', color: '#444', margin: 0, whiteSpace: 'pre-line', fontWeight: 500 }}>
           {quote}
         </p>
-        <button className="hero-cta" style={{ zIndex: 2 }} onClick={() => navigate('/company-tracker')}>
+        <button style={{
+          background: 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '2rem',
+          fontWeight: 700,
+          fontSize: '1.15em',
+          padding: '0.8em 2.2em',
+          boxShadow: '0 2px 12px #e0e7ef',
+          cursor: 'pointer',
+          letterSpacing: '0.04em',
+          marginTop: '1.2rem',
+          transition: 'background 0.18s, color 0.18s, transform 0.18s',
+        }}
+          onClick={() => navigate('/company-tracker')}
+        >
           🚀 Go to Company Tracker
         </button>
       </div>
@@ -528,7 +577,7 @@ function PackagePage({ pkg, packages, setPackages }) {
   const [filterDistribution, setFilterDistribution] = useState('');
   const [filterBusinessProfileClaiming, setFilterBusinessProfileClaiming] = useState('');
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 15;
+  const PAGE_SIZE = 10;
   const navigate = useNavigate();
 
   // Task columns
@@ -854,9 +903,39 @@ function PackagePage({ pkg, packages, setPackages }) {
         {/* Pagination controls */}
         {pageCount > 1 && (
           <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8 }}>
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              style={{
+                background: page === 1 ? '#f0f0f0' : 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
+                color: page === 1 ? '#bbb' : '#fff',
+                border: page === 1 ? '1.5px solid #e0e0e0' : 'none',
+                borderRadius: 8,
+                fontWeight: 700,
+                fontSize: '1em',
+                padding: '0.5em 1.5em',
+                cursor: page === 1 ? 'not-allowed' : 'pointer',
+                opacity: page === 1 ? 0.7 : 1,
+                transition: 'background 0.18s, color 0.18s',
+              }}
+            >Prev</button>
             <span>Page {page} of {pageCount}</span>
-            <button onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount}>Next</button>
+            <button
+              onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+              disabled={page === pageCount}
+              style={{
+                background: page === pageCount ? '#f0f0f0' : 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
+                color: page === pageCount ? '#bbb' : '#fff',
+                border: page === pageCount ? '1.5px solid #e0e0e0' : 'none',
+                borderRadius: 8,
+                fontWeight: 700,
+                fontSize: '1em',
+                padding: '0.5em 1.5em',
+                cursor: page === pageCount ? 'not-allowed' : 'pointer',
+                opacity: page === pageCount ? 0.7 : 1,
+                transition: 'background 0.18s, color 0.18s',
+              }}
+            >Next</button>
           </div>
         )}
       </div>
@@ -2097,6 +2176,25 @@ function App() {
     return () => unsubscribe();
   }, [user]);
 
+  const [userBio, setUserBio] = useState('');
+  useEffect(() => {
+    if (user && user.uid) {
+      // Try to get bio from user object first
+      if (user.bio) {
+        setUserBio(user.bio);
+      } else {
+        // Fetch from Firestore
+        getDoc(firestoreDoc(db, 'users', user.uid)).then(docSnap => {
+          if (docSnap.exists()) {
+            setUserBio(docSnap.data().bio || '');
+          } else {
+            setUserBio('');
+          }
+        });
+      }
+    }
+  }, [user]);
+
   if (!user && location.pathname === '/login') {
     return <Login />;
   }
@@ -2361,6 +2459,9 @@ function App() {
                     </div>
                     <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>{getGreeting(user?.displayName || user?.email?.split('@')[0])}</div>
                     <div style={{ fontSize: 13, color: '#888', marginBottom: 2 }}>{user?.email}</div>
+                    <div style={{ color: '#888', fontSize: 14, fontWeight: 500, maxWidth: 260, whiteSpace: 'pre-line', overflow: 'hidden', textOverflow: 'ellipsis', margin: '6px 0 0 0', textAlign: 'center' }}>
+                      {userBio ? userBio.slice(0, 200) : 'This user has no bio yet.'}
+                    </div>
                   </div>
                   <div className="divider-line" />
                   <button
