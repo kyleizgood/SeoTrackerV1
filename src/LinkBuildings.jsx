@@ -22,6 +22,9 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
   const [search, setSearch] = useState({});
   const [statusFilter, setStatusFilter] = useState({});
   const [showDeleteToast, setShowDeleteToast] = useState(false);
+  // Add per-package page state
+  const [page, setPage] = useState({});
+  const PAGE_SIZE = 15;
 
   useEffect(() => {
     // Initialize status from company data if available
@@ -88,6 +91,10 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
           const matchesStatus = !statusFilter[pkg] || (status[c.id] || 'Pending') === statusFilter[pkg];
           return matchesSearch && matchesStatus;
         });
+        // Pagination logic
+        const currentPage = page[pkg] || 1;
+        const pageCount = Math.ceil(filteredCompanies.length / PAGE_SIZE);
+        const paginated = filteredCompanies.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
         const pendingCount = filteredCompanies.filter(c => (status[c.id] || 'Pending') !== 'Completed').length;
         return (
           <div key={pkg} style={{ marginBottom: 32, width: '100%' }}>
@@ -117,7 +124,10 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <select
                   value={statusFilter[pkg] || ''}
-                  onChange={e => setStatusFilter(f => ({ ...f, [pkg]: e.target.value }))}
+                  onChange={e => {
+                    setStatusFilter(f => ({ ...f, [pkg]: e.target.value }));
+                    setPage(p => ({ ...p, [pkg]: 1 }));
+                  }}
                   style={{ minWidth: 90, borderRadius: 8, border: '1.5px solid #b6b6d8', fontSize: '1em', background: '#faf9f6', color: '#232323', fontWeight: 600, boxShadow: '0 1px 4px #ececec', padding: '0.3em 1em' }}
                 >
                   <option value="">All</option>
@@ -149,7 +159,7 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
                   {filteredCompanies.length === 0 && (
                     <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies in this package.</td></tr>
                   )}
-                  {filteredCompanies.slice(0, 15).map(c => (
+                  {paginated.map(c => (
                     <tr key={c.id}>
                       <td className="company-name company-col">{c.name}</td>
                       <td className="package-col">
@@ -211,12 +221,25 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
                       </td>
                     </tr>
                   ))}
-                  {filteredCompanies.length > 15 && filteredCompanies.slice(15).map((c, i) => (
-                    <tr key={c.id} style={{display:'none'}}></tr>
-                  ))}
                 </tbody>
               </table>
             </div>
+            {/* Pagination controls */}
+            {pageCount > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 12, gap: 16 }}>
+                <button
+                  onClick={() => setPage(p => ({ ...p, [pkg]: (p[pkg] || 1) - 1 }))}
+                  disabled={currentPage === 1}
+                  style={{ padding: '0.4em 1.2em', borderRadius: 8, border: '1.5px solid #b6b6d8', background: currentPage === 1 ? '#eee' : '#faf9f6', color: '#232323', fontWeight: 600, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                >Prev</button>
+                <span style={{ fontWeight: 600, fontSize: '1.05em' }}>Page {currentPage} of {pageCount}</span>
+                <button
+                  onClick={() => setPage(p => ({ ...p, [pkg]: (p[pkg] || 1) + 1 }))}
+                  disabled={currentPage === pageCount}
+                  style={{ padding: '0.4em 1.2em', borderRadius: 8, border: '1.5px solid #b6b6d8', background: currentPage === pageCount ? '#eee' : '#faf9f6', color: '#232323', fontWeight: 600, cursor: currentPage === pageCount ? 'not-allowed' : 'pointer' }}
+                >Next</button>
+              </div>
+            )}
           </div>
         );
       })}

@@ -963,6 +963,9 @@ function Report({ packages, setPackages }) {
   // Add search state for each package
   const [search, setSearch] = useState({});
   const [confirmRemove, setConfirmRemove] = useState({ pkg: null, companyId: null, companyName: '' });
+  // Add per-package page state
+  const [page, setPage] = useState({});
+  const PAGE_SIZE = 15;
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -1021,8 +1024,14 @@ function Report({ packages, setPackages }) {
   });
 
   // Handlers for per-package filters
-  const handleFilterI = (pkg, value) => setFilterI(f => ({ ...f, [pkg]: value }));
-  const handleFilterII = (pkg, value) => setFilterII(f => ({ ...f, [pkg]: value }));
+  const handleFilterI = (pkg, value) => {
+    setFilterI(f => ({ ...f, [pkg]: value }));
+    setPage(p => ({ ...p, [pkg]: 1 }));
+  };
+  const handleFilterII = (pkg, value) => {
+    setFilterII(f => ({ ...f, [pkg]: value }));
+    setPage(p => ({ ...p, [pkg]: 1 }));
+  };
 
   // Remove company from package in Report page
   const handleRemoveFromReport = (pkg, companyId, companyName) => {
@@ -1053,6 +1062,10 @@ function Report({ packages, setPackages }) {
             const matchSearch = !search[pkg] || c.name.toLowerCase().includes(search[pkg].toLowerCase());
             return matchI && matchII && matchSearch;
           });
+        // Pagination logic
+        const currentPage = page[pkg] || 1;
+        const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+        const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
         // Count companies with Report I not completed (excluding OnHold)
         const pendingReportICount = (packages[pkg] || []).filter(c => c.status !== 'OnHold' && c.reportI !== 'Completed').length;
         return (
@@ -1157,7 +1170,7 @@ function Report({ packages, setPackages }) {
                   {filtered.length === 0 && (
                     <tr><td colSpan={6} style={{ textAlign: 'center', color: '#aaa' }}>No companies in this package.</td></tr>
                   )}
-                  {filtered.slice(0, 15).map(c => {
+                  {paginated.map(c => {
                     // Parse start date
                     let readyForReportII = false;
                     let startDateObj = null;
@@ -1251,12 +1264,28 @@ function Report({ packages, setPackages }) {
                       </tr>
                     );
                   })}
-                  {filtered.length > 15 && filtered.slice(15).map((c, i) => (
+                  {filtered.length > PAGE_SIZE && filtered.slice(PAGE_SIZE).map((c, i) => (
                     <tr key={c.id} style={{display:'none'}}></tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {/* Pagination controls */}
+            {pageCount > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 12, gap: 16 }}>
+                <button
+                  onClick={() => setPage(p => ({ ...p, [pkg]: (p[pkg] || 1) - 1 }))}
+                  disabled={currentPage === 1}
+                  style={{ padding: '0.4em 1.2em', borderRadius: 8, border: '1.5px solid #b6b6d8', background: currentPage === 1 ? '#eee' : '#faf9f6', color: '#232323', fontWeight: 600, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                >Prev</button>
+                <span style={{ fontWeight: 600, fontSize: '1.05em' }}>Page {currentPage} of {pageCount}</span>
+                <button
+                  onClick={() => setPage(p => ({ ...p, [pkg]: (p[pkg] || 1) + 1 }))}
+                  disabled={currentPage === pageCount}
+                  style={{ padding: '0.4em 1.2em', borderRadius: 8, border: '1.5px solid #b6b6d8', background: currentPage === pageCount ? '#eee' : '#faf9f6', color: '#232323', fontWeight: 600, cursor: currentPage === pageCount ? 'not-allowed' : 'pointer' }}
+                >Next</button>
+              </div>
+            )}
           </div>
         );
       })}
@@ -1285,6 +1314,9 @@ function Bookmarking({ packages, setPackages }) {
   const [search, setSearch] = useState({});
   const [confirmRemove, setConfirmRemove] = useState({ pkg: null, companyId: null, companyName: '' });
   const [showDeleteToast, setShowDeleteToast] = useState(false);
+  // Add per-package page state
+  const [page, setPage] = useState({});
+  const PAGE_SIZE = 15;
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -1304,8 +1336,14 @@ function Bookmarking({ packages, setPackages }) {
   };
 
   // Handlers for per-package filters
-  const handleFilterCreation = (pkg, value) => setFilterCreation(f => ({ ...f, [pkg]: value }));
-  const handleFilterSubmission = (pkg, value) => setFilterSubmission(f => ({ ...f, [pkg]: value }));
+  const handleFilterCreation = (pkg, value) => {
+    setFilterCreation(f => ({ ...f, [pkg]: value }));
+    setPage(p => ({ ...p, [pkg]: 1 }));
+  };
+  const handleFilterSubmission = (pkg, value) => {
+    setFilterSubmission(f => ({ ...f, [pkg]: value }));
+    setPage(p => ({ ...p, [pkg]: 1 }));
+  };
 
   // Remove company from package in Bookmarking page
   const handleRemoveFromBM = (pkg, companyId, companyName) => {
@@ -1357,6 +1395,10 @@ function Bookmarking({ packages, setPackages }) {
             const matchSearch = !search[pkg] || c.name.toLowerCase().includes(search[pkg].toLowerCase());
             return matchCreation && matchSubmission && matchSearch;
           });
+        // Pagination logic
+        const currentPage = page[pkg] || 1;
+        const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+        const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
         // Count companies with BM Creation not completed (excluding OnHold)
         const pendingBMCreationCount = (packages[pkg] || []).filter(c => c.status !== 'OnHold' && c.bmCreation !== 'Completed').length;
         // Count companies with BM Submission not completed (excluding OnHold)
@@ -1402,7 +1444,7 @@ function Bookmarking({ packages, setPackages }) {
                 letterSpacing: '0.03em',
               }}>
                 <span style={{fontSize:'1.4em',marginRight:12}}>🚩</span>
-                Action Needed: You have <b>{pendingBMSubmissionCount}</b> compan{pendingBMSubmissionCount === 1 ? 'y' : 'ies'} in this package that still need BM Submission.
+                Action Needed: You have <b>{pendingBMSubmissionCount}</b>&nbsp;compan{pendingBMSubmissionCount === 1 ? 'y' : 'ies'} in this package that still need BM Submission.
               </div>
             )}
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 0}}>
@@ -1484,7 +1526,7 @@ function Bookmarking({ packages, setPackages }) {
                   {filtered.length === 0 && (
                     <tr><td colSpan={6} style={{ textAlign: 'center', color: '#aaa' }}>No companies in this package.</td></tr>
                   )}
-                  {filtered.slice(0, 15).map(c => (
+                  {paginated.map(c => (
                     <tr key={c.id}>
                       <td className="company-name company-col">{c.name}</td>
                       <td className="package-col">
@@ -1552,6 +1594,22 @@ function Bookmarking({ packages, setPackages }) {
                 </tbody>
               </table>
             </div>
+            {/* Pagination controls */}
+            {pageCount > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 12, gap: 16 }}>
+                <button
+                  onClick={() => setPage(p => ({ ...p, [pkg]: (p[pkg] || 1) - 1 }))}
+                  disabled={currentPage === 1}
+                  style={{ padding: '0.4em 1.2em', borderRadius: 8, border: '1.5px solid #b6b6d8', background: currentPage === 1 ? '#eee' : '#faf9f6', color: '#232323', fontWeight: 600, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
+                >Prev</button>
+                <span style={{ fontWeight: 600, fontSize: '1.05em' }}>Page {currentPage} of {pageCount}</span>
+                <button
+                  onClick={() => setPage(p => ({ ...p, [pkg]: (p[pkg] || 1) + 1 }))}
+                  disabled={currentPage === pageCount}
+                  style={{ padding: '0.4em 1.2em', borderRadius: 8, border: '1.5px solid #b6b6d8', background: currentPage === pageCount ? '#eee' : '#faf9f6', color: '#232323', fontWeight: 600, cursor: currentPage === pageCount ? 'not-allowed' : 'pointer' }}
+                >Next</button>
+              </div>
+            )}
           </div>
         );
       })}
