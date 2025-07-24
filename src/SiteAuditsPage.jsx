@@ -250,41 +250,43 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
           }}
         >
           <h2 style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.3em', marginBottom: 18, letterSpacing: '0.04em', color: '#b26a00' }}>Site Audit B</h2>
-          <table className="company-table report-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', background: 'rgba(255,255,255,0.98)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 12px #ececec' }}>
-            <thead>
-              <tr style={{ background: '#f7f6f2' }}>
-                <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Company Name</th>
-                <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Package</th>
-                <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Start Date</th>
-                <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Days Since Start</th>
-                <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {table1.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies for half-year audit today.</td></tr>
-              ) : table1.map(c => {
-                const startDate = parseDisplayDateToInput(c.start);
-                const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
-                return (
-                  <tr key={c.id} style={{ transition: 'background 0.18s' }}>
-                    <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #b26a00', letterSpacing: '0.02em', borderRadius: 8 }}>{c.name}</td>
-                    <td style={{ padding: '0.7em', textAlign: 'center' }}>
-                      <span className={getPackageClass(c.package)}>{c.package}</span>
-                    </td>
-                    <td style={{ padding: '0.7em', textAlign: 'center' }}>{c.start}</td>
-                    <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 600, color: '#b26a00' }}>{daysSinceStart}</td>
-                    <td style={{ padding: '0.7em', textAlign: 'center' }}>
-                      <select value={auditStatus[c.id] || 'Pending'} onChange={e => handleAuditStatusChange(c.id, e.target.value)} style={{ padding: '0.3em 1em', borderRadius: 8, fontWeight: 600, background: auditStatus[c.id] === 'Completed' ? '#eaffea' : '#ffeaea', color: auditStatus[c.id] === 'Completed' ? '#19744d' : '#c00', border: '1.5px solid #b6b6d8', minWidth: 120, boxShadow: '0 1px 4px #ececec', transition: 'background 0.18s, color 0.18s' }}>
-                        <option value="Pending">🔴 Pending</option>
-                        <option value="Completed">🟢 Completed</option>
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="responsive-table-wrapper">
+            <table className="company-table report-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', background: 'rgba(255,255,255,0.98)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 12px #ececec' }}>
+              <thead>
+                <tr style={{ background: '#f7f6f2' }}>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Company Name</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Package</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Start Date</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Days Since Start</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {table1.length === 0 ? (
+                  <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies for half-year audit today.</td></tr>
+                ) : table1.map(c => {
+                  const startDate = parseDisplayDateToInput(c.start);
+                  const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
+                  return (
+                    <tr key={c.id} style={{ transition: 'background 0.18s' }}>
+                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #b26a00', letterSpacing: '0.02em', borderRadius: 8 }}>{c.name}</td>
+                      <td style={{ padding: '0.7em', textAlign: 'center' }}>
+                        <span className={getPackageClass(c.package)}>{c.package}</span>
+                      </td>
+                      <td style={{ padding: '0.7em', textAlign: 'center' }}>{c.start}</td>
+                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 600, color: '#b26a00' }}>{daysSinceStart}</td>
+                      <td style={{ padding: '0.7em', textAlign: 'center' }}>
+                        <select value={auditStatus[c.id] || 'Pending'} onChange={e => handleAuditStatusChange(c.id, e.target.value)} style={{ padding: '0.3em 1em', borderRadius: 8, fontWeight: 600, background: auditStatus[c.id] === 'Completed' ? '#eaffea' : '#ffeaea', color: auditStatus[c.id] === 'Completed' ? '#19744d' : '#c00', border: '1.5px solid #b6b6d8', minWidth: 120, boxShadow: '0 1px 4px #ececec', transition: 'background 0.18s, color 0.18s' }}>
+                          <option value="Pending">🔴 Pending</option>
+                          <option value="Completed">🟢 Completed</option>
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
         {/* Table 2 */}
         <div
@@ -301,41 +303,43 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
           }}
         >
           <h2 style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.3em', marginBottom: 18, letterSpacing: '0.04em', color: '#1976d2' }}>Site Audit C</h2>
-          <table className="company-table report-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', background: 'rgba(255,255,255,0.98)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 12px #ececec' }}>
-            <thead>
-              <tr style={{ background: '#f7f6f2' }}>
-                <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Company Name</th>
-                <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Package</th>
-                <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Start Date</th>
-                <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Days Since Start</th>
-                <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {table2.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies for pre-EOC audit today.</td></tr>
-              ) : table2.map(c => {
-                const startDate = parseDisplayDateToInput(c.start);
-                const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
-                return (
-                  <tr key={c.id} style={{ transition: 'background 0.18s' }}>
-                    <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #1976d2', letterSpacing: '0.02em', borderRadius: 8 }}>{c.name}</td>
-                    <td style={{ padding: '0.7em', textAlign: 'center' }}>
-                      <span className={getPackageClass(c.package)}>{c.package}</span>
-                    </td>
-                    <td style={{ padding: '0.7em', textAlign: 'center' }}>{c.start}</td>
-                    <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 600, color: '#1976d2' }}>{daysSinceStart}</td>
-                    <td style={{ padding: '0.7em', textAlign: 'center' }}>
-                      <select value={preEOCStatus[c.id] || 'Pending'} onChange={e => handlePreEOCStatusChange(c.id, e.target.value)} style={{ padding: '0.3em 1em', borderRadius: 8, fontWeight: 600, background: preEOCStatus[c.id] === 'Completed' ? '#eaffea' : '#ffeaea', color: preEOCStatus[c.id] === 'Completed' ? '#19744d' : '#c00', border: '1.5px solid #b6b6d8', minWidth: 120, boxShadow: '0 1px 4px #ececec', transition: 'background 0.18s, color 0.18s' }}>
-                        <option value="Pending">🔴 Pending</option>
-                        <option value="Completed">🟢 Completed</option>
-                      </select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="responsive-table-wrapper">
+            <table className="company-table report-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', background: 'rgba(255,255,255,0.98)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 12px #ececec' }}>
+              <thead>
+                <tr style={{ background: '#f7f6f2' }}>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Company Name</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Package</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Start Date</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Days Since Start</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {table2.length === 0 ? (
+                  <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies for pre-EOC audit today.</td></tr>
+                ) : table2.map(c => {
+                  const startDate = parseDisplayDateToInput(c.start);
+                  const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
+                  return (
+                    <tr key={c.id} style={{ transition: 'background 0.18s' }}>
+                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #1976d2', letterSpacing: '0.02em', borderRadius: 8 }}>{c.name}</td>
+                      <td style={{ padding: '0.7em', textAlign: 'center' }}>
+                        <span className={getPackageClass(c.package)}>{c.package}</span>
+                      </td>
+                      <td style={{ padding: '0.7em', textAlign: 'center' }}>{c.start}</td>
+                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 600, color: '#1976d2' }}>{daysSinceStart}</td>
+                      <td style={{ padding: '0.7em', textAlign: 'center' }}>
+                        <select value={preEOCStatus[c.id] || 'Pending'} onChange={e => handlePreEOCStatusChange(c.id, e.target.value)} style={{ padding: '0.3em 1em', borderRadius: 8, fontWeight: 600, background: preEOCStatus[c.id] === 'Completed' ? '#eaffea' : '#ffeaea', color: preEOCStatus[c.id] === 'Completed' ? '#19744d' : '#c00', border: '1.5px solid #b6b6d8', minWidth: 120, boxShadow: '0 1px 4px #ececec', transition: 'background 0.18s, color 0.18s' }}>
+                          <option value="Pending">🔴 Pending</option>
+                          <option value="Completed">🟢 Completed</option>
+                        </select>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>

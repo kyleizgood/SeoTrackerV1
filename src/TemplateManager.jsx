@@ -380,51 +380,53 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
             </div>
             {openCategory === cat && (
               <>
-                <table className="minimal-table">
-                  <thead>
-                    <tr>
-                      <th style={{width: '30%'}}>Title</th>
-                      <th style={{width: '50%'}}>Content</th>
-                      <th style={{textAlign: 'right', width: '20%'}}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(groupedTemplates[cat] || []).length === 0 && (
-                      <tr><td colSpan={3} className="template-list-empty">No templates in this category.</td></tr>
-                    )}
-                    {(groupedTemplates[cat] || []).map(template => {
-                      const expanded = selectedTemplate === template.id;
-                      return (
-                        <React.Fragment key={template.id}>
-                          <tr className={expanded ? 'expanded-row' : ''} onClick={() => setSelectedTemplate(expanded ? null : template.id)} style={{cursor: 'pointer'}}>
-                            <td><span className="template-item-title">{template.title}</span></td>
-                            <td className="muted" style={{whiteSpace: 'pre', wordBreak: 'break-word', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis'}}>
-                              {!expanded ? (
-                                <span className="template-preview">{template.content.length > 80 ? template.content.slice(0, 80) + '...' : template.content}</span>
-                              ) : (
-                                <span className="template-preview">{template.content.length > 80 ? template.content.slice(0, 80) + '...' : template.content}</span>
-                              )}
-                            </td>
-                            <td style={{textAlign: 'right'}} onClick={e => e.stopPropagation()}>
-                              <button className="icon-btn" title="Edit" onClick={() => handleEdit(template)}>✏️</button>
-                              <button className="icon-btn" title="Copy" onClick={() => handleCopy(template.content)}>📋</button>
-                              <button className="icon-btn danger" title="Remove" onClick={() => handleRemove(template.id)}>🗑️</button>
-                            </td>
-                          </tr>
-                          {expanded && (
-                            <tr className="dropdown-row">
-                              <td colSpan={3} style={{background: 'var(--bg-main)', borderBottom: '1px solid var(--border)'}}>
-                                <div className="template-dropdown-content" style={{padding: '1em 0 0.5em 0', color: 'var(--text-main)'}}>
-                                  <pre style={{margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{template.content}</pre>
-                                </div>
+                <div className="responsive-table-wrapper">
+                  <table className="minimal-table">
+                    <thead>
+                      <tr>
+                        <th style={{width: '30%'}}>Title</th>
+                        <th style={{width: '50%'}}>Content</th>
+                        <th style={{textAlign: 'right', width: '20%'}}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(groupedTemplates[cat] || []).length === 0 && (
+                        <tr><td colSpan={3} className="template-list-empty">No templates in this category.</td></tr>
+                      )}
+                      {(groupedTemplates[cat] || []).map(template => {
+                        const expanded = selectedTemplate === template.id;
+                        return (
+                          <React.Fragment key={template.id}>
+                            <tr className={expanded ? 'expanded-row' : ''} onClick={() => setSelectedTemplate(expanded ? null : template.id)} style={{cursor: 'pointer'}}>
+                              <td><span className="template-item-title">{template.title}</span></td>
+                              <td className="muted" style={{whiteSpace: 'pre', wordBreak: 'break-word', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                                {!expanded ? (
+                                  <span className="template-preview">{template.content.length > 80 ? template.content.slice(0, 80) + '...' : template.content}</span>
+                                ) : (
+                                  <span className="template-preview">{template.content.length > 80 ? template.content.slice(0, 80) + '...' : template.content}</span>
+                                )}
+                              </td>
+                              <td style={{textAlign: 'right'}} onClick={e => e.stopPropagation()}>
+                                <button className="icon-btn" title="Edit" onClick={() => handleEdit(template)}>✏️</button>
+                                <button className="icon-btn" title="Copy" onClick={() => handleCopy(template.content)}>📋</button>
+                                <button className="icon-btn danger" title="Remove" onClick={() => handleRemove(template.id)}>🗑️</button>
                               </td>
                             </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            {expanded && (
+                              <tr className="dropdown-row">
+                                <td colSpan={3} style={{background: 'var(--bg-main)', borderBottom: '1px solid var(--border)'}}>
+                                  <div className="template-dropdown-content" style={{padding: '1em 0 0.5em 0', color: 'var(--text-main)'}}>
+                                    <pre style={{margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{template.content}</pre>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
                 {/* Load more button for templates */}
                 {hasMore && !loading && (
                   <button onClick={() => fetchTemplates(true)} disabled={loadingMore} style={{ margin: 18, padding: '10px 24px', borderRadius: 8, background: '#1976d2', color: '#fff', fontWeight: 700, border: 'none', fontSize: 16, cursor: 'pointer', opacity: loadingMore ? 0.6 : 1 }}>

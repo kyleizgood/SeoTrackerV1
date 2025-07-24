@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { getPackages, updateCompanyAuditStatus, updatePackageCompanyStatus } from './firestoreHelpers';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+import {
+  getPackages,
+  updatePackageCompanyStatus,
+  markAsEOC,
+  updateEOCDate
+} from './firestoreHelpers';
 import * as XLSX from 'xlsx';
 import { getEOC } from './App.jsx';
 
@@ -123,6 +130,149 @@ function exportToExcel(rows) {
   XLSX.writeFile(wb, 'company-overview.xlsx');
 }
 
+// Add styles object at the top of the component, before the function definition
+const styles = {
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    background: '#fff',
+    padding: '24px',
+    borderRadius: '12px',
+    width: '90%',
+    maxWidth: '400px',
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+  },
+  modalTitle: {
+    fontSize: '1.2em',
+    fontWeight: '600',
+    marginBottom: '16px',
+    color: '#1e293b',
+  },
+  modalText: {
+    marginBottom: '24px',
+    color: '#475569',
+    lineHeight: '1.5',
+  },
+  modalButtons: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '12px',
+  },
+  buttonCancel: {
+    padding: '8px 16px',
+    borderRadius: '6px',
+    border: '1px solid #e2e8f0',
+    background: '#fff',
+    color: '#475569',
+    cursor: 'pointer',
+    fontSize: '0.95em',
+    fontWeight: '500',
+  },
+  buttonConfirm: {
+    padding: '8px 16px',
+    borderRadius: '6px',
+    border: 'none',
+    background: '#ef5350',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '0.95em',
+    fontWeight: '500',
+  },
+  successToast: {
+    position: 'fixed',
+    top: '80px', // Changed from '24px' to '80px' to appear below the navbar
+    right: '24px',
+    padding: '12px 24px',
+    background: '#ef5350',
+    color: '#fff',
+    borderRadius: '8px',
+    boxShadow: '0 2px 12px rgba(0, 0, 0, 0.1)',
+    zIndex: 1000,
+    animation: 'slideIn 0.3s ease-out'
+  },
+  statusSelect: {
+    padding: '8px 12px',
+    borderRadius: '8px',
+    border: '1.5px solid #e0e0e0',
+    background: '#f8fafc',
+    fontSize: '0.95em',
+    minWidth: '120px',
+    cursor: 'pointer',
+    outline: 'none',
+    marginLeft: '8px'
+  },
+  statusPill: (status) => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '4px 12px',
+    borderRadius: '16px',
+    fontWeight: '600',
+    fontSize: '0.95em',
+    background: status === 'Active' ? '#e8f5e9' : 
+               status === 'OnHold' ? '#f3e5f5' : 
+               status === 'EOC' ? '#ffebee' : '#f5f5f5',
+    color: status === 'Active' ? '#2e7d32' : 
+           status === 'OnHold' ? '#7b1fa2' : 
+           status === 'EOC' ? '#c62828' : '#757575',
+    border: `1.5px solid ${
+      status === 'Active' ? '#66bb6a' : 
+      status === 'OnHold' ? '#ba68c8' : 
+      status === 'EOC' ? '#ef5350' : '#bdbdbd'
+    }`,
+  }),
+  statusDot: (status) => ({
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    background: status === 'Active' ? '#43a047' : 
+                status === 'OnHold' ? '#8e24aa' : 
+                status === 'EOC' ? '#d32f2f' : '#bdbdbd',
+  })
+};
+
+// Add this function to calculate EOC dates from packages data
+const getEOCDatesFromPackages = async () => {
+  try {
+    const pkgs = await getPackages();
+    const eocDates = {};
+    
+    Object.entries(pkgs).forEach(([pkg, companies]) => {
+      companies.forEach(company => {
+        // Calculate EOC date for each company based on start date
+        if (company.start) {
+          const startParts = company.start.match(/(\w+)\s+(\d+),\s+(\d+)/);
+          if (startParts) {
+            const [_, month, day, year] = startParts;
+            const startDate = new Date(`${month} ${day}, ${year}`);
+            const eocDate = new Date(startDate.setFullYear(startDate.getFullYear() + 1));
+            const months = [
+              'January', 'February', 'March', 'April', 'May', 'June',
+              'July', 'August', 'September', 'October', 'November', 'December'
+            ];
+            eocDates[company.id] = `${months[eocDate.getMonth()]} ${eocDate.getDate()}, ${eocDate.getFullYear()}`;
+          }
+        }
+      });
+    });
+    
+    return eocDates;
+  } catch (error) {
+    console.error('Error fetching EOC dates:', error);
+    return {};
+  }
+};
+
 export default function CompanyOverview({ darkMode, setDarkMode }) {
   const [rows, setRows] = useState([]);
   const [filter, setFilter] = useState('all');
@@ -130,29 +280,74 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
   const [page, setPage] = useState(1);
   const [selectedRow, setSelectedRow] = useState(null);
   const [packageFilter, setPackageFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');  // Add new state for status filter
   const PAGE_SIZE = 10;
   const GRID_COLUMNS = 2;
+  const [confirmEOCModal, setConfirmEOCModal] = useState(null);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  // Add new state variables at the top of the component
+  const [editingEOCDate, setEditingEOCDate] = useState(false);
+  const [newEOCDate, setNewEOCDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState(null);
+  // 1. Add a new state for the toast message
+  const [toastMessage, setToastMessage] = useState('');
 
+  // Add function to format date to your required format
+  const formatDate = (date) => {
+    if (!date) return '';
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+  };
+
+  // Add function to parse date string
+  const parseDate = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return isNaN(date.getTime()) ? null : date;
+  };
+
+  // 1. Update EOC date display logic everywhere to always use the stored eocDate if present
+  // In the table row rendering:
+  // In the details modal:
+  // 2. In useEffect, when loading rows, never overwrite eocDate if it exists
   useEffect(() => {
-    getPackages().then(pkgs => {
-      // Flatten all companies from all packages
-      const allRows = [];
-      Object.entries(pkgs).forEach(([pkg, companies]) => {
-        companies.forEach(company => {
-          allRows.push({ ...company, package: pkg });
+    const fetchData = async () => {
+      try {
+        const pkgs = await getPackages();
+        const allRows = [];
+        Object.entries(pkgs).forEach(([pkg, companies]) => {
+          companies.forEach(company => {
+            allRows.push({
+              ...company,
+              package: pkg,
+              eocDate: company.eocDate ? company.eocDate : (company.start ? getEOC(company.start) : 'N/A')
+            });
+          });
         });
-      });
-      setRows(allRows);
-    });
+        // Sort companies by name for consistent order (change this to sort by another field if needed)
+        allRows.sort((a, b) => a.name.localeCompare(b.name));
+        setRows(allRows);
+        console.log('[CompanyOverview] Loaded rows:', allRows);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
+    fetchData();
   }, []);
 
-  // Filtering logic
+  // Updated filtering logic
   const filteredRows = rows.filter(row => {
+    // Status filter (Active/OnHold)
+    if (statusFilter !== 'all' && row.status !== statusFilter) return false;
+    
     // Package filter
     if (packageFilter !== 'all' && row.package !== packageFilter) return false;
-    // Status filter
+    
+    // Task status filter
     if (filter !== 'all') {
-      // Check if any status field matches the filter (case-insensitive)
       const matches = TASK_GROUPS.some(group =>
         group.fields.some(field => {
           const val = row[field.key];
@@ -162,6 +357,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
       );
       if (!matches) return false;
     }
+    
     // Search filter
     if (row.name && !row.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -171,42 +367,255 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
   const pageCount = Math.ceil(filteredRows.length / PAGE_SIZE);
   const paginatedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Handle status update
+  // Add EOC to the status options in the status filter dropdown
+  const statusOptions = (
+    <select 
+      value={statusFilter} 
+      onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+      style={{
+        padding: '6px 12px',
+        borderRadius: 6,
+        border: '1.5px solid #e0e0e0',
+        background: '#fff',
+        minWidth: 120
+      }}
+    >
+      <option value="all">All Status</option>
+      <option value="Active">🟢 Active</option>
+      <option value="OnHold">🟣 OnHold</option>
+      <option value="EOC">🔴 EOC</option>
+    </select>
+  );
+
+  // Update the handleStatusChange function
   const handleStatusChange = async (row, fieldKey, value) => {
-    await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
-    // Re-fetch packages to update UI
-    getPackages().then(pkgs => {
-      const allRows = [];
-      Object.entries(pkgs).forEach(([pkg, companies]) => {
-        companies.forEach(company => {
-          allRows.push({ ...company, package: pkg });
+    if (!row) return;
+
+    if (fieldKey === 'status' && value === 'EOC') {
+      setConfirmEOCModal(row);
+      return;
+    }
+
+    try {
+      await updateStatus(row, fieldKey, value);
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
+  };
+
+  // 2. Update handleEOCDateUpdate to set the correct toast message and update the local state only for the edited row
+  const handleEOCDateUpdate = async (row) => {
+    try {
+      if (!selectedDate) {
+        alert('Please select a date');
+        return;
+      }
+      
+      const formattedDate = formatDate(selectedDate);
+      await updateEOCDate(row.id, row.package, formattedDate);
+      
+      // Update local state
+      setRows(prevRows => {
+        const updatedRows = prevRows.map(r => 
+          r.id === row.id ? { ...r, eocDate: formattedDate } : r
+        );
+        console.log('[CompanyOverview] Updated rows after EOC date change:', updatedRows);
+        return updatedRows;
+      });
+      // Update selectedRow if it matches the edited row
+      setSelectedRow(prev => prev && prev.id === row.id ? { ...prev, eocDate: formattedDate } : prev);
+      
+      setEditingEOCDate(false);
+      setSelectedDate(null);
+      setToastMessage('EOC date updated successfully');
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
+    } catch (error) {
+      console.error('Error updating EOC date:', error);
+      alert('Error updating EOC date');
+    }
+  };
+
+  const isFinalEOC = (row) => {
+    // Example logic: Only allow EOC if not on hold and has no extension
+    // You can adjust this logic as needed
+    return row.status !== 'OnHold' && (!row.extension || row.extension === 0);
+  };
+
+  // 3. Update updateStatus to set the correct toast message for EOC status change
+  const updateStatus = async (row, fieldKey, value) => {
+    try {
+      if (fieldKey === 'status' && value === 'EOC') {
+        // Only allow marking as EOC if the account is final
+        if (!isFinalEOC(row)) {
+          alert('Cannot mark as EOC: Account is not final (may be on hold or has extension).');
+          return;
+        }
+        // Use the current eocDate as the final date
+        const finalEOCDate = row.eocDate;
+        if (!finalEOCDate) {
+          alert('Cannot mark as EOC: EOC date must be set and final.');
+          return;
+        }
+        const updatedCompany = await markAsEOC(row.id, row.package, finalEOCDate);
+        console.log('Received updated company:', updatedCompany);
+        setRows(prevRows => {
+          const newRows = prevRows.map(r =>
+            r.id === row.id ? {
+              ...r,
+              ...updatedCompany,
+              eocDate: updatedCompany.eocDate || finalEOCDate
+            } : r
+          );
+          console.log('Updated rows:', newRows);
+          return newRows;
+        });
+        setToastMessage('Company moved to EOC accounts');
+        await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
+        const pkgs = await getPackages();
+        const allRows = [];
+        Object.entries(pkgs).forEach(([pkg, companies]) => {
+          companies.forEach(company => {
+            allRows.push({
+              ...company,
+              package: pkg,
+              eocDate: company.eocDate || (company.start ? getEOC(company.start) : 'N/A')
+            });
+          });
+        });
+        setRows(allRows);
+      } else {
+        await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
+        // Re-fetch packages to update UI
+        const pkgs = await getPackages();
+        
+        const allRows = [];
+        Object.entries(pkgs).forEach(([pkg, companies]) => {
+          companies.forEach(company => {
+            allRows.push({
+              ...company,
+              package: pkg,
+              eocDate: company.eocDate || (company.start ? getEOC(company.start) : 'N/A')
+            });
+          });
+        });
+        setRows(allRows);
+      }
+
+      if (value === 'EOC') {
+        setSelectedRow(null);
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 3000);
+      } else {
+        setSelectedRow(prev => prev && prev.id === row.id && prev.package === row.package ? 
+          { ...prev, [fieldKey]: value } : prev);
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
+  };
+
+  // Update the status cell in the table to include EOC styling
+  const renderStatusCell = (status) => (
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '4px 12px',
+      borderRadius: '16px',
+      fontWeight: '600',
+      fontSize: '0.95em',
+      background: status === 'Active' ? '#e8f5e9' : 
+                 status === 'OnHold' ? '#f3e5f5' : 
+                 status === 'EOC' ? '#ffebee' : '#f5f5f5',
+      color: status === 'Active' ? '#2e7d32' : 
+             status === 'OnHold' ? '#7b1fa2' : 
+             status === 'EOC' ? '#c62828' : '#757575',
+      border: `1.5px solid ${
+        status === 'Active' ? '#66bb6a' : 
+        status === 'OnHold' ? '#ba68c8' : 
+        status === 'EOC' ? '#ef5350' : '#bdbdbd'
+      }`,
+    }}>
+      <span style={{
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        background: status === 'Active' ? '#43a047' : 
+                   status === 'OnHold' ? '#8e24aa' : 
+                   status === 'EOC' ? '#d32f2f' : '#bdbdbd',
+      }} />
+      {status || 'Not Set'}
+    </span>
+  );
+
+  // Update the status select rendering in the modal
+  const statusSelect = (
+    <select
+      value={selectedRow?.status || ''}
+      onChange={e => handleStatusChange(selectedRow, 'status', e.target.value)}
+      style={styles.statusSelect}
+    >
+      <option value="Active" style={{ background: '#e8f5e9', color: '#2e7d32' }}>🟢 Active</option>
+      <option value="OnHold" style={{ background: '#f3e5f5', color: '#7b1fa2' }}>🟣 OnHold</option>
+      <option value="EOC" style={{ background: '#ffebee', color: '#c62828' }}>🔴 EOC</option>
+    </select>
+  );
+
+  // Update the status display to use the styles object
+  const renderStatusPill = (status) => (
+    <span style={styles.statusPill(status)}>
+      <span style={styles.statusDot(status)} />
+      {status || 'Not Set'}
+    </span>
+  );
+
+  const reloadRows = async () => {
+    const pkgs = await getPackages();
+    const allRows = [];
+    Object.entries(pkgs).forEach(([pkg, companies]) => {
+      companies.forEach(company => {
+        allRows.push({
+          ...company,
+          package: pkg,
+          eocDate: company.eocDate || (company.start ? getEOC(company.start) : 'N/A')
         });
       });
-      setRows(allRows);
-      setSelectedRow(prev => prev && prev.id === row.id && prev.package === row.package ? { ...prev, [fieldKey]: value } : prev);
     });
+    // Always sort by name for consistency
+    allRows.sort((a, b) => a.name.localeCompare(b.name));
+    setRows(allRows);
   };
 
   return (
     <div style={{ padding: 24, background: darkMode ? '#181a1b' : '#f7f6f2', minHeight: '100vh' }}>
       <h2>Company Task Overview</h2>
-      <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <button onClick={() => exportToCSV(filteredRows)} style={{ padding: '6px 16px', borderRadius: 6, background: '#1976d2', color: '#fff', fontWeight: 600, border: 'none', cursor: 'pointer' }}>Export to CSV</button>
         <button onClick={() => exportToExcel(filteredRows)} style={{ padding: '6px 16px', borderRadius: 6, background: '#43a047', color: '#fff', fontWeight: 600, border: 'none', cursor: 'pointer' }}>Export to Excel</button>
-        <label style={{ marginLeft: 24 }}>Filter by status: </label>
+        
+        {/* Add new status filter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <label>Company Status:</label>
+          {statusOptions}
+        </div>
+
+        <label>Task Status:</label>
         <select value={filter} onChange={e => { setFilter(e.target.value); setPage(1); }}>
-          <option value="all">All</option>
+          <option value="all">All Tasks</option>
           <option value="completed">Completed</option>
           <option value="pending">Pending</option>
           <option value="not_started">Not Started</option>
         </select>
-        <label style={{ marginLeft: 24 }}>Filter by package: </label>
+
+        <label>Package:</label>
         <select value={packageFilter} onChange={e => { setPackageFilter(e.target.value); setPage(1); }}>
-          <option value="all">All</option>
+          <option value="all">All Packages</option>
           {PACKAGE_LIST.map(pkg => (
             <option key={pkg} value={pkg}>{pkg}</option>
           ))}
         </select>
+
         <div className="search-filter-wrapper">
           <span className="search-filter-icon" role="img" aria-label="Search">🔍</span>
           <input
@@ -452,63 +861,83 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
   color: #fff;
 }
 `}</style>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th style={{ border: '1px solid #ccc', padding: 8 }}>Company Name</th>
-            <th style={{ border: '1px solid #ccc', padding: 8 }}>Package</th>
-            {TASK_GROUPS.map(group => (
-              <th key={group.key} style={{ border: '1px solid #ccc', padding: 8 }}>
-                {group.label}
-                {group.fields.length > 1 && (
-                  <div style={{ fontSize: '0.8em', color: '#888' }}>
-                    {group.fields.map(f => f.label).join(' / ')}
-                  </div>
-                )}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {paginatedRows.map(row => (
-            <tr key={row.id + row.package} style={{ cursor: 'pointer' }} onClick={() => setSelectedRow(row)}>
-              <td style={{ border: '1px solid #ccc', padding: 8 }}>{row.name}</td>
-              <td style={{ border: '1px solid #ccc', padding: 8 }}>
-                <span className="package-badge" style={{
-                  background: PACKAGE_COLORS[row.package] || '#eee',
-                  color: '#fff',
-                  padding: '2px 18px',
-                  borderRadius: 20,
-                  fontWeight: 700,
-                  fontSize: '1em',
-                  border: PACKAGE_BORDERS[row.package] || 'none',
-                  marginRight: 2,
-                  letterSpacing: '0.03em',
-                  boxShadow: '0 1px 4px #ececec',
-                  display: 'inline-block',
-                }}>{row.package}</span>
-              </td>
+      <div className="responsive-table-wrapper">
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Company Name</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Package</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Start Date</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>EOC Date</th>
+              <th style={{ padding: 12, textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>Status</th>
               {TASK_GROUPS.map(group => (
-                <td key={group.key} style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
-                  {group.fields.map((field, idx) => {
-                    const status = getStatusDisplay(row[field.key]);
-                    let pillClass = 'status-pill';
-                    if (status.label === 'Completed') pillClass += ' completed';
-                    else if (status.label === 'Pending') pillClass += ' pending';
-                    else pillClass += ' not_set';
-                    return (
-                      <React.Fragment key={field.key}>
-                        <span className={pillClass}>{status.label}</span>
-                        {group.fields.length > 1 && idx < group.fields.length - 1 && <span style={{ color: '#232323', fontWeight: 700, margin: '0 2px' }}>/</span>}
-                      </React.Fragment>
-                    );
-                  })}
-                </td>
+                <th key={group.key} style={{ border: '1px solid #ccc', padding: 8 }}>
+                  {group.label}
+                  {group.fields.length > 1 && (
+                    <div style={{ fontSize: '0.8em', color: '#888' }}>
+                      {group.fields.map(f => f.label).join(' / ')}
+                    </div>
+                  )}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {paginatedRows.map(row => {
+              console.log('Rendering row:', row);
+              return (
+                <tr key={row.id + row.package} style={{ cursor: 'pointer' }} onClick={() => setSelectedRow(row)}>
+                  <td style={{ padding: 12 }}>{row.name}</td>
+                  <td style={{ padding: 12 }}>
+                    <span className="package-badge" style={{
+                      background: PACKAGE_COLORS[row.package] || '#eee',
+                      color: '#fff',
+                      padding: '2px 18px',
+                      borderRadius: 20,
+                      fontWeight: 700,
+                      fontSize: '0.95em',
+                      border: PACKAGE_BORDERS[row.package] || 'none',
+                      display: 'inline-block'
+                    }}>
+                      {row.package}
+                    </span>
+                  </td>
+                  <td style={{ padding: 12 }}>{row.start || 'N/A'}</td>
+                  <td style={{ padding: 12 }}>
+                    {console.log('EOC date rendering:', { 
+                      status: row.status, 
+                      eocDate: row.eocDate, 
+                      start: row.start,
+                      calculatedEOC: row.start ? getEOC(row.start) : 'N/A'
+                    })}
+                    {row.eocDate ? row.eocDate : (row.start ? getEOC(row.start) : 'N/A')}
+                  </td>
+                  <td style={{ padding: 12, textAlign: 'center' }}>
+                    {renderStatusPill(row.status)}
+                  </td>
+                  {TASK_GROUPS.map(group => (
+                    <td key={group.key} style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
+                      {group.fields.map((field, idx) => {
+                        const status = getStatusDisplay(row[field.key]);
+                        let pillClass = 'status-pill';
+                        if (status.label === 'Completed') pillClass += ' completed';
+                        else if (status.label === 'Pending') pillClass += ' pending';
+                        else pillClass += ' not_set';
+                        return (
+                          <React.Fragment key={field.key}>
+                            <span className={pillClass}>{status.label}</span>
+                            {group.fields.length > 1 && idx < group.fields.length - 1 && <span style={{ color: '#232323', fontWeight: 700, margin: '0 2px' }}>/</span>}
+                          </React.Fragment>
+                        );
+                      })}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {/* Pagination controls */}
       <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8 }}>
         <button
@@ -565,17 +994,85 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                   display: 'inline-block',
                 }}>{selectedRow.package}</span></li>
                 <li><span className="company-details-label">Start Date:</span> {selectedRow.start || 'N/A'}</li>
-                <li><span className="company-details-label">EOC Date:</span> {selectedRow.eoc || (selectedRow.start ? getEOC(selectedRow.start) : 'N/A')}</li>
-                <li><span className="company-details-label">Status:</span> <span style={{
-                  color: selectedRow.status === 'Active' ? '#43a047' : selectedRow.status === 'OnHold' ? '#8e24aa' : '#232323',
-                  fontWeight: 700,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                }}>
-                  {selectedRow.status === 'Active' && <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: '50%', background: '#43a047', marginRight: 8 }} />}
-                  {selectedRow.status === 'OnHold' && <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: '50%', background: '#8e24aa', marginRight: 8 }} />}
-                  {selectedRow.status || 'N/A'}
-                </span></li>
+                <li>
+                  <span className="company-details-label">EOC Date:</span>
+                  {editingEOCDate ? (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
+                      <DatePicker
+                        selected={selectedDate}
+                        onChange={date => setSelectedDate(date)}
+                        dateFormat="MMMM d, yyyy"
+                        placeholderText="Select date..."
+                        className="react-datepicker__input"
+                        popperPlacement="bottom-start"
+                      />
+                      <button
+                        onClick={() => handleEOCDateUpdate(selectedRow)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#4caf50',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.9em'
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingEOCDate(false);
+                          setSelectedDate(null);
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#ef5350',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.9em'
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
+                      <span>{selectedRow.eocDate ? selectedRow.eocDate : (selectedRow.start ? getEOC(selectedRow.start) : 'N/A')}</span>
+                      <button
+                        onClick={() => {
+                          setEditingEOCDate(true);
+                          setSelectedDate(parseDate(selectedRow.eocDate || (selectedRow.start ? getEOC(selectedRow.start) : null)));
+                        }}
+                        style={{
+                          padding: '4px',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: darkMode ? '#90caf9' : '#1976d2',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '4px',
+                          transition: 'all 0.2s ease',
+                          marginLeft: '4px'
+                        }}
+                        title="Edit EOC Date"
+                      >
+                        ✏️
+                      </button>
+                    </span>
+                  )}
+                </li>
+                <li>
+                  <span className="company-details-label">Status:</span>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                    {statusSelect}
+                    {renderStatusPill(selectedRow.status)}
+                  </div>
+                </li>
                 <li><span className="company-details-label">ID:</span> {selectedRow.id || 'N/A'}</li>
               </ul>
               <div className="company-details-section-grid">
@@ -690,6 +1187,68 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal for EOC */}
+      {confirmEOCModal && (
+        <div style={styles.modalOverlay} onClick={() => setConfirmEOCModal(null)}>
+          <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalTitle}>Confirm EOC Status</div>
+            <div style={styles.modalText}>
+              Are you sure you want to mark <strong>{confirmEOCModal.name}</strong> as EOC?
+              <div style={{ marginTop: '12px', fontSize: '0.95em', color: '#666' }}>
+                <div>Start Date: {confirmEOCModal.start || 'N/A'}</div>
+                <div>EOC Date: {selectedRow?.eocDate || confirmEOCModal.eocDate || (confirmEOCModal.start ? getEOC(confirmEOCModal.start) : 'Will be set to current date')}</div>
+              </div>
+              <div style={{ marginTop: '12px', padding: '8px', background: '#fff4e5', borderRadius: '6px', fontSize: '0.9em', color: '#b45309' }}>
+                This will move the company to the EOC accounts page.
+              </div>
+            </div>
+            <div style={styles.modalButtons}>
+              <button 
+                style={styles.buttonCancel}
+                onClick={() => setConfirmEOCModal(null)}
+              >
+                Cancel
+              </button>
+              <button 
+                style={styles.buttonConfirm}
+                onClick={async () => {
+                  // Always use the latest selectedRow for EOC date
+                  await updateStatus({ ...confirmEOCModal, eocDate: selectedRow?.eocDate }, 'status', 'EOC');
+                  setConfirmEOCModal(null);
+                  // Reload data to ensure all UI is up to date
+                  await reloadRows();
+                }}
+              >
+                Mark as EOC
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Toast */}
+      {showSuccessToast && (
+        <div style={styles.successToast}>
+          ✅ {toastMessage || 'Operation completed successfully'}
+        </div>
+      )}
+
+      {/* Add CSS for animation */}
+      <style>
+        {`
+          @keyframes slideIn {
+            from {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+        `}
+      </style>
     </div>
   );
 } 

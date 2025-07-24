@@ -98,52 +98,54 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
         </div>
       )}
       <div className="table-scroll-container table-responsive">
-        <table className="company-table trash-table">
-          <thead>
-            <tr>
-              <th style={{ minWidth: 220 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                  <span>Title</span>
-                  <input
-                    type="text"
-                    className="package-search-input"
-                    style={{ minWidth: 180, marginTop: 6 }}
-                    placeholder="Search trashed templates..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
-                </div>
-              </th>
-              <th>Content</th>
-              <th style={{ minWidth: 120, textAlign: 'right' }}>
-                {trash.length > 0 && (
-                  <button className="trash-action-btn delete" style={{ minWidth: 100, marginLeft: 8 }} onClick={handleDeleteAll}>
-                    Delete All
-                  </button>
-                )}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTrash.length === 0 && (
-              <tr><td colSpan={3} className="trash-empty">Trash is empty.</td></tr>
-            )}
-            {filteredTrash.map((template, idx) => (
-              <tr key={template.id || idx}>
-                <td style={{ fontWeight: 700, fontSize: '1.13rem', color: '#232323', background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #4e342e', letterSpacing: '0.02em' }}>
-                  {template.title || template.subject || template.name || 'No Title'}
-                </td>
-                <td style={{ maxWidth: 400, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fff8f8' }}>
-                  {template.content || template.company || template.ticketId || template.package || template.status || 'No Content'}
-                </td>
-                <td>
-                  <button className="trash-action-btn restore" onClick={() => handleRestore(template)}>Restore</button>
-                  <button className="trash-action-btn delete" onClick={() => handleDeleteForever(template)}>Delete Forever</button>
-                </td>
+        <div className="responsive-table-wrapper">
+          <table className="company-table trash-table">
+            <thead>
+              <tr>
+                <th style={{ minWidth: 220 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <span>Title</span>
+                    <input
+                      type="text"
+                      className="package-search-input"
+                      style={{ minWidth: 180, marginTop: 6 }}
+                      placeholder="Search trashed templates..."
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                    />
+                  </div>
+                </th>
+                <th>Content</th>
+                <th style={{ minWidth: 120, textAlign: 'right' }}>
+                  {trash.length > 0 && (
+                    <button className="trash-action-btn delete" style={{ minWidth: 100, marginLeft: 8 }} onClick={handleDeleteAll}>
+                      Delete All
+                    </button>
+                  )}
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredTrash.length === 0 && (
+                <tr><td colSpan={3} className="trash-empty">Trash is empty.</td></tr>
+              )}
+              {filteredTrash.map((template, idx) => (
+                <tr key={template.id || idx}>
+                  <td style={{ fontWeight: 700, fontSize: '1.13rem', color: '#232323', background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #4e342e', letterSpacing: '0.02em' }}>
+                    {template.title || template.subject || template.name || 'No Title'}
+                  </td>
+                  <td style={{ maxWidth: 400, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fff8f8' }}>
+                    {template.content || template.company || template.ticketId || template.package || template.status || 'No Content'}
+                  </td>
+                  <td>
+                    <button className="trash-action-btn restore" onClick={() => handleRestore(template)}>Restore</button>
+                    <button className="trash-action-btn delete" onClick={() => handleDeleteForever(template)}>Delete Forever</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       {confirmDeleteId && (
         <div className="confirm-modal-overlay">

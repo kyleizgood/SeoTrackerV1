@@ -28,6 +28,7 @@ import ProfilePage from './ProfilePage';
 import ChatManager from './ChatSystem/ChatManager';
 import ChatUsersPage from './ChatSystem/ChatUsersPage';
 import { useChat } from './ChatSystem/ChatManager';
+import EOCAccounts from './EOCAccounts';
 
 function HomeHero({ userEmail }) {
   const navigate = useNavigate();
@@ -2582,6 +2583,7 @@ function App() {
                       <a href="#projects">Projects</a>
                       <Link to="/resources">Resources</Link>
                       <Link to="/gits">Gits</Link>
+                      <Link to="/eoc-accounts">EOC Accounts</Link>
                     </nav>
                   </div>
                 </header>
@@ -2609,6 +2611,7 @@ function App() {
                     <Route path="/notes" element={user ? <NotesPage darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
                     <Route path="/profile" element={user ? <ProfilePage onProfileUpdate={u => setUser(prev => ({ ...prev, ...u }))} /> : <Navigate to="/login" replace />} />
                     <Route path="/chat-users" element={<ChatUsersPage />} />
+                    <Route path="/eoc-accounts" element={user ? <EOCAccounts darkMode={darkMode} /> : <Navigate to="/login" replace />} />
                   </Routes>
                 </main>
                 <div className="minimalist-divider" />

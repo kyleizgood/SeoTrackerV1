@@ -1,6 +1,14 @@
 import { db } from './firebase';
-import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, query, where, orderBy, onSnapshot, addDoc, updateDoc, arrayUnion, limit as fsLimit, startAfter as fsStartAfter } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, query, where, orderBy, onSnapshot, addDoc, updateDoc, arrayUnion, limit as fsLimit, startAfter as fsStartAfter, enableIndexedDbPersistence } from 'firebase/firestore';
 import { auth } from './firebase';
+
+// After initializing Firestore (db), enable offline persistence
+try {
+  enableIndexedDbPersistence(db);
+  console.log('Firestore offline persistence enabled');
+} catch (err) {
+  console.warn('Could not enable offline persistence:', err);
+}
 
 // Save a company for the current user
 export async function saveCompany(company) {
@@ -489,4 +497,136 @@ export async function getGits() {
     { label: 'Git 3', ip: '47.128.64.60' },
     { label: 'Git 4', ip: '54.179.74.207' },
   ];
+} 
+
+// --- EOC HELPERS ---
+export async function getEOCAccounts() {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+
+  const docSnap = await getDocs(collection(db, 'users', user.uid, 'meta'));
+  const meta = docSnap.docs.find(d => d.id === 'packages');
+  const packages = meta ? meta.data().packages : {};
+
+  const eocAccounts = [];
+  Object.entries(packages).forEach(([pkg, companies]) => {
+    companies.forEach(company => {
+      if (company.status === 'EOC') {
+        // Calculate EOC date if not present
+        let eocDate = company.eocDate;
+        if (!eocDate && company.start) {
+          const startParts = company.start.match(/(\w+)\s+(\d+),\s+(\d+)/);
+          if (startParts) {
+            const [_, month, day, year] = startParts;
+            const startDate = new Date(`${month} ${day}, ${year}`);
+            const eocDateObj = new Date(startDate);
+            eocDateObj.setFullYear(eocDateObj.getFullYear() + 1);
+            const months = [
+              'January', 'February', 'March', 'April', 'May', 'June',
+              'July', 'August', 'September', 'October', 'November', 'December'
+            ];
+            eocDate = `${months[eocDateObj.getMonth()]} ${eocDateObj.getDate()}, ${eocDateObj.getFullYear()}`;
+          }
+        }
+
+        eocAccounts.push({
+          ...company,
+          package: pkg,
+          eocDate: eocDate || 'N/A'
+        });
+      }
+    });
+  });
+
+  return eocAccounts;
+}
+
+// Update the markAsEOC function to accept a custom EOC date and only set it when final
+export async function markAsEOC(companyId, pkg, finalEOCDate) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  if (!finalEOCDate) throw new Error('Final EOC date must be provided when marking as EOC');
+  
+  // Get current packages
+  const docSnap = await getDocs(collection(db, 'users', user.uid, 'meta'));
+  const meta = docSnap.docs.find(d => d.id === 'packages');
+  let packages = meta ? meta.data().packages : {};
+  
+  // Find the company to get its start date
+  const company = packages[pkg]?.find(c => c.id === companyId);
+  if (!company) {
+    console.error('Company not found:', { companyId, pkg });
+    return;
+  }
+
+  // Create updated company data with provided final EOC date
+  const updatedCompany = {
+    ...company,
+    status: 'EOC',
+    eocDate: finalEOCDate
+  };
+  
+  // Update the company in the correct package
+  packages[pkg] = (packages[pkg] || []).map(c =>
+    c.id === companyId ? updatedCompany : c
+  );
+  
+  // Save back to Firestore
+  await setDoc(doc(db, 'users', user.uid, 'meta', 'packages'), { packages });
+  
+  return updatedCompany;
+}
+
+// Reactivate an EOC account
+export async function reactivateEOCAccount(companyId, pkg, newStatus = 'Active') {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  // Get current packages
+  const docSnap = await getDocs(collection(db, 'users', user.uid, 'meta'));
+  const meta = docSnap.docs.find(d => d.id === 'packages');
+  let packages = meta ? meta.data().packages : {};
+  
+  // Update the company in the correct package
+  packages[pkg] = (packages[pkg] || []).map(c =>
+    c.id === companyId ? {
+      ...c,
+      status: newStatus,
+      eocDate: null,
+      reactivatedDate: new Date().toISOString(),
+    } : c
+  );
+  
+  // Save back to Firestore
+  await setDoc(doc(db, 'users', user.uid, 'meta', 'packages'), { packages });
+} 
+
+// Add function to update EOC date
+export async function updateEOCDate(companyId, pkg, newEOCDate) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  // Get current packages
+  const docSnap = await getDocs(collection(db, 'users', user.uid, 'meta'));
+  const meta = docSnap.docs.find(d => d.id === 'packages');
+  let packages = meta ? meta.data().packages : {};
+  console.log('[updateEOCDate] Packages before update:', JSON.parse(JSON.stringify(packages)));
+  
+  // Ensure companyId is a string for comparison
+  const companyIdStr = String(companyId);
+  // Find and update the company
+  packages[pkg] = (packages[pkg] || []).map(c =>
+    String(c.id) === companyIdStr ? { ...c, eocDate: newEOCDate } : c
+  );
+  console.log('[updateEOCDate] Packages after update:', JSON.parse(JSON.stringify(packages)));
+  
+  // Save back to Firestore with error logging
+  try {
+    await setDoc(doc(db, 'users', user.uid, 'meta', 'packages'), { packages });
+  } catch (err) {
+    console.error('[updateEOCDate] Firestore error:', err);
+    throw err;
+  }
+  
+  return { id: companyId, package: pkg, eocDate: newEOCDate };
 } 
