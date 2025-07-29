@@ -1,8 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { updateCompanyAuditStatus, getPackages, savePackages } from './firestoreHelpers';
 
 const AUDIT_STATUS_KEY = 'siteAuditStatus';
 const PRE_EOC_STATUS_KEY = 'sitePreEOCStatus';
+
+// History entry structure
+const createHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
+  id: Date.now() + Math.random(),
+  timestamp: new Date().toISOString(),
+  companyId,
+  companyName,
+  packageName,
+  field,
+  oldValue,
+  newValue,
+  action
+});
 
 function parseDisplayDateToInput(dateStr) {
   if (!dateStr) return null;
@@ -38,10 +52,26 @@ function getPackageClass(pkg) {
   return '';
 }
 
+function formatTimestamp(timestamp) {
+  const date = new Date(timestamp);
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+}
+
 function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
   const location = useLocation();
   const [auditStatus, setAuditStatus] = useState({}); // { [companyId]: 'Pending' | 'Completed' }
   const [preEOCStatus, setPreEOCStatus] = useState({}); // { [companyId]: 'Pending' | 'Completed' }
+  const [history, setHistory] = useState([]); // Array of history entries
+  const [showHistory, setShowHistory] = useState(false);
+  const [recentChanges, setRecentChanges] = useState(new Set()); // Track recently changed companies
+  const [confirmModal, setConfirmModal] = useState(null); // For confirmation modal
+  const [revertModal, setRevertModal] = useState(null); // For revert confirmation modal
 
   useEffect(() => {
     const all = Object.values(packages).flat();
@@ -81,37 +111,53 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
   const showAuditBAlert = table1.length > 0;
   const showAuditCAlert = table2.length > 0;
 
-  const handleAuditStatusChange = async (id, value) => {
-    // Optimistically update local state
-    setAuditStatus(prev => ({ ...prev, [id]: value }));
-    // Remove from companies in UI if completed
-    if (value === 'Completed') {
-      setPackages(prev => ({
-        ...prev,
-        [c.package]: prev[c.package].map(c => c.id === id ? { ...c, siteAuditBStatus: value } : c)
-      }));
-    }
+  const addToHistory = (entry) => {
+    setHistory(prev => [entry, ...prev.slice(0, 49)]); // Keep last 50 entries
+    // Mark as recently changed
+    setRecentChanges(prev => new Set([...prev, entry.companyId]));
+    // Remove from recent changes after 5 seconds
+    setTimeout(() => {
+      setRecentChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.companyId);
+        return newSet;
+      });
+    }, 5000);
+  };
+
+  const revertChange = async (historyEntry) => {
+    setRevertModal(historyEntry);
+  };
+
+  const confirmRevert = async () => {
+    const historyEntry = revertModal;
     try {
-      await updateCompanyAuditStatus(id, 'siteAuditBStatus', value);
-      // Also update in meta/packages
+      const field = historyEntry.field === 'Site Audit B' ? 'siteAuditBStatus' : 'siteAuditCStatus';
+      const value = historyEntry.oldValue;
+      
+      // Update in Firestore
+      await updateCompanyAuditStatus(historyEntry.companyId, field, value);
+      
+      // Update in packages
       const pkgs = await getPackages();
       let updated = false;
       Object.keys(pkgs).forEach(pkg => {
         pkgs[pkg] = pkgs[pkg].map(c => {
-          if (c.id === id) {
+          if (c.id === historyEntry.companyId) {
             updated = true;
-            return { ...c, siteAuditBStatus: value };
+            return { ...c, [field]: value };
           }
           return c;
         });
       });
-      if (updated) await savePackages(pkgs);
-      // Now reload
+      
+      if (updated) {
+        await savePackages(pkgs);
+        setPackages(pkgs);
+      }
+      
+      // Update local status maps
       const all = Object.values(pkgs).flat();
-      setPackages(prev => ({
-        ...prev,
-        [c.package]: all.filter(c => c.package === c.package)
-      }));
       const auditB = {};
       const auditC = {};
       all.forEach(c => {
@@ -120,53 +166,138 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
       });
       setAuditStatus(auditB);
       setPreEOCStatus(auditC);
+      
+      // Add revert entry to history
+      const revertEntry = createHistoryEntry(
+        historyEntry.companyId,
+        historyEntry.companyName,
+        historyEntry.packageName,
+        historyEntry.field,
+        historyEntry.newValue,
+        historyEntry.oldValue,
+        'reverted'
+      );
+      addToHistory(revertEntry);
+      
+      setRevertModal(null);
+      
     } catch (err) {
+      console.error('Error reverting change:', err);
+      alert('Failed to revert change. Please try again.');
+    }
+  };
+
+  const handleAuditStatusChange = async (id, value) => {
+    const oldValue = auditStatus[id] || 'Pending';
+    const company = companies.find(c => c.id === id);
+    
+    if (value === 'Completed') {
+      // Show confirmation modal for completing
+      setConfirmModal({
+        type: 'complete',
+        company,
+        field: 'Site Audit B',
+        oldValue,
+        newValue: value
+      });
+      return;
+    }
+    
+    // For reverting to Pending, proceed directly
+    await performStatusUpdate(id, 'siteAuditBStatus', value, company, oldValue, 'Site Audit B');
+  };
+
+  const handlePreEOCStatusChange = async (id, value) => {
+    const oldValue = preEOCStatus[id] || 'Pending';
+    const company = companies.find(c => c.id === id);
+    
+    if (value === 'Completed') {
+      // Show confirmation modal for completing
+      setConfirmModal({
+        type: 'complete',
+        company,
+        field: 'Site Audit C',
+        oldValue,
+        newValue: value
+      });
+      return;
+    }
+    
+    // For reverting to Pending, proceed directly
+    await performStatusUpdate(id, 'siteAuditCStatus', value, company, oldValue, 'Site Audit C');
+  };
+
+  const performStatusUpdate = async (id, field, value, company, oldValue, fieldName) => {
+    // Optimistically update local state
+    if (field === 'siteAuditBStatus') {
+      setAuditStatus(prev => ({ ...prev, [id]: value }));
+    } else {
+      setPreEOCStatus(prev => ({ ...prev, [id]: value }));
+    }
+    
+    try {
+      // Update in Firestore
+      await updateCompanyAuditStatus(id, field, value);
+      
+      // Also update in meta/packages
+      const pkgs = await getPackages();
+      let updated = false;
+      Object.keys(pkgs).forEach(pkg => {
+        pkgs[pkg] = pkgs[pkg].map(c => {
+          if (c.id === id) {
+            updated = true;
+            return { ...c, [field]: value };
+          }
+          return c;
+        });
+      });
+      
+      if (updated) {
+        await savePackages(pkgs);
+        // Update local packages state
+        setPackages(pkgs);
+      }
+      
+      // Update local status maps
+      const all = Object.values(pkgs).flat();
+      const auditB = {};
+      const auditC = {};
+      all.forEach(c => {
+        auditB[c.id] = c.siteAuditBStatus || 'Pending';
+        auditC[c.id] = c.siteAuditCStatus || 'Pending';
+      });
+      setAuditStatus(auditB);
+      setPreEOCStatus(auditC);
+      
+      // Add to history
+      const historyEntry = createHistoryEntry(
+        id,
+        company?.name || 'Unknown Company',
+        company?.package || 'Unknown Package',
+        fieldName,
+        oldValue,
+        value
+      );
+      addToHistory(historyEntry);
+      
+    } catch (err) {
+      console.error('Error updating audit status:', err);
       // Revert optimistic update on error
-      setAuditStatus(prev => ({ ...prev, [id]: 'Pending' }));
+      if (field === 'siteAuditBStatus') {
+        setAuditStatus(prev => ({ ...prev, [id]: 'Pending' }));
+      } else {
+      setPreEOCStatus(prev => ({ ...prev, [id]: 'Pending' }));
+      }
       alert('Failed to update status. Please try again.');
     }
   };
-  const handlePreEOCStatusChange = async (id, value) => {
-    setPreEOCStatus(prev => ({ ...prev, [id]: value }));
-    if (value === 'Completed') {
-      setPackages(prev => ({
-        ...prev,
-        [c.package]: prev[c.package].map(c => c.id === id ? { ...c, siteAuditCStatus: value } : c)
-      }));
-    }
-    try {
-      await updateCompanyAuditStatus(id, 'siteAuditCStatus', value);
-      // Also update in meta/packages
-      const pkgs = await getPackages();
-      let updated = false;
-      Object.keys(pkgs).forEach(pkg => {
-        pkgs[pkg] = pkgs[pkg].map(c => {
-          if (c.id === id) {
-            updated = true;
-            return { ...c, siteAuditCStatus: value };
-          }
-          return c;
-        });
-      });
-      if (updated) await savePackages(pkgs);
-      // Now reload
-      const all = Object.values(pkgs).flat();
-      setPackages(prev => ({
-        ...prev,
-        [c.package]: all.filter(c => c.package === c.package)
-      }));
-      const auditB = {};
-      const auditC = {};
-      all.forEach(c => {
-        auditB[c.id] = c.siteAuditBStatus || 'Pending';
-        auditC[c.id] = c.siteAuditCStatus || 'Pending';
-      });
-      setAuditStatus(auditB);
-      setPreEOCStatus(auditC);
-    } catch (err) {
-      setPreEOCStatus(prev => ({ ...prev, [id]: 'Pending' }));
-      alert('Failed to update status. Please try again.');
-    }
+
+  const confirmStatusChange = async () => {
+    const { company, field, newValue, oldValue } = confirmModal;
+    const fieldKey = field === 'Site Audit B' ? 'siteAuditBStatus' : 'siteAuditCStatus';
+    
+    await performStatusUpdate(company.id, fieldKey, newValue, company, oldValue, field);
+    setConfirmModal(null);
   };
 
   return (
@@ -214,8 +345,110 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
           {table2.length} package{table2.length > 1 ? 's' : ''} need Site Audit C.
         </div>
       )}
+      
+      {/* Header with History Button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
       <h1 className="fancy-title" style={{ textAlign: 'center', marginBottom: 10, marginTop: 0 }}>Site Audits</h1>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          style={{
+            padding: '8px 16px',
+            background: showHistory ? '#007bff' : '#f8f9fa',
+            color: showHistory ? '#ffffff' : '#495057',
+            border: '1px solid #dee2e6',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
+        </button>
+      </div>
+      
       <p className="hero-desc" style={{ textAlign: 'center', marginBottom: 18, marginTop: 0 }}>Companies are automatically sorted into the tables below based on their package start and EOC dates.</p>
+      
+      {/* History Panel */}
+      {showHistory && (
+        <div style={{
+          width: '100%',
+          maxWidth: 1600,
+          background: '#ffffff',
+          borderRadius: 12,
+          padding: '20px',
+          marginBottom: '20px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          border: '1px solid #e9ecef'
+        }}>
+          <h3 style={{ margin: '0 0 15px 0', color: '#495057', fontSize: '1.1rem' }}>📋 Change History</h3>
+          {history.length === 0 ? (
+            <p style={{ color: '#6c757d', textAlign: 'center', fontStyle: 'italic' }}>No changes recorded yet.</p>
+          ) : (
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              {history.map((entry, index) => (
+                <div
+                  key={entry.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px',
+                    border: '1px solid #e9ecef',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    background: entry.action === 'reverted' ? '#fff3cd' : '#ffffff',
+                    borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : '4px solid #007bff'
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '600', color: '#495057', marginBottom: '4px' }}>
+                      {entry.companyName} - {entry.packageName}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#6c757d' }}>
+                      {entry.field}: <span style={{ color: '#dc3545' }}>{entry.oldValue}</span> → <span style={{ color: '#28a745' }}>{entry.newValue}</span>
+                      {entry.action === 'reverted' && <span style={{ color: '#ffc107', marginLeft: '8px' }}>🔄 Reverted</span>}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#adb5bd', marginTop: '4px' }}>
+                      {formatTimestamp(entry.timestamp)}
+                    </div>
+                  </div>
+                  {entry.action !== 'reverted' && (
+                    <button
+                      onClick={() => revertChange(entry)}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#f8f9fa',
+                        color: '#6c757d',
+                        border: '1px solid #dee2e6',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseOver={(e) => {
+                        e.target.style.background = '#e9ecef';
+                        e.target.style.color = '#495057';
+                      }}
+                      onMouseOut={(e) => {
+                        e.target.style.background = '#f8f9fa';
+                        e.target.style.color = '#6c757d';
+                      }}
+                    >
+                      ↩️ Revert
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      
       <div
         className="site-audits-table-row"
         style={{
@@ -267,9 +500,18 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
                 ) : table1.map(c => {
                   const startDate = parseDisplayDateToInput(c.start);
                   const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
+                  const isRecentlyChanged = recentChanges.has(c.id);
+                  
                   return (
-                    <tr key={c.id} style={{ transition: 'background 0.18s' }}>
-                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #b26a00', letterSpacing: '0.02em', borderRadius: 8 }}>{c.name}</td>
+                    <tr key={c.id} style={{ 
+                      transition: 'background 0.18s',
+                      background: isRecentlyChanged ? '#fff3cd' : 'transparent',
+                      borderLeft: isRecentlyChanged ? '4px solid #ffc107' : 'none'
+                    }}>
+                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #b26a00', letterSpacing: '0.02em', borderRadius: 8 }}>
+                        {c.name}
+                        {isRecentlyChanged && <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#ffc107' }}>🔄</span>}
+                      </td>
                       <td style={{ padding: '0.7em', textAlign: 'center' }}>
                         <span className={getPackageClass(c.package)}>{c.package}</span>
                       </td>
@@ -320,9 +562,18 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
                 ) : table2.map(c => {
                   const startDate = parseDisplayDateToInput(c.start);
                   const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
+                  const isRecentlyChanged = recentChanges.has(c.id);
+                  
                   return (
-                    <tr key={c.id} style={{ transition: 'background 0.18s' }}>
-                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #1976d2', letterSpacing: '0.02em', borderRadius: 8 }}>{c.name}</td>
+                    <tr key={c.id} style={{ 
+                      transition: 'background 0.18s',
+                      background: isRecentlyChanged ? '#fff3cd' : 'transparent',
+                      borderLeft: isRecentlyChanged ? '4px solid #ffc107' : 'none'
+                    }}>
+                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #1976d2', letterSpacing: '0.02em', borderRadius: 8 }}>
+                        {c.name}
+                        {isRecentlyChanged && <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#ffc107' }}>🔄</span>}
+                      </td>
                       <td style={{ padding: '0.7em', textAlign: 'center' }}>
                         <span className={getPackageClass(c.package)}>{c.package}</span>
                       </td>
@@ -342,6 +593,151 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {confirmModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 450,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm Action</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to mark "{confirmModal.company?.name} - {confirmModal.company?.package}" as "{confirmModal.newValue}"?
+              This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={() => {
+                  confirmStatusChange();
+                  setConfirmModal(null);
+                }}
+                style={{
+                  padding: '10px 25px',
+                  background: '#28a745',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Mark as {confirmModal.newValue}
+              </button>
+              <button
+                onClick={() => setConfirmModal(null)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#dc3545',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revert Confirmation Modal */}
+      {revertModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 450,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm Revert</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to revert "{revertModal.companyName} - {revertModal.packageName}" {revertModal.field} from "{revertModal.newValue}" back to "{revertModal.oldValue}"?
+              This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={confirmRevert}
+                style={{
+                  padding: '10px 25px',
+                  background: '#ffc107',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Revert
+              </button>
+              <button
+                onClick={() => setRevertModal(null)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#dc3545',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -333,6 +333,10 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
   const [currentMatch, setCurrentMatch] = useState(0);
   const searchInputRef = useRef(null);
 
+  // Toast notification state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
   const currentUserId = auth.currentUser?.uid;
 
   // Listen for latest messages in this conversation (limit 50)
@@ -557,6 +561,11 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
     setDeletedMessageIds(ids => [...ids, msg.id]);
     setConfirmDeleteFor(null);
     cancelEditing();
+    
+    // Add toast notification
+    setToastMessage('Message deleted successfully');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
   };
   const cancelDelete = () => setConfirmDeleteFor(null);
 
@@ -1334,6 +1343,12 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
       {/* Error message for send failure */}
       {sendError && (
         <div style={{ color: '#d32f2f', fontSize: 13, textAlign: 'center', marginBottom: 8 }}>{sendError}</div>
+      )}
+      {/* Toast notification */}
+      {showToast && (
+        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
+          ✅ {toastMessage}
+        </div>
       )}
     </div>
   );

@@ -5,7 +5,10 @@ import {
   getPackages,
   updatePackageCompanyStatus,
   markAsEOC,
-  updateEOCDate
+  updateEOCDate,
+  saveHistoryLog,
+  loadHistoryLog,
+  clearHistoryLog
 } from './firestoreHelpers';
 import * as XLSX from 'xlsx';
 import { getEOC } from './App.jsx';
@@ -292,6 +295,109 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
   // 1. Add a new state for the toast message
   const [toastMessage, setToastMessage] = useState('');
 
+  // --- History Log State ---
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [recentChanges, setRecentChanges] = useState(new Set());
+  const [revertModal, setRevertModal] = useState(null);
+  const [clearHistoryModal, setClearHistoryModal] = useState(false);
+
+  // History entry structure
+  const createHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    companyId,
+    companyName,
+    packageName,
+    field,
+    oldValue,
+    newValue,
+    action
+  });
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const addToHistory = (entry) => {
+    setHistory(prev => [entry, ...prev.slice(0, 49)]);
+    setRecentChanges(prev => new Set([...prev, entry.companyId]));
+    setTimeout(() => {
+      setRecentChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.companyId);
+        return newSet;
+      });
+    }, 5000);
+  };
+
+  const revertChange = async (historyEntry) => {
+    setRevertModal(historyEntry);
+  };
+
+  const confirmRevert = async () => {
+    const historyEntry = revertModal;
+    try {
+      const field = historyEntry.field;
+      const value = historyEntry.oldValue;
+      
+      // Update in packages
+      await updatePackageCompanyStatus(historyEntry.companyId, historyEntry.packageName, field, value);
+      
+      // Reload rows to reflect the change
+      await reloadRows();
+      
+      // Add revert entry to history
+      const revertEntry = createHistoryEntry(
+        historyEntry.companyId,
+        historyEntry.companyName,
+        historyEntry.packageName,
+        historyEntry.field,
+        historyEntry.newValue,
+        historyEntry.oldValue,
+        'reverted'
+      );
+      addToHistory(revertEntry);
+      
+      setRevertModal(null);
+      
+    } catch (err) {
+      console.error('Error reverting change:', err);
+      alert('Failed to revert change. Please try again.');
+    }
+  };
+
+  const handleClearHistory = async () => {
+    setHistory([]);
+    await clearHistoryLog('companyoverview');
+    setClearHistoryModal(false);
+  };
+
+  // Load history from Firestore on mount
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadHistoryLog('companyoverview');
+      const historyArray = loaded?.log || loaded || [];
+      setHistory(Array.isArray(historyArray) ? historyArray : []);
+    })();
+  }, []);
+
+  // Save history to Firestore on every change
+  useEffect(() => {
+    if (history && history.length > 0) {
+      saveHistoryLog('companyoverview', history).catch(err => {
+        console.error('Error saving history:', err);
+      });
+    }
+  }, [history]);
+
   // Add function to format date to your required format
   const formatDate = (date) => {
     if (!date) return '';
@@ -412,6 +518,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
       }
       
       const formattedDate = formatDate(selectedDate);
+      const oldValue = row.eocDate || 'N/A';
       await updateEOCDate(row.id, row.package, formattedDate);
       
       // Update local state
@@ -424,6 +531,17 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
       });
       // Update selectedRow if it matches the edited row
       setSelectedRow(prev => prev && prev.id === row.id ? { ...prev, eocDate: formattedDate } : prev);
+      
+      // Add to history
+      const historyEntry = createHistoryEntry(
+        row.id,
+        row.name,
+        row.package,
+        'EOC Date',
+        oldValue,
+        formattedDate
+      );
+      addToHistory(historyEntry);
       
       setEditingEOCDate(false);
       setSelectedDate(null);
@@ -445,6 +563,8 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
   // 3. Update updateStatus to set the correct toast message for EOC status change
   const updateStatus = async (row, fieldKey, value) => {
     try {
+      const oldValue = row[fieldKey] || 'N/A';
+      
       if (fieldKey === 'status' && value === 'EOC') {
         // Only allow marking as EOC if the account is final
         if (!isFinalEOC(row)) {
@@ -459,6 +579,8 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
         }
         const updatedCompany = await markAsEOC(row.id, row.package, finalEOCDate);
         console.log('Received updated company:', updatedCompany);
+        
+        // Update only the specific row to maintain order
         setRows(prevRows => {
           const newRows = prevRows.map(r =>
             r.id === row.id ? {
@@ -470,45 +592,59 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
           console.log('Updated rows:', newRows);
           return newRows;
         });
+        
+        // Add to history
+        const historyEntry = createHistoryEntry(
+          row.id,
+          row.name,
+          row.package,
+          'Status',
+          oldValue,
+          value
+        );
+        addToHistory(historyEntry);
+        
         setToastMessage('Company moved to EOC accounts');
         await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
-        const pkgs = await getPackages();
-        const allRows = [];
-        Object.entries(pkgs).forEach(([pkg, companies]) => {
-          companies.forEach(company => {
-            allRows.push({
-              ...company,
-              package: pkg,
-              eocDate: company.eocDate || (company.start ? getEOC(company.start) : 'N/A')
-            });
-          });
-        });
-        setRows(allRows);
-      } else {
-        await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
-        // Re-fetch packages to update UI
-        const pkgs = await getPackages();
-        
-        const allRows = [];
-        Object.entries(pkgs).forEach(([pkg, companies]) => {
-          companies.forEach(company => {
-            allRows.push({
-              ...company,
-              package: pkg,
-              eocDate: company.eocDate || (company.start ? getEOC(company.start) : 'N/A')
-            });
-          });
-        });
-        setRows(allRows);
-      }
 
-      if (value === 'EOC') {
-        setSelectedRow(null);
-        setShowSuccessToast(true);
-        setTimeout(() => setShowSuccessToast(false), 3000);
+        if (value === 'EOC') {
+          setSelectedRow(null);
+          setShowSuccessToast(true);
+          setTimeout(() => setShowSuccessToast(false), 3000);
+        }
       } else {
+        // For non-EOC status changes, update only the specific row
+        await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
+        
+        // Update only the specific row to maintain order
+        setRows(prevRows => {
+          const newRows = prevRows.map(r =>
+            r.id === row.id ? { ...r, [fieldKey]: value } : r
+          );
+          return newRows;
+        });
+        
+        // Update selectedRow if it matches
         setSelectedRow(prev => prev && prev.id === row.id && prev.package === row.package ? 
           { ...prev, [fieldKey]: value } : prev);
+        
+        // Add to history for all status changes (including regular status changes)
+        const historyEntry = createHistoryEntry(
+          row.id,
+          row.name,
+          row.package,
+          fieldKey === 'status' ? 'Status' :
+          fieldKey === 'reportI' ? 'Report I' : 
+          fieldKey === 'reportII' ? 'Report II' : 
+          fieldKey === 'linkBuildingStatus' ? 'Link Building' :
+          fieldKey === 'siteAuditBStatus' ? 'Site Audit B' :
+          fieldKey === 'siteAuditCStatus' ? 'Site Audit C' :
+          fieldKey === 'bmCreation' ? 'Bookmarking Creation' :
+          fieldKey === 'bmSubmission' ? 'Bookmarking Submission' : fieldKey,
+          oldValue,
+          value
+        );
+        addToHistory(historyEntry);
       }
     } catch (error) {
       console.error('Error updating status:', error);
@@ -589,7 +725,29 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
 
   return (
     <div style={{ padding: 24, background: darkMode ? '#181a1b' : '#f7f6f2', minHeight: '100vh' }}>
-      <h2>Company Task Overview</h2>
+      {/* Header with History Button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
+        <h2>Company Task Overview</h2>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          style={{
+            padding: '8px 16px',
+            background: showHistory ? '#1976d2' : '#f8f9fa',
+            color: showHistory ? '#ffffff' : '#495057',
+            border: '1px solid #dee2e6',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
+        </button>
+      </div>
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <button onClick={() => exportToCSV(filteredRows)} style={{ padding: '6px 16px', borderRadius: 6, background: '#1976d2', color: '#fff', fontWeight: 600, border: 'none', cursor: 'pointer' }}>Export to CSV</button>
         <button onClick={() => exportToExcel(filteredRows)} style={{ padding: '6px 16px', borderRadius: 6, background: '#43a047', color: '#fff', fontWeight: 600, border: 'none', cursor: 'pointer' }}>Export to Excel</button>
@@ -628,6 +786,219 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
           />
         </div>
       </div>
+      
+      {/* History Panel */}
+      {showHistory && (
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e0e7ef',
+          borderRadius: '16px',
+          padding: '32px',
+          marginBottom: '30px',
+          position: 'relative',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          width: '100%',
+          maxWidth: '1200px',
+          margin: '0 auto 30px'
+        }}>
+          {/* Icon-only Clear History button in upper right */}
+          <button
+            onClick={() => setClearHistoryModal(true)}
+            title="Clear History"
+            style={{
+              position: 'absolute',
+              top: '24px',
+              right: '24px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              margin: 0,
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              transition: 'background 0.18s',
+              zIndex: 1
+            }}
+            onMouseOver={e => e.currentTarget.style.background = '#f8d7da'}
+            onMouseOut={e => e.currentTarget.style.background = 'none'}
+          >
+            {/* Trash can SVG icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+          <div style={{ paddingRight: '40px' }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#495057' }}>History Log</h3>
+          </div>
+          <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '16px', marginTop: '20px' }}>
+            {history.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', margin: '30px 0', fontSize: '1.1rem' }}>
+                No history entries yet
+              </p>
+            ) : (
+              <div>
+                {history.map((entry, index) => (
+                  <div
+                    key={entry.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      border: '1px solid #e9ecef',
+                      borderRadius: '10px',
+                      marginBottom: '12px',
+                      background: entry.action === 'reverted' ? '#fff3cd' : '#ffffff',
+                      borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : 
+                                 entry.packageName === 'SEO - BASIC' ? '4px solid #4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '4px solid #00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '4px solid #8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '4px solid #1A237E' : '4px solid #007bff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      transition: 'all 0.2s ease',
+                      gap: '16px'
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontWeight: '600', 
+                        color: '#495057', 
+                        marginBottom: '6px', 
+                        fontSize: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        <span style={{ 
+                          flex: '1', 
+                          minWidth: 0, 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          color: entry.packageName === 'SEO - BASIC' ? '#4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '#00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '#8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '#1A237E' : '#495057',
+                          fontWeight: '600'
+                        }}>
+                          {entry.companyName}
+                        </span>
+                        <span style={{ 
+                          color: entry.packageName === 'SEO - BASIC' ? '#4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '#00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '#8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '#1A237E' : '#6c757d',
+                          fontWeight: '500', 
+                          whiteSpace: 'nowrap',
+                          opacity: 0.85
+                        }}>
+                          {entry.packageName}
+                        </span>
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.95rem', 
+                        color: '#6c757d', 
+                        marginBottom: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span style={{ whiteSpace: 'nowrap' }}>{entry.field}:</span>
+                        <span style={{ 
+                          color: entry.oldValue === 'Completed' ? '#28a745' : 
+                                 entry.oldValue === 'Pending' ? '#dc3545' : 
+                                 entry.oldValue === 'Active' ? '#28a745' :
+                                 entry.oldValue === 'EOC' ? '#dc3545' :
+                                 entry.oldValue === 'OnHold' ? '#6f42c1' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.oldValue}</span>
+                        <span style={{ color: '#adb5bd', margin: '0 2px' }}>→</span>
+                        <span style={{ 
+                          color: entry.newValue === 'Completed' ? '#28a745' : 
+                                 entry.newValue === 'Pending' ? '#dc3545' : 
+                                 entry.newValue === 'Active' ? '#28a745' :
+                                 entry.newValue === 'EOC' ? '#dc3545' :
+                                 entry.newValue === 'OnHold' ? '#6f42c1' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.newValue}</span>
+                        {entry.action === 'reverted' && (
+                          <span style={{ 
+                            color: '#ffc107', 
+                            marginLeft: '4px', 
+                            fontWeight: '500',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '2px'
+                          }}>
+                            <span style={{ fontSize: '1.1em', lineHeight: 1 }}>🔄</span> Reverted
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.85rem', 
+                        color: '#adb5bd',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span style={{ fontSize: '0.9em' }}>🕒</span>
+                        {formatTimestamp(entry.timestamp)}
+                      </div>
+                    </div>
+                    {entry.action !== 'reverted' && (
+                      <button
+                        onClick={() => revertChange(entry)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#f8f9fa',
+                          color: '#6c757d',
+                          border: '1px solid #dee2e6',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          fontWeight: '500',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease',
+                          marginLeft: '8px',
+                          alignSelf: 'center',
+                          whiteSpace: 'nowrap',
+                          height: '32px'
+                        }}
+                        onMouseOver={e => {
+                          e.currentTarget.style.background = '#e9ecef';
+                          e.currentTarget.style.borderColor = '#ced4da';
+                          e.currentTarget.style.color = '#495057';
+                        }}
+                        onMouseOut={e => {
+                          e.currentTarget.style.background = '#f8f9fa';
+                          e.currentTarget.style.borderColor = '#dee2e6';
+                          e.currentTarget.style.color = '#6c757d';
+                        }}
+                      >
+                        <span style={{ fontSize: '1.1em', lineHeight: 1, marginRight: '1px' }}>↩️</span>
+                        Revert
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
       <style>{`
 .package-badge {
   transition: filter 0.18s, box-shadow 0.18s;
@@ -884,7 +1255,6 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
           </thead>
           <tbody>
             {paginatedRows.map(row => {
-              console.log('Rendering row:', row);
               return (
                 <tr key={row.id + row.package} style={{ cursor: 'pointer' }} onClick={() => setSelectedRow(row)}>
                   <td style={{ padding: 12 }}>{row.name}</td>
@@ -904,12 +1274,6 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                   </td>
                   <td style={{ padding: 12 }}>{row.start || 'N/A'}</td>
                   <td style={{ padding: 12 }}>
-                    {console.log('EOC date rendering:', { 
-                      status: row.status, 
-                      eocDate: row.eocDate, 
-                      start: row.start,
-                      calculatedEOC: row.start ? getEOC(row.start) : 'N/A'
-                    })}
                     {row.eocDate ? row.eocDate : (row.start ? getEOC(row.start) : 'N/A')}
                   </td>
                   <td style={{ padding: 12, textAlign: 'center' }}>
@@ -1002,9 +1366,183 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                         selected={selectedDate}
                         onChange={date => setSelectedDate(date)}
                         dateFormat="MMMM d, yyyy"
-                        placeholderText="Select date..."
+                        placeholderText="Select date or type: MM/DD/YYYY"
                         className="react-datepicker__input"
                         popperPlacement="bottom-start"
+                        showYearDropdown
+                        showMonthDropdown
+                        dropdownMode="select"
+                        yearDropdownItemNumber={20}
+                        scrollableYearDropdown
+                        customInput={
+                          <input
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              border: '1px solid #ccc',
+                              borderRadius: '4px',
+                              fontSize: '14px',
+                              outline: 'none'
+                            }}
+                            placeholder="Type: MM/DD/YYYY or click to pick"
+                          />
+                        }
+                        renderCustomHeader={({ date, changeYear, changeMonth }) => (
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                            padding: '8px',
+                            background: '#f8f9fa',
+                            borderBottom: '1px solid #e9ecef',
+                            borderRadius: '4px 4px 0 0'
+                          }}>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              fontSize: '0.9rem',
+                              fontWeight: '600',
+                              color: '#495057'
+                            }}>
+                              <span>Quick Navigation:</span>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}>
+                                <button
+                                  onClick={() => changeYear(date.getFullYear() - 1)}
+                                  style={{
+                                    padding: '4px 8px',
+                                    fontSize: '0.8rem',
+                                    background: '#e9ecef',
+                                    border: '1px solid #dee2e6',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    color: '#495057',
+                                    fontWeight: '500',
+                                    transition: 'all 0.2s',
+                                    minWidth: '32px'
+                                  }}
+                                  onMouseOver={e => {
+                                    e.target.style.background = '#007bff';
+                                    e.target.style.color = '#fff';
+                                  }}
+                                  onMouseOut={e => {
+                                    e.target.style.background = '#e9ecef';
+                                    e.target.style.color = '#495057';
+                                  }}
+                                >
+                                  ←
+                                </button>
+                                <span style={{ 
+                                  fontSize: '1rem', 
+                                  fontWeight: '600', 
+                                  color: '#495057',
+                                  minWidth: '60px',
+                                  textAlign: 'center'
+                                }}>
+                                  {date.getFullYear()}
+                                </span>
+                                <button
+                                  onClick={() => changeYear(date.getFullYear() + 1)}
+                                  style={{
+                                    padding: '4px 8px',
+                                    fontSize: '0.8rem',
+                                    background: '#e9ecef',
+                                    border: '1px solid #dee2e6',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    color: '#495057',
+                                    fontWeight: '500',
+                                    transition: 'all 0.2s',
+                                    minWidth: '32px'
+                                  }}
+                                  onMouseOver={e => {
+                                    e.target.style.background = '#007bff';
+                                    e.target.style.color = '#fff';
+                                  }}
+                                  onMouseOut={e => {
+                                    e.target.style.background = '#e9ecef';
+                                    e.target.style.color = '#495057';
+                                  }}
+                                >
+                                  →
+                                </button>
+                              </div>
+                            </div>
+
+                            <div style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '4px',
+                              marginTop: '8px',
+                              paddingTop: '8px',
+                              borderTop: '1px solid #dee2e6'
+                            }}>
+                              <div style={{
+                                fontSize: '0.85rem',
+                                fontWeight: '600',
+                                color: '#495057',
+                                marginBottom: '4px'
+                              }}>
+                                Quick Months:
+                              </div>
+                              <div style={{
+                                display: 'flex',
+                                gap: '3px',
+                                flexWrap: 'wrap'
+                              }}>
+                                {/* All months for current year */}
+                                {[
+                                  { label: 'Jan', month: 0 },
+                                  { label: 'Feb', month: 1 },
+                                  { label: 'Mar', month: 2 },
+                                  { label: 'Apr', month: 3 },
+                                  { label: 'May', month: 4 },
+                                  { label: 'Jun', month: 5 },
+                                  { label: 'Jul', month: 6 },
+                                  { label: 'Aug', month: 7 },
+                                  { label: 'Sep', month: 8 },
+                                  { label: 'Oct', month: 9 },
+                                  { label: 'Nov', month: 10 },
+                                  { label: 'Dec', month: 11 }
+                                ].map(({ label, month }) => (
+                                  <button
+                                    key={label}
+                                    onClick={() => changeMonth(month)}
+                                    style={{
+                                      padding: '3px 6px',
+                                      fontSize: '0.75rem',
+                                      background: '#f8f9fa',
+                                      border: '1px solid #dee2e6',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer',
+                                      color: '#6c757d',
+                                      fontWeight: '500',
+                                      transition: 'all 0.2s',
+                                      minWidth: '28px',
+                                      textAlign: 'center'
+                                    }}
+                                    onMouseOver={e => {
+                                      e.target.style.background = '#28a745';
+                                      e.target.style.color = '#fff';
+                                      e.target.style.borderColor = '#28a745';
+                                    }}
+                                    onMouseOut={e => {
+                                      e.target.style.background = '#f8f9fa';
+                                      e.target.style.color = '#6c757d';
+                                      e.target.style.borderColor = '#dee2e6';
+                                    }}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       />
                       <button
                         onClick={() => handleEOCDateUpdate(selectedRow)}
@@ -1227,6 +1765,150 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
         </div>
       )}
 
+      {/* Clear History Confirmation Modal */}
+      {clearHistoryModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 400,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Clear History Log?</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to clear the entire history log? This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={handleClearHistory}
+                style={{
+                  padding: '10px 25px',
+                  background: '#dc3545',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Clear All
+              </button>
+              <button
+                onClick={() => setClearHistoryModal(false)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#6c757d',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revert Confirmation Modal */}
+      {revertModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 400,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Revert Change?</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to revert the change for <strong>{revertModal.companyName}</strong>?
+              <br />
+              <span style={{ color: '#666', fontSize: '0.9em' }}>
+                {revertModal.field}: {revertModal.newValue} → {revertModal.oldValue}
+              </span>
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={confirmRevert}
+                style={{
+                  padding: '10px 25px',
+                  background: '#ffc107',
+                  color: '#000000',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Revert
+              </button>
+              <button
+                onClick={() => setRevertModal(null)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#6c757d',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Success Toast */}
       {showSuccessToast && (
         <div style={styles.successToast}>
@@ -1246,6 +1928,14 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
               transform: translateX(0);
               opacity: 1;
             }
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes scaleIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
           }
         `}
       </style>

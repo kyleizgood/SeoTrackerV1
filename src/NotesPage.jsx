@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { getNotesPaginated, saveNote, deleteNote, getTrash, saveTrash } from './firestoreHelpers';
+import { getNotesPaginated, saveNote, deleteNote, getTrash, saveTrash, saveHistoryLog, loadHistoryLog, clearHistoryLog } from './firestoreHelpers';
 import { getDocs, collection } from 'firebase/firestore';
 import { db } from './firebase';
 import { useNavigate } from 'react-router-dom';
@@ -56,9 +56,102 @@ export default function NotesPage({ darkMode, setDarkMode }) {
   const [trashNotes, setTrashNotes] = useState([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const navigate = useNavigate();
+  // Add toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   // LocalStorage cache key
   const NOTES_CACHE_KEY = 'notes_cache_v1';
+
+  // --- History Log State ---
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [recentChanges, setRecentChanges] = useState(new Set());
+  const [revertModal, setRevertModal] = useState(null);
+  const [clearHistoryModal, setClearHistoryModal] = useState(false);
+
+  // History entry structure
+  const createHistoryEntry = (noteId, title, field, oldValue, newValue, action = 'changed') => ({
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    noteId,
+    title,
+    field,
+    oldValue,
+    newValue,
+    action
+  });
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const addToHistory = (entry) => {
+    setHistory(prev => [entry, ...prev.slice(0, 49)]);
+    setRecentChanges(prev => new Set([...prev, entry.noteId]));
+    setTimeout(() => {
+      setRecentChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.noteId);
+        return newSet;
+      });
+    }, 5000);
+  };
+
+  const revertChange = async (historyEntry) => {
+    setRevertModal(historyEntry);
+  };
+
+  const confirmRevert = async () => {
+    const historyEntry = revertModal;
+    try {
+      const field = historyEntry.field;
+      const value = historyEntry.oldValue;
+      setNotes(prev => prev.map(n => n.id === historyEntry.noteId ? { ...n, [field]: value } : n));
+      await saveNote({ ...notes.find(n => n.id === historyEntry.noteId), [field]: value });
+      const revertEntry = createHistoryEntry(
+        historyEntry.noteId,
+        historyEntry.title,
+        historyEntry.field,
+        historyEntry.newValue,
+        historyEntry.oldValue,
+        'reverted'
+      );
+      addToHistory(revertEntry);
+      setRevertModal(null);
+    } catch (err) {
+      alert('Failed to revert change. Please try again.');
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadHistoryLog('notes');
+      const historyArray = loaded?.log || loaded || [];
+      setHistory(Array.isArray(historyArray) ? historyArray : []);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (history && history.length > 0) {
+      saveHistoryLog('notes', history).catch(err => {
+        console.error('Error saving history:', err);
+      });
+    }
+  }, [history]);
+
+  const handleClearHistory = async () => {
+    setHistory([]);
+    await clearHistoryLog('notes');
+    setClearHistoryModal(false);
+  };
 
   // Fetch paginated notes (initial or more)
   const fetchNotes = async (loadMore = false) => {
@@ -116,13 +209,21 @@ export default function NotesPage({ darkMode, setDarkMode }) {
     setModalData(note);
     setShowModal(true);
   };
+  // In handleModalSave, add to history on add/edit
   const handleModalSave = async (data) => {
-    // Ensure priority is always set
     const noteWithPriority = { ...data, priority: data.priority || 'medium' };
     let newNote = null;
     if (noteWithPriority.id) {
       setNotes(notes => notes.map(n => n.id === noteWithPriority.id ? { ...n, ...noteWithPriority, updatedAt: new Date().toISOString() } : n));
       newNote = { ...noteWithPriority, updatedAt: new Date().toISOString() };
+      // Add to history for edit
+      const oldNote = notes.find(n => n.id === noteWithPriority.id);
+      if (oldNote) {
+        if (oldNote.title !== noteWithPriority.title) addToHistory(createHistoryEntry(noteWithPriority.id, oldNote.title, 'title', oldNote.title, noteWithPriority.title));
+        if (oldNote.content !== noteWithPriority.content) addToHistory(createHistoryEntry(noteWithPriority.id, oldNote.title, 'content', oldNote.content, noteWithPriority.content));
+        if (oldNote.reminderDate !== noteWithPriority.reminderDate) addToHistory(createHistoryEntry(noteWithPriority.id, oldNote.title, 'reminderDate', oldNote.reminderDate, noteWithPriority.reminderDate));
+        if (oldNote.priority !== noteWithPriority.priority) addToHistory(createHistoryEntry(noteWithPriority.id, oldNote.title, 'priority', oldNote.priority, noteWithPriority.priority));
+      }
     } else {
       newNote = {
         ...noteWithPriority,
@@ -131,10 +232,15 @@ export default function NotesPage({ darkMode, setDarkMode }) {
         updatedAt: new Date().toISOString(),
       };
       setNotes(notes => [newNote, ...notes]);
+      // Add to history for add
+      addToHistory(createHistoryEntry(newNote.id, newNote.title, 'created', '', 'Note created'));
     }
     setShowModal(false);
     try {
       await saveNote(newNote);
+      setToastMessage('Note saved successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
     } catch (err) {
       alert('Failed to save note. Please try again.');
       setNotes(notes => notes.filter(n => n.id !== newNote.id));
@@ -161,6 +267,10 @@ export default function NotesPage({ darkMode, setDarkMode }) {
       await deleteNote(note.id);
       await fetchTrash();
       if (selectedId === id) setSelectedId(notes[0]?.id || null);
+      // Add toast for delete
+      setToastMessage('Note deleted successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
     } catch (err) {
       // Optionally show an error, but do not delay UI
     }
@@ -297,6 +407,221 @@ export default function NotesPage({ darkMode, setDarkMode }) {
       </aside>
       {/* Main content */}
       <main style={{ flex: 1, padding: '36px 48px', overflowY: 'auto', background: darkMode ? '#181a1b' : '#f7f6f2', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        {/* Header with History Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px', width: '100%', maxWidth: '900px' }}>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            style={{
+              padding: '8px 16px',
+              background: showHistory ? '#1976d2' : '#f8f9fa',
+              color: showHistory ? '#ffffff' : '#495057',
+              border: '1px solid #dee2e6',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: '600',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
+          </button>
+        </div>
+        {/* History Panel */}
+        {showHistory && (
+          <div style={{
+            background: '#ffffff',
+            border: '1px solid #e0e7ef',
+            borderRadius: '16px',
+            padding: '32px',
+            marginBottom: '30px',
+            position: 'relative',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+            width: '100%',
+            maxWidth: '900px',
+            margin: '0 auto 30px'
+          }}>
+            {/* Icon-only Clear History button in upper right */}
+            <button
+              onClick={() => setClearHistoryModal(true)}
+              title="Clear History"
+              style={{
+                position: 'absolute',
+                top: '24px',
+                right: '24px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                margin: 0,
+                width: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                transition: 'background 0.18s',
+                zIndex: 1
+              }}
+              onMouseOver={e => e.currentTarget.style.background = '#f8d7da'}
+              onMouseOut={e => e.currentTarget.style.background = 'none'}
+            >
+              {/* Trash can SVG icon */}
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </button>
+            <div style={{ paddingRight: '40px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#495057' }}>History Log</h3>
+            </div>
+            <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '16px', marginTop: '20px' }}>
+              {history.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', margin: '30px 0', fontSize: '1.1rem' }}>
+                  No history entries yet
+                </p>
+              ) : (
+                <div>
+                  {history.map((entry, index) => (
+                    <div
+                      key={entry.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        padding: '16px 20px',
+                        border: '1px solid #e9ecef',
+                        borderRadius: '10px',
+                        marginBottom: '12px',
+                        background: entry.action === 'reverted' ? '#fff3cd' : '#ffffff',
+                        borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : '4px solid #1976d2',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        transition: 'all 0.2s ease',
+                        gap: '16px'
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ 
+                          fontWeight: '600', 
+                          color: '#495057', 
+                          marginBottom: '6px', 
+                          fontSize: '1rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <span style={{ 
+                            flex: '1', 
+                            minWidth: 0, 
+                            whiteSpace: 'nowrap', 
+                            overflow: 'hidden', 
+                            textOverflow: 'ellipsis',
+                            color: '#1976d2',
+                            fontWeight: '600'
+                          }}>
+                            {entry.title}
+                          </span>
+                          <span style={{ 
+                            color: '#1976d2',
+                            fontWeight: '500', 
+                            whiteSpace: 'nowrap',
+                            opacity: 0.85
+                          }}>
+                            {entry.field}
+                          </span>
+                        </div>
+                        <div style={{ 
+                          fontSize: '0.95rem', 
+                          color: '#6c757d', 
+                          marginBottom: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          flexWrap: 'wrap'
+                        }}>
+                          <span style={{ whiteSpace: 'nowrap' }}>{entry.field}:</span>
+                          <span style={{ 
+                            color: entry.oldValue === 'Completed' ? '#28a745' : entry.oldValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap'
+                          }}>{entry.oldValue}</span>
+                          <span style={{ color: '#adb5bd', margin: '0 2px' }}>→</span>
+                          <span style={{ 
+                            color: entry.newValue === 'Completed' ? '#28a745' : entry.newValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap'
+                          }}>{entry.newValue}</span>
+                          {entry.action === 'reverted' && (
+                            <span style={{ 
+                              color: '#ffc107', 
+                              marginLeft: '4px', 
+                              fontWeight: '500',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '2px'
+                            }}>
+                              <span style={{ fontSize: '1.1em', lineHeight: 1 }}>🔄</span> Reverted
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ 
+                          fontSize: '0.85rem', 
+                          color: '#adb5bd',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          <span style={{ fontSize: '0.9em' }}>🕒</span>
+                          {formatTimestamp(entry.timestamp)}
+                        </div>
+                      </div>
+                      {entry.action !== 'reverted' && (
+                        <button
+                          onClick={() => revertChange(entry)}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#f8f9fa',
+                            color: '#6c757d',
+                            border: '1px solid #dee2e6',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem',
+                            fontWeight: '500',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'all 0.2s ease',
+                            marginLeft: '8px',
+                            alignSelf: 'center',
+                            whiteSpace: 'nowrap',
+                            height: '32px'
+                          }}
+                          onMouseOver={e => {
+                            e.currentTarget.style.background = '#e9ecef';
+                            e.currentTarget.style.borderColor = '#ced4da';
+                            e.currentTarget.style.color = '#495057';
+                          }}
+                          onMouseOut={e => {
+                            e.currentTarget.style.background = '#f8f9fa';
+                            e.currentTarget.style.borderColor = '#dee2e6';
+                            e.currentTarget.style.color = '#6c757d';
+                          }}
+                        >
+                          <span style={{ fontSize: '1.1em', lineHeight: 1, marginRight: '1px' }}>↩️</span>
+                          Revert
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+                  </div>
+      )}
         {selectedNote ? (
           <div style={{
             width: '100%',
@@ -403,9 +728,32 @@ export default function NotesPage({ darkMode, setDarkMode }) {
                       timeFormat="HH:mm"
                       timeIntervals={15}
                       dateFormat="MMMM d, yyyy h:mm aa"
-                      placeholderText="Select date and time"
+                      placeholderText="Type: MM/DD/YYYY or click to pick"
                       className="custom-datepicker-input"
-                      style={{ marginLeft: 12, marginTop: 6, marginBottom: 6, width: 200, padding: '0.3em 1em', borderRadius: 8, border: '1.5px solid #bdbdbd', fontSize: '1em', fontWeight: 600, background: '#f7f6f2', color: '#232323' }}
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={15}
+                      scrollableYearDropdown
+                      customInput={
+                        <input
+                          style={{
+                            marginLeft: 12,
+                            marginTop: 6,
+                            marginBottom: 6,
+                            width: 200,
+                            padding: '0.3em 1em',
+                            borderRadius: 8,
+                            border: '1.5px solid #bdbdbd',
+                            fontSize: '1em',
+                            fontWeight: 600,
+                            background: '#f7f6f2',
+                            color: '#232323',
+                            outline: 'none'
+                          }}
+                          placeholder="Type: MM/DD/YYYY or click to pick"
+                        />
+                      }
                       popperPlacement="bottom"
                     />
                   </label>
@@ -440,6 +788,24 @@ export default function NotesPage({ darkMode, setDarkMode }) {
             <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end' }}>
               <button onClick={confirmDelete} style={{ background: '#c00', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 28px', fontWeight: 700, fontSize: '1.08em', cursor: 'pointer' }}>Delete</button>
               <button onClick={cancelDelete} style={{ background: '#eee', color: '#232323', border: 'none', borderRadius: 8, padding: '10px 28px', fontWeight: 700, fontSize: '1.08em', cursor: 'pointer' }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Add toast notification */}
+      {showToast && (
+        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
+          ✅ {toastMessage}
+        </div>
+      )}
+      {clearHistoryModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: darkMode ? 'rgba(24,26,27,0.88)' : 'rgba(44,62,80,0.18)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: darkMode ? '#23272e' : '#fff', borderRadius: 18, boxShadow: darkMode ? '0 2px 24px #181a1b' : '0 2px 24px #ececec', padding: 36, minWidth: 320, maxWidth: 400, color: darkMode ? '#e3e3e3' : '#232323' }}>
+            <div style={{ fontWeight: 800, fontSize: '1.15em', marginBottom: 18, color: '#c00' }}>Clear History?</div>
+            <div style={{ fontSize: '1.08em', color: '#232323', marginBottom: 24 }}>Are you sure you want to clear all history entries? This action cannot be undone.</div>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end' }}>
+              <button onClick={handleClearHistory} style={{ background: '#c00', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 28px', fontWeight: 700, fontSize: '1.08em', cursor: 'pointer' }}>Clear</button>
+              <button onClick={() => setClearHistoryModal(false)} style={{ background: '#eee', color: '#232323', border: 'none', borderRadius: 8, padding: '10px 28px', fontWeight: 700, fontSize: '1.08em', cursor: 'pointer' }}>Cancel</button>
             </div>
           </div>
         </div>

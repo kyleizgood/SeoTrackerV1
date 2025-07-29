@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { getTrash, saveTrash, saveTemplate, saveTicket, saveCompany, getPackages, savePackages, getCategories, saveCategories } from './firestoreHelpers';
+import { getTrash, saveTrash, saveTemplate, saveTicket, saveCompany, getPackages, savePackages, getCategories, saveCategories, deleteTemplate } from './firestoreHelpers';
 
 const TemplateTrash = ({ darkMode, setDarkMode }) => {
   const [trash, setTrash] = useState([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [search, setSearch] = useState('');
   const [showDeleteAll, setShowDeleteAll] = useState(false);
+  // Add toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     // Fetch trash from Firestore
@@ -25,34 +28,19 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
   };
 
   const handleRestore = async (item) => {
-    // Remove from trash
-    const updatedTrash = trash.filter(t => t.id !== item.id && t.name !== item.name);
-    await saveTrash(updatedTrash);
-    // Restore to the correct collection
-    if (item.type === 'template') {
-      await saveTemplate({ ...item });
-    } else if (item.type === 'ticket') {
-      await saveTicket({ ...item });
-    } else if (item.type === 'company') {
-      if (item.originalPackage) {
-        const packages = await getPackages();
-        if (!packages[item.originalPackage]) packages[item.originalPackage] = [];
-        if (!packages[item.originalPackage].some(c => c.id === item.id)) {
-          packages[item.originalPackage].push({ ...item });
-          await savePackages(packages);
-        }
-      } else {
-        await saveCompany({ ...item });
-      }
-    } else if (item.type === 'category') {
-      // Restore category to categories list
-      const categories = await getCategories();
-      if (!categories.includes(item.name)) {
-        const updated = [item.name, ...categories];
-        await saveCategories(updated);
-      }
+    try {
+      await saveTemplate(item);
+      const updatedTrash = trash.filter(t => t.id !== item.id);
+      setTrash(updatedTrash);
+      await saveTrash(updatedTrash);
+      // Add toast for restore
+      setToastMessage('Template restored successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('Error restoring template:', error);
+      alert('Error restoring template');
     }
-    refreshTrash();
   };
 
   const handleDeleteForever = (template) => {
@@ -60,10 +48,20 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
   };
 
   const handleDeleteConfirm = async () => {
-    const updatedTrash = trash.filter(t => t.id !== confirmDeleteId);
-    await saveTrash(updatedTrash);
-    setConfirmDeleteId(null);
-    refreshTrash();
+    try {
+      await deleteTemplate(confirmDeleteId);
+      const updatedTrash = trash.filter(t => t.id !== confirmDeleteId);
+      setTrash(updatedTrash);
+      await saveTrash(updatedTrash);
+      setConfirmDeleteId(null);
+      // Add toast for delete forever
+      setToastMessage('Template permanently deleted');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('Error deleting template permanently:', error);
+      alert('Error deleting template');
+    }
   };
 
   const handleDeleteCancel = () => {
@@ -75,9 +73,22 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
     setShowDeleteAll(true);
   };
   const handleDeleteAllConfirm = async () => {
-    await saveTrash([]);
-    setShowDeleteAll(false);
-    refreshTrash();
+    try {
+      // Delete all templates permanently
+      for (const template of trash) {
+        await deleteTemplate(template.id);
+      }
+      setTrash([]);
+      await saveTrash([]);
+      setShowDeleteAll(false);
+      // Add toast for delete all
+      setToastMessage('All templates permanently deleted');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('Error deleting all templates:', error);
+      alert('Error deleting all templates');
+    }
   };
   const handleDeleteAllCancel = () => {
     setShowDeleteAll(false);
@@ -169,6 +180,12 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
               <button className="confirm-btn cancel" onClick={handleDeleteAllCancel}>Cancel</button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Add toast notification */}
+      {showToast && (
+        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
+          ✅ {toastMessage}
         </div>
       )}
     </section>

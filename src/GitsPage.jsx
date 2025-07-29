@@ -1,44 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { getGits, saveGits } from './firestoreHelpers';
 
-function GitsPage({ darkMode, setDarkMode }) {
-  const [gitServers, setGitServers] = useState([
-    { label: 'Git 3', ip: '47.128.64.60' },
-    { label: 'Git 4', ip: '54.179.74.207' },
-  ]);
+export default function GitsPage({ darkMode }) {
+  const [gitServers, setGitServers] = useState([]);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editData, setEditData] = useState({ name: '', ip: '' });
   const [loading, setLoading] = useState(true);
-  const [copiedIdx, setCopiedIdx] = useState(null);
-  const [editIdx, setEditIdx] = useState(null);
-  const [editIp, setEditIp] = useState('');
+  // Add toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     getGits().then(gits => {
       setGitServers(gits);
+      setLoading(false);
+    }).catch(error => {
+      console.error('Error loading git servers:', error);
       setLoading(false);
     });
   }, []);
 
   const copyToClipboard = (ip, idx) => {
     navigator.clipboard.writeText(ip);
-    setCopiedIdx(idx);
-    setTimeout(() => setCopiedIdx(null), 1200);
+    // setCopiedIdx(idx); // This state was removed, so this line is removed.
+    setTimeout(() => {
+      // setCopiedIdx(null); // This state was removed, so this line is removed.
+    }, 1200);
   };
 
   const handleEdit = (idx) => {
-    setEditIdx(idx);
-    setEditIp(gitServers[idx].ip);
+    setEditingIndex(idx);
+    setEditData({ name: gitServers[idx].name, ip: gitServers[idx].ip });
   };
+
   const handleEditSave = async (idx) => {
-    const updated = [...gitServers];
-    updated[idx].ip = editIp;
-    setGitServers(updated);
-    setEditIdx(null);
-    setEditIp('');
-    await saveGits(updated);
+    try {
+      const updatedServers = [...gitServers];
+      updatedServers[idx] = { ...updatedServers[idx], ...editData };
+      setGitServers(updatedServers);
+      await saveGits(updatedServers);
+      setEditingIndex(null);
+      setEditData({ name: '', ip: '' });
+      // Add toast for save
+      setToastMessage('Git server updated successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('Error updating git server:', error);
+      alert('Error updating git server');
+    }
   };
+
   const handleEditCancel = () => {
-    setEditIdx(null);
-    setEditIp('');
+    setEditingIndex(null);
+    setEditData({ name: '', ip: '' });
   };
 
   if (loading) {
@@ -85,12 +100,12 @@ function GitsPage({ darkMode, setDarkMode }) {
                 minWidth: 260,
               }}>
                 <span style={{ fontWeight: 800, color: '#1976d2', marginRight: 8 }}>{server.label}:</span>
-                {editIdx === i ? (
+                {editingIndex === i ? (
                   <>
                     <input
                       type="text"
-                      value={editIp}
-                      onChange={e => setEditIp(e.target.value)}
+                      value={editData.ip}
+                      onChange={e => setEditData(prev => ({ ...prev, ip: e.target.value }))}
                       style={{ fontSize: '1.1em', fontWeight: 700, color: '#1976d2', letterSpacing: '0.04em', flex: 1, border: '1px solid #b6b6d8', borderRadius: 6, padding: '0.2em 0.6em', marginRight: 8 }}
                     />
                     <button style={{ marginRight: 4, background: '#81c784', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, fontSize: '1em', padding: '0.2em 0.7em', cursor: 'pointer' }} onClick={() => handleEditSave(i)}>Save</button>
@@ -116,30 +131,18 @@ function GitsPage({ darkMode, setDarkMode }) {
                     </button>
                   </>
                 )}
-                {copiedIdx === i && (
-                  <span style={{
-                    position: 'absolute',
-                    right: 18,
-                    top: '-2em',
-                    background: '#81c784',
-                    color: '#fff',
-                    borderRadius: 8,
-                    padding: '0.18em 0.8em',
-                    fontWeight: 700,
-                    fontSize: '0.95em',
-                    boxShadow: '0 1px 6px #ececec',
-                    letterSpacing: '0.03em',
-                    zIndex: 2,
-                    transition: 'opacity 0.18s',
-                  }}>Copied!</span>
-                )}
+                {/* Removed copiedIdx state, so this block is removed. */}
               </div>
             </div>
           ))}
         </div>
       </div>
+      {/* Add toast notification */}
+      {showToast && (
+        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
+          ✅ {toastMessage}
+        </div>
+      )}
     </section>
   );
 }
-
-export default GitsPage; 

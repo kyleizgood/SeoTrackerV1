@@ -14,8 +14,8 @@ import AuthPage from './AuthPage';
 import Login from './Login';
 import Register from './Register';
 import { getCompanies, saveCompany, deleteCompany } from './firestoreHelpers';
-import { getPackages, savePackages, getTrash, saveTrash, getTemplates, saveTemplate, deleteTemplate, getTickets, saveTicket, deleteTicket } from './firestoreHelpers';
-import { onSnapshot, collection, doc as firestoreDoc, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
+import { getPackages, savePackages, getTrash, saveTrash, getTemplates, saveTemplate, deleteTemplate, getTickets, saveTicket, deleteTicket, loadHistoryLog, saveHistoryLog, clearHistoryLog } from './firestoreHelpers';
+import { onSnapshot, collection, doc as firestoreDoc, deleteDoc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import GitsPage from './GitsPage';
 import SiteAuditsPage from './SiteAuditsPage';
@@ -353,10 +353,18 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
       await saveCompany(updated);
       setCompanies(await getCompanies());
       setEditId(null);
+      // Add toast for edit
+      if (window.showToast) {
+        window.showToast('Company updated successfully');
+      }
     } else {
       const newCompany = { ...form, start, id: Date.now(), siteAuditBStatus: 'Pending', siteAuditCStatus: 'Pending' };
       await saveCompany(newCompany);
       setCompanies(await getCompanies());
+      // Add toast for add
+      if (window.showToast) {
+        window.showToast('Company added successfully');
+      }
     }
     setForm({ name: '', startDate: null, status: 'Active' });
   };
@@ -424,7 +432,7 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
           forRevision: 'Pending',
           ra: 'Pending',
           distribution: 'Pending',
-          businessProfileClaiming: 'Ticket',
+          businessProfileClaiming: 'Pending',
         },
         reportI: 'Pending',
         reportII: 'Pending',
@@ -433,6 +441,10 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
       });
       setPackages(updatedPackages);
       await savePackages(updatedPackages);
+      // Add toast for add to package
+      if (window.showToast) {
+        window.showToast(`Company added to ${pkg} successfully`);
+      }
     }
     setShowAddToPackage(null);
   };
@@ -449,6 +461,25 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
           value={form.name}
           onChange={handleChange}
           required
+          style={{
+            fontSize: '0.95rem',
+            width: '100%',
+            padding: '8px 12px',
+            border: '1px solid #e1e5e9',
+            borderRadius: '6px',
+            outline: 'none',
+            background: '#ffffff',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = '#007bff';
+            e.target.style.boxShadow = '0 0 0 2px rgba(0,123,255,0.1)';
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = '#e1e5e9';
+            e.target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+          }}
         />
         <DatePicker
           selected={form.startDate}
@@ -457,14 +488,287 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
           placeholderText="Start Date"
           className="company-form-datepicker"
           required
-          style={{ fontSize: '1.1rem', width: '100%' }}
+          showYearDropdown
+          showMonthDropdown
+          dropdownMode="select"
+          yearDropdownItemNumber={20}
+          scrollableYearDropdown
+          onClickOutside={(e) => e.preventDefault()}
+          onInputClick={(e) => e.preventDefault()}
+          customInput={
+            <input
+              style={{
+                fontSize: '0.95rem',
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #e1e5e9',
+                borderRadius: '6px',
+                outline: 'none',
+                background: '#ffffff',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+              placeholder="Start Date"
+            />
+          }
+          renderCustomHeader={({ date, changeYear, changeMonth }) => (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '8px',
+              background: '#f8f9fa',
+              borderBottom: '1px solid #e9ecef',
+              borderRadius: '4px 4px 0 0'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '0.9rem',
+                fontWeight: '600',
+                color: '#495057'
+              }}>
+                <span>Quick Navigation:</span>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      changeYear(date.getFullYear() - 1);
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: '0.8rem',
+                      background: '#e9ecef',
+                      border: '1px solid #dee2e6',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      color: '#495057',
+                      fontWeight: '500',
+                      transition: 'all 0.2s',
+                      minWidth: '32px'
+                    }}
+                    onMouseOver={e => {
+                      e.target.style.background = '#007bff';
+                      e.target.style.color = '#fff';
+                    }}
+                    onMouseOut={e => {
+                      e.target.style.background = '#e9ecef';
+                      e.target.style.color = '#495057';
+                    }}
+                  >
+                    ←
+                  </button>
+                  <span style={{ 
+                    fontSize: '1rem', 
+                    fontWeight: '600', 
+                    color: '#495057',
+                    minWidth: '60px',
+                    textAlign: 'center'
+                  }}>
+                    {date.getFullYear()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      changeYear(date.getFullYear() + 1);
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: '0.8rem',
+                      background: '#e9ecef',
+                      border: '1px solid #dee2e6',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      color: '#495057',
+                      fontWeight: '500',
+                      transition: 'all 0.2s',
+                      minWidth: '32px'
+                    }}
+                    onMouseOver={e => {
+                      e.target.style.background = '#007bff';
+                      e.target.style.color = '#fff';
+                    }}
+                    onMouseOut={e => {
+                      e.target.style.background = '#e9ecef';
+                      e.target.style.color = '#495057';
+                    }}
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                marginTop: '8px',
+                paddingTop: '8px',
+                borderTop: '1px solid #dee2e6'
+              }}>
+                <div style={{
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  color: '#495057',
+                  marginBottom: '4px'
+                }}>
+                  Quick Months:
+                </div>
+                <div style={{
+                  display: 'flex',
+                  gap: '3px',
+                  flexWrap: 'wrap'
+                }}>
+                  {/* All months for current year */}
+                  {[
+                    { label: 'Jan', month: 0 },
+                    { label: 'Feb', month: 1 },
+                    { label: 'Mar', month: 2 },
+                    { label: 'Apr', month: 3 },
+                    { label: 'May', month: 4 },
+                    { label: 'Jun', month: 5 },
+                    { label: 'Jul', month: 6 },
+                    { label: 'Aug', month: 7 },
+                    { label: 'Sep', month: 8 },
+                    { label: 'Oct', month: 9 },
+                    { label: 'Nov', month: 10 },
+                    { label: 'Dec', month: 11 }
+                  ].map(({ label, month }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        changeMonth(month);
+                      }}
+                      style={{
+                        padding: '3px 6px',
+                        fontSize: '0.75rem',
+                        background: '#f8f9fa',
+                        border: '1px solid #dee2e6',
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                        color: '#6c757d',
+                        fontWeight: '500',
+                        transition: 'all 0.2s',
+                        minWidth: '28px',
+                        textAlign: 'center'
+                      }}
+                      onMouseOver={e => {
+                        e.target.style.background = '#28a745';
+                        e.target.style.color = '#fff';
+                        e.target.style.borderColor = '#28a745';
+                      }}
+                      onMouseOut={e => {
+                        e.target.style.background = '#f8f9fa';
+                        e.target.style.color = '#6c757d';
+                        e.target.style.borderColor = '#dee2e6';
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         />
-        <select name="status" value={form.status} onChange={handleChange}>
-          <option value="Active">Active</option>
-          <option value="OnHold">OnHold</option>
+        <select 
+          name="status" 
+          value={form.status} 
+          onChange={handleChange}
+          style={{
+            fontSize: '0.95rem',
+            width: 'auto',
+            minWidth: 'fit-content',
+            padding: '8px 12px',
+            border: '1px solid #e1e5e9',
+            borderRadius: '6px',
+            outline: 'none',
+            background: '#ffffff',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            cursor: 'pointer'
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = '#007bff';
+            e.target.style.boxShadow = '0 0 0 2px rgba(0,123,255,0.1)';
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = '#e1e5e9';
+            e.target.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+          }}
+        >
+          <option value="Active">🟢 Active</option>
+          <option value="OnHold">🟣 OnHold</option>
         </select>
-        <button type="submit">{editId ? 'Update' : 'Add'}</button>
-        {editId && <button type="button" onClick={handleCancel} style={{background:'#eee',color:'#232323',marginLeft:8}}>Cancel</button>}
+        <button 
+          type="submit"
+          style={{
+            fontSize: '0.9rem',
+            width: 'auto',
+            minWidth: 'fit-content',
+            padding: '8px 12px',
+            border: 'none',
+            borderRadius: '6px',
+            background: '#007bff',
+            color: '#ffffff',
+            fontWeight: '600',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 6px rgba(0,123,255,0.2)'
+          }}
+          onMouseOver={(e) => {
+            e.target.style.background = '#0056b3';
+            e.target.style.boxShadow = '0 3px 8px rgba(0,123,255,0.3)';
+          }}
+          onMouseOut={(e) => {
+            e.target.style.background = '#007bff';
+            e.target.style.boxShadow = '0 2px 6px rgba(0,123,255,0.2)';
+          }}
+        >
+          {editId ? 'Update' : 'Add'}
+        </button>
+        {editId && (
+          <button 
+            type="button" 
+            onClick={handleCancel}
+            style={{
+              fontSize: '0.9rem',
+              width: '100%',
+              padding: '8px 12px',
+              border: '1px solid #e1e5e9',
+              borderRadius: '6px',
+              background: '#ffffff',
+              color: '#6c757d',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              marginTop: '6px'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.borderColor = '#6c757d';
+              e.target.style.background = '#f8f9fa';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.borderColor = '#e1e5e9';
+              e.target.style.background = '#ffffff';
+            }}
+          >
+            Cancel
+          </button>
+        )}
       </form>
       <div className="table-scroll-container table-responsive">
         <table className="company-table">
@@ -563,6 +867,154 @@ function formatDateToDisplay(dateObj) {
   return `${months[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()}`;
 }
 
+function TicketModalForm({ ticket, onSave, onCancel }) {
+  const [formData, setFormData] = useState({
+    subject: ticket.subject || '',
+    ticketId: ticket.ticketId || '',
+    followUpDate: ticket.followUpDate ? new Date(ticket.followUpDate).toISOString().split('T')[0] : '',
+    description: ticket.description || ''
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const updatedTicket = {
+      ...ticket,
+      subject: formData.subject,
+      ticketId: formData.ticketId,
+      followUpDate: formData.followUpDate ? new Date(formData.followUpDate).toISOString() : '',
+      description: formData.description
+    };
+    onSave(updatedTicket);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ textAlign: 'left' }}>
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#495057' }}>
+          Subject *
+        </label>
+        <input
+          type="text"
+          value={formData.subject}
+          onChange={(e) => setFormData(prev => ({ ...prev, subject: e.target.value }))}
+          placeholder="Enter ticket subject"
+          required
+          style={{
+            width: '100%',
+            padding: '8px 12px',
+            border: '1px solid #ced4da',
+            borderRadius: '4px',
+            fontSize: '14px'
+          }}
+        />
+      </div>
+
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#495057' }}>
+          Ticket ID *
+        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <input
+            type="text"
+            value={formData.ticketId}
+            onChange={(e) => setFormData(prev => ({ ...prev, ticketId: e.target.value }))}
+            placeholder="Enter ticket ID"
+            required
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              border: '1px solid #ced4da',
+              borderRadius: '4px',
+              fontSize: '14px'
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(formData.ticketId);
+              if (window.showToast) {
+                window.showToast('Ticket ID copied to clipboard!');
+              }
+            }}
+            title="Copy Ticket ID"
+            style={{
+              padding: '8px',
+              background: '#f8f9fa',
+              border: '1px solid #ced4da',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease',
+              minWidth: '36px',
+              height: '36px'
+            }}
+            onMouseOver={e => {
+              e.currentTarget.style.background = '#e9ecef';
+              e.currentTarget.style.borderColor = '#adb5bd';
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.background = '#f8f9fa';
+              e.currentTarget.style.borderColor = '#ced4da';
+            }}
+          >
+            📋
+          </button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#495057' }}>
+          Follow Up Date *
+        </label>
+        <input
+          type="date"
+          value={formData.followUpDate}
+          onChange={(e) => setFormData(prev => ({ ...prev, followUpDate: e.target.value }))}
+          required
+          style={{
+            width: '100%',
+            padding: '8px 12px',
+            border: '1px solid #ced4da',
+            borderRadius: '4px',
+            fontSize: '14px'
+          }}
+        />
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '600', color: '#495057' }}>
+          Description
+        </label>
+        <textarea
+          value={formData.description}
+          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+          placeholder="Enter ticket description"
+          rows="3"
+          style={{
+            width: '100%',
+            padding: '8px 12px',
+            border: '1px solid #ced4da',
+            borderRadius: '4px',
+            fontSize: '14px',
+            resize: 'vertical'
+          }}
+        />
+      </div>
+
+      <div className="confirm-btns">
+        <button type="submit" className="confirm-btn delete" style={{ background: '#28a745' }}>
+          Save Ticket
+        </button>
+        <button type="button" className="confirm-btn cancel" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function PackagePage({ pkg, packages, setPackages }) {
   const [companies, setCompanies] = useState([]);
   const [editId, setEditId] = useState(null);
@@ -580,6 +1032,184 @@ function PackagePage({ pkg, packages, setPackages }) {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
   const navigate = useNavigate();
+
+  // --- History Log State ---
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [recentChanges, setRecentChanges] = useState(new Set());
+  const [revertModal, setRevertModal] = useState(null);
+  const [clearHistoryModal, setClearHistoryModal] = useState(false);
+  const [pendingHistorySave, setPendingHistorySave] = useState(false);
+  const [saveTimeout, setSaveTimeout] = useState(null);
+  const [ticketModal, setTicketModal] = useState(null);
+
+  // History entry structure
+  const createHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    companyId,
+    companyName,
+    packageName,
+    field,
+    oldValue,
+    newValue,
+    action
+  });
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const addToHistory = (entry) => {
+    setHistory(prev => [entry, ...prev.slice(0, 49)]);
+    setRecentChanges(prev => new Set([...prev, entry.companyId]));
+    setTimeout(() => {
+      setRecentChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.companyId);
+        return newSet;
+      });
+    }, 5000);
+    
+    // Debounced save to reduce database writes
+    setPendingHistorySave(true);
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+    const newTimeout = setTimeout(() => {
+      setHistory(currentHistory => {
+        if (currentHistory && currentHistory.length > 0) {
+          saveHistoryLog(`seo-${pkg.toLowerCase().replace('seo - ', '')}`, currentHistory).catch(err => {
+            console.error('Error saving history:', err);
+          });
+        }
+        return currentHistory;
+      });
+      setPendingHistorySave(false);
+    }, 2000); // 2 second delay
+    setSaveTimeout(newTimeout);
+  };
+
+  const revertChange = async (historyEntry) => {
+    setRevertModal(historyEntry);
+  };
+
+  const confirmRevert = async () => {
+    const historyEntry = revertModal;
+    try {
+      const field = historyEntry.field;
+      const value = historyEntry.oldValue;
+      
+      if (field === 'Status') {
+        // Update company status
+        const updatedPackages = { ...packages };
+        updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
+          c.id === historyEntry.companyId ? { ...c, status: value } : c
+        );
+        setPackages(updatedPackages);
+        await savePackages(updatedPackages);
+      } else if (field === 'Company Name' || field === 'Start Date' || field === 'EOC Date') {
+        // Handle company info changes
+        const updatedPackages = { ...packages };
+        updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
+          c.id === historyEntry.companyId ? { 
+            ...c, 
+            name: field === 'Company Name' ? value : c.name,
+            start: field === 'Start Date' ? value : c.start,
+            eoc: field === 'EOC Date' ? value : c.eoc
+          } : c
+        );
+        setPackages(updatedPackages);
+        await savePackages(updatedPackages);
+      } else {
+        // Handle task changes
+        const updatedPackages = { ...packages };
+        updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
+          c.id === historyEntry.companyId ? {
+            ...c,
+            tasks: { ...c.tasks, [field.toLowerCase().replace(/ /g, '')]: value }
+          } : c
+        );
+        setPackages(updatedPackages);
+        await savePackages(updatedPackages);
+      }
+      
+      // Reload companies to reflect changes
+      const updatedPackages = await getPackages();
+      let pkgCompanies = (updatedPackages[pkg] || []).map(c => ({
+        ...c,
+        tasks: {
+          forVSO: c.tasks?.forVSO || 'Pending',
+          forRevision: c.tasks?.forRevision || 'Pending',
+          ra: c.tasks?.ra || 'Pending',
+          distribution: c.tasks?.distribution || 'Pending',
+          businessProfileClaiming: c.tasks?.businessProfileClaiming || 'Pending',
+        },
+      }));
+      setCompanies(pkgCompanies);
+      
+      // Add revert entry to history
+      const revertEntry = createHistoryEntry(
+        historyEntry.companyId,
+        historyEntry.companyName,
+        historyEntry.packageName,
+        historyEntry.field,
+        historyEntry.newValue,
+        historyEntry.oldValue,
+        'reverted'
+      );
+      addToHistory(revertEntry);
+      
+      setRevertModal(null);
+      
+    } catch (err) {
+      console.error('Error reverting change:', err);
+      alert('Failed to revert change. Please try again.');
+    }
+  };
+
+  const handleClearHistory = async () => {
+    // Clear any pending save
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+      setSaveTimeout(null);
+    }
+    setPendingHistorySave(false);
+    
+    setHistory([]);
+    await clearHistoryLog(`seo-${pkg.toLowerCase().replace('seo - ', '')}`);
+    setClearHistoryModal(false);
+  };
+
+  const handleTicketModalSave = async (updatedTicket) => {
+    try {
+      console.log('Saving ticket:', updatedTicket);
+      // Ensure createdAt is set for proper ordering
+      const ticketToSave = {
+        ...updatedTicket,
+        createdAt: updatedTicket.createdAt || new Date().toISOString()
+      };
+      console.log('Final ticket to save:', ticketToSave);
+      await saveTicket(ticketToSave);
+      console.log('Ticket saved successfully to Firestore');
+      setTicketModal(null);
+      if (window.showToast) {
+        window.showToast(`Ticket created successfully for ${updatedTicket.company}`);
+      }
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+      if (window.showToast) {
+        window.showToast('Error creating ticket. Please try again.');
+      }
+    }
+  };
 
   // Task columns
   const taskKeys = [
@@ -601,9 +1231,22 @@ function PackagePage({ pkg, packages, setPackages }) {
     { value: 'Completed', label: '🟢 Completed' },
   ];
   const businessProfileClaimingOptions = [
+    { value: 'Pending', label: '🟡 Pending' },
     { value: 'Ticket', label: '🔴 Ticket' },
     { value: 'Completed', label: '🟢 Completed' },
   ];
+
+  // Load history from Firestore on mount
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadHistoryLog(`seo-${pkg.toLowerCase().replace('seo - ', '')}`);
+      const historyArray = loaded?.log || loaded || [];
+      setHistory(Array.isArray(historyArray) ? historyArray : []);
+    })();
+  }, [pkg]);
+
+  // Save history to Firestore on every change (now handled by debounced addToHistory)
+  // Removed to prevent double saves and reduce database usage
 
   // Load companies from Firestore and ensure tasks are initialized
   useEffect(() => {
@@ -615,7 +1258,7 @@ function PackagePage({ pkg, packages, setPackages }) {
           forRevision: c.tasks?.forRevision || 'Pending',
           ra: c.tasks?.ra || 'Pending',
           distribution: c.tasks?.distribution || 'Pending',
-          businessProfileClaiming: c.tasks?.businessProfileClaiming === 'Pending' || !c.tasks?.businessProfileClaiming ? 'Ticket' : c.tasks?.businessProfileClaiming,
+          businessProfileClaiming: c.tasks?.businessProfileClaiming || 'Pending',
         },
       }));
       setCompanies(pkgCompanies);
@@ -629,6 +1272,135 @@ function PackagePage({ pkg, packages, setPackages }) {
 
   // Handle dropdown change
   const handleTaskChange = async (companyId, taskKey, value) => {
+    const company = companies.find(c => c.id === companyId);
+    const oldValue = company?.tasks?.[taskKey] || 'Pending';
+    
+    // Special handling for Business Profile Claiming
+    if (taskKey === 'businessProfileClaiming' && value === 'Ticket') {
+      // Check if a ticket already exists for this company
+      if (company.ticketId) {
+        // Ticket already exists, just update the status and show existing ticket
+        const updatedPackages = { ...packages };
+        let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
+          if (c.id === companyId) {
+            return {
+              ...c,
+              tasks: { ...c.tasks, [taskKey]: value }
+              // Keep existing ticketId
+            };
+          }
+          return c;
+        });
+        updatedPackages[pkg] = pkgCompanies;
+        setPackages(updatedPackages);
+        await savePackages(updatedPackages);
+        setCompanies(pkgCompanies);
+        
+        // Add to history
+        const historyEntry = createHistoryEntry(
+          companyId,
+          company?.name || 'Unknown Company',
+          pkg,
+          'Business Profile Claiming',
+          oldValue,
+          value
+        );
+        addToHistory(historyEntry);
+        
+        // Show success message for reactivating existing ticket
+        if (window.showToast) {
+          window.showToast(`Existing ticket reactivated for ${company.name}`);
+        }
+        
+        return;
+      }
+      
+      // No existing ticket, create a new one
+      const timestamp = Date.now();
+      const ticketData = {
+        id: timestamp.toString(),
+        company: company.name,
+        subject: `Business Profile Claiming - ${company.name}`,
+        ticketId: `BPC-${timestamp}`, // Default ticket ID
+        description: `Business Profile Claiming task for ${company.name} in ${pkg} package.`,
+        status: 'open',
+        priority: 'medium',
+        category: 'Business Profile',
+        createdAt: new Date().toISOString(), // Changed from createdDate to createdAt
+        followUpDate: new Date(timestamp + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+        package: pkg,
+        companyId: companyId,
+        taskType: 'businessProfileClaiming'
+      };
+      
+      // Update company with ticket reference (but don't save ticket to database yet)
+      const updatedPackages = { ...packages };
+      let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
+        if (c.id === companyId) {
+          return {
+            ...c,
+            tasks: { ...c.tasks, [taskKey]: value },
+            ticketId: ticketData.id // Store ticket reference
+          };
+        }
+        return c;
+      });
+      updatedPackages[pkg] = pkgCompanies;
+      setPackages(updatedPackages);
+      await savePackages(updatedPackages);
+      setCompanies(pkgCompanies);
+      
+      // Add to history
+      const historyEntry = createHistoryEntry(
+        companyId,
+        company?.name || 'Unknown Company',
+        pkg,
+        'Business Profile Claiming',
+        oldValue,
+        value
+      );
+      addToHistory(historyEntry);
+      
+      // Open ticket modal for finalization
+      setTicketModal({
+        ticket: ticketData,
+        company: company,
+        package: pkg
+      });
+      
+      return;
+    }
+    
+    // Handle Completed status - check if there's a related ticket
+    if (taskKey === 'businessProfileClaiming' && value === 'Completed') {
+      const companyWithTicket = companies.find(c => c.id === companyId);
+      if (companyWithTicket?.ticketId) {
+        try {
+          // Get the ticket and update its status to closed
+          const tickets = await getTickets();
+          const relatedTicket = tickets.find(t => t.id === companyWithTicket.ticketId);
+          if (relatedTicket) {
+            await saveTicket({ ...relatedTicket, status: 'closed' });
+            if (window.showToast) {
+              window.showToast(`Ticket for ${company.name} marked as closed`);
+            }
+          }
+        } catch (error) {
+          console.error('Error updating ticket status:', error);
+        }
+      }
+    }
+    
+    // Handle Pending status - keep existing ticket but hide the button
+    if (taskKey === 'businessProfileClaiming' && value === 'Pending') {
+      // The ticket remains in the database but the button won't show
+      // This allows for easy reactivation later
+      if (window.showToast) {
+        window.showToast(`Ticket for ${company.name} is now pending`);
+      }
+    }
+    
+    // Regular task update
     const updatedPackages = { ...packages };
     let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
       if (c.id === companyId) {
@@ -643,6 +1415,18 @@ function PackagePage({ pkg, packages, setPackages }) {
     setPackages(updatedPackages); // Optimistically update UI
     await savePackages(updatedPackages); // Persist to Firestore
     setCompanies(pkgCompanies);
+    
+    // Add to history
+    const fieldName = taskLabels[taskKeys.indexOf(taskKey)] || taskKey;
+    const historyEntry = createHistoryEntry(
+      companyId,
+      company?.name || 'Unknown Company',
+      pkg,
+      fieldName,
+      oldValue,
+      value
+    );
+    addToHistory(historyEntry);
   };
 
   const handleEdit = (company) => {
@@ -666,10 +1450,52 @@ function PackagePage({ pkg, packages, setPackages }) {
     setPackages(updatedPackages);
     await savePackages(updatedPackages);
     setCompanies(updatedCompanies);
+    
+    // Add to history for each changed field
+    if (editName !== company.name) {
+      const historyEntry = createHistoryEntry(
+        company.id,
+        company.name,
+        pkg,
+        'Company Name',
+        company.name,
+        editName
+      );
+      addToHistory(historyEntry);
+    }
+    
+    if (formatDateToDisplay(editStart) !== company.start) {
+      const historyEntry = createHistoryEntry(
+        company.id,
+        company.name,
+        pkg,
+        'Start Date',
+        company.start,
+        formatDateToDisplay(editStart)
+      );
+      addToHistory(historyEntry);
+    }
+    
+    if (formatDateToDisplay(editEOC) !== company.eoc) {
+      const historyEntry = createHistoryEntry(
+        company.id,
+        company.name,
+        pkg,
+        'EOC Date',
+        company.eoc,
+        formatDateToDisplay(editEOC)
+      );
+      addToHistory(historyEntry);
+    }
+    
     setEditId(null);
     setEditName('');
     setEditStart(null);
     setEditEOC(null);
+    // Add toast for edit save
+    if (window.showToast) {
+      window.showToast('Company updated successfully');
+    }
   };
 
   const handleEditCancel = () => {
@@ -691,16 +1517,58 @@ function PackagePage({ pkg, packages, setPackages }) {
     setPackages(updatedPackages);
     await savePackages(updatedPackages);
     setCompanies(updatedCompanies);
-    // Add to trash
+    
+    // Add to history
     if (companyToRemove) {
+      const historyEntry = createHistoryEntry(
+        companyToRemove.id,
+        companyToRemove.name,
+        pkg,
+        'Company',
+        'In Package',
+        'Removed',
+        'removed'
+      );
+      addToHistory(historyEntry);
+      
+      // Add to trash
       const trash = await getTrash();
       trash.push({ ...companyToRemove, originalPackage: pkg, type: 'company' });
       await saveTrash(trash);
     }
     setConfirmRemoveId(null);
+    // Add toast for remove
+    if (window.showToast) {
+      window.showToast('Company removed successfully');
+    }
   };
   const handleRemoveCancel = () => {
     setConfirmRemoveId(null);
+  };
+
+  // Handle status change
+  const handleStatusChange = async (companyId, newStatus) => {
+    const company = companies.find(c => c.id === companyId);
+    const oldStatus = company?.status || 'Active';
+    
+    const updatedPackages = { ...packages };
+    updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
+      c.id === companyId ? { ...c, status: newStatus } : c
+    );
+    setPackages(updatedPackages);
+    await savePackages(updatedPackages);
+    setCompanies(updatedPackages[pkg]);
+    
+    // Add to history
+    const historyEntry = createHistoryEntry(
+      companyId,
+      company?.name || 'Unknown Company',
+      pkg,
+      'Status',
+      oldStatus,
+      newStatus
+    );
+    addToHistory(historyEntry);
   };
 
   // Filtered companies for this package
@@ -711,7 +1579,7 @@ function PackagePage({ pkg, packages, setPackages }) {
     .filter(c => !filterRevision || (c.tasks?.forRevision || 'Pending') === filterRevision)
     .filter(c => !filterRA || (c.tasks?.ra || 'Pending') === filterRA)
     .filter(c => !filterDistribution || (c.tasks?.distribution || 'Pending') === filterDistribution)
-    .filter(c => !filterBusinessProfileClaiming || (c.tasks?.businessProfileClaiming || 'Ticket') === filterBusinessProfileClaiming);
+    .filter(c => !filterBusinessProfileClaiming || (c.tasks?.businessProfileClaiming || 'Pending') === filterBusinessProfileClaiming);
 
   const pageCount = Math.ceil(filteredCompanies.length / PAGE_SIZE);
   const paginatedCompanies = filteredCompanies.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -720,6 +1588,247 @@ function PackagePage({ pkg, packages, setPackages }) {
     <section className="company-tracker-page">
       <h2 className="fancy-subtitle">{pkg} Companies</h2>
       <div className="company-total-badge"><span className="total-icon" role="img" aria-label="Total">👥</span>Total: {filteredCompanies.length}</div>
+
+      {/* History Log Section */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          style={{
+            padding: '8px 16px',
+            background: showHistory ? '#007bff' : '#f8f9fa',
+            color: showHistory ? '#ffffff' : '#495057',
+            border: '1px solid #dee2e6',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            position: 'relative'
+          }}
+        >
+          📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
+          {pendingHistorySave && (
+            <span style={{
+              position: 'absolute',
+              top: '-4px',
+              right: '-4px',
+              width: '8px',
+              height: '8px',
+              background: '#ffc107',
+              borderRadius: '50%',
+              animation: 'pulse 1.5s infinite'
+            }} />
+          )}
+        </button>
+      </div>
+
+      {/* History Panel */}
+      {showHistory && (
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e0e7ef',
+          borderRadius: '16px',
+          padding: '32px',
+          marginBottom: '30px',
+          position: 'relative',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          width: '100%',
+          maxWidth: '1200px',
+          margin: '0 auto 30px'
+        }}>
+          {/* Icon-only Clear History button in upper right */}
+          <button
+            onClick={() => setClearHistoryModal(true)}
+            title="Clear History"
+            style={{
+              position: 'absolute',
+              top: '24px',
+              right: '24px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              margin: 0,
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              transition: 'background 0.18s',
+              zIndex: 1
+            }}
+            onMouseOver={e => e.currentTarget.style.background = '#f8d7da'}
+            onMouseOut={e => e.currentTarget.style.background = 'none'}
+          >
+            {/* Trash can SVG icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+          <div style={{ paddingRight: '40px' }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#495057' }}>History Log</h3>
+          </div>
+          <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '16px', marginTop: '20px' }}>
+            {history.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', margin: '30px 0', fontSize: '1.1rem' }}>
+                No history entries yet
+              </p>
+            ) : (
+              <div>
+                {history.map((entry, index) => (
+                  <div
+                    key={entry.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      border: '1px solid #e9ecef',
+                      borderRadius: '10px',
+                      marginBottom: '12px',
+                      background: entry.action === 'reverted' ? '#fff3cd' : '#ffffff',
+                      borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : 
+                                 entry.packageName === 'SEO - BASIC' ? '4px solid #4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '4px solid #00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '4px solid #8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '4px solid #1A237E' : '4px solid #007bff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      transition: 'all 0.2s ease',
+                      gap: '16px'
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontWeight: '600', 
+                        color: '#495057', 
+                        marginBottom: '6px', 
+                        fontSize: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        <span style={{ 
+                          flex: '1', 
+                          minWidth: 0, 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          color: entry.packageName === 'SEO - BASIC' ? '#4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '#00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '#8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '#1A237E' : '#495057',
+                          fontWeight: '600'
+                        }}>
+                          {entry.companyName}
+                        </span>
+                        <span style={{ 
+                          color: entry.packageName === 'SEO - BASIC' ? '#4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '#00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '#8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '#1A237E' : '#6c757d',
+                          fontWeight: '500', 
+                          whiteSpace: 'nowrap',
+                          opacity: 0.85
+                        }}>
+                          {entry.packageName}
+                        </span>
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.95rem', 
+                        color: '#6c757d', 
+                        marginBottom: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span style={{ whiteSpace: 'nowrap' }}>{entry.field}:</span>
+                        <span style={{ 
+                          color: entry.oldValue === 'Completed' ? '#28a745' : entry.oldValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.oldValue}</span>
+                        <span style={{ color: '#adb5bd', margin: '0 2px' }}>→</span>
+                        <span style={{ 
+                          color: entry.newValue === 'Completed' ? '#28a745' : entry.newValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.newValue}</span>
+                        {entry.action === 'reverted' && (
+                          <span style={{ 
+                            color: '#ffc107', 
+                            marginLeft: '4px', 
+                            fontWeight: '500',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '2px'
+                          }}>
+                            <span style={{ fontSize: '1.1em', lineHeight: 1 }}>🔄</span> Reverted
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.85rem', 
+                        color: '#adb5bd',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span style={{ fontSize: '0.9em' }}>🕒</span>
+                        {formatTimestamp(entry.timestamp)}
+                      </div>
+                    </div>
+                    {entry.action !== 'reverted' && (
+                      <button
+                        onClick={() => revertChange(entry)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#f8f9fa',
+                          color: '#6c757d',
+                          border: '1px solid #dee2e6',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          fontWeight: '500',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease',
+                          marginLeft: '8px',
+                          alignSelf: 'center',
+                          whiteSpace: 'nowrap',
+                          height: '32px'
+                        }}
+                        onMouseOver={e => {
+                          e.currentTarget.style.background = '#e9ecef';
+                          e.currentTarget.style.borderColor = '#ced4da';
+                          e.currentTarget.style.color = '#495057';
+                        }}
+                        onMouseOut={e => {
+                          e.currentTarget.style.background = '#f8f9fa';
+                          e.currentTarget.style.borderColor = '#dee2e6';
+                          e.currentTarget.style.color = '#6c757d';
+                        }}
+                      >
+                        <span style={{ fontSize: '0.9em' }}>↩️</span>
+                        Revert
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="table-scroll-container table-responsive">
         <table className="company-table">
           <thead>
@@ -827,8 +1936,162 @@ function PackagePage({ pkg, packages, setPackages }) {
                       dateFormat="MMMM d, yyyy"
                       className="react-datepicker__input"
                       popperPlacement="bottom"
-                      placeholderText="Select start date"
-                      style={{ padding: '0.5em 1em', borderRadius: 8, border: '1.5px solid #b6b6d8', fontSize: '1rem', minWidth: 120 }}
+                      placeholderText="Type: MM/DD/YYYY or click to pick"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={20}
+                      scrollableYearDropdown
+                      customInput={
+                        <input
+                          style={{
+                            padding: '0.5em 1em',
+                            borderRadius: 8,
+                            border: '1.5px solid #b6b6d8',
+                            fontSize: '1rem',
+                            minWidth: 120,
+                            outline: 'none'
+                          }}
+                          placeholder="Type: MM/DD/YYYY or click to pick"
+                        />
+                      }
+                      renderCustomHeader={({ date, changeYear, changeMonth }) => (
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          padding: '8px',
+                          background: '#f8f9fa',
+                          borderBottom: '1px solid #e9ecef',
+                          borderRadius: '4px 4px 0 0'
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontSize: '0.9rem',
+                            fontWeight: '600',
+                            color: '#495057'
+                          }}>
+                            <span>Quick Navigation:</span>
+                            <span style={{ fontSize: '0.8rem', color: '#6c757d' }}>
+                              {date.getFullYear()}
+                            </span>
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            gap: '4px',
+                            flexWrap: 'wrap'
+                          }}>
+                            {/* Quick Year + Month combinations */}
+                            {[
+                              { label: '2y ago (Jan)', year: -2, month: 0 },
+                              { label: '3y ago (Jan)', year: -3, month: 0 },
+                              { label: '5y ago (Jan)', year: -5, month: 0 },
+                              { label: '2y ago (Jun)', year: -2, month: 5 },
+                              { label: '3y ago (Jun)', year: -3, month: 5 },
+                              { label: '5y ago (Jun)', year: -5, month: 5 }
+                            ].map(({ label, year, month }) => (
+                              <button
+                                key={label}
+                                onClick={() => {
+                                  changeYear(date.getFullYear() + year);
+                                  changeMonth(month);
+                                }}
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '0.8rem',
+                                  background: '#e9ecef',
+                                  border: '1px solid #dee2e6',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  color: '#495057',
+                                  fontWeight: '500',
+                                  transition: 'all 0.2s'
+                                }}
+                                onMouseOver={e => {
+                                  e.target.style.background = '#007bff';
+                                  e.target.style.color = '#fff';
+                                }}
+                                onMouseOut={e => {
+                                  e.target.style.background = '#e9ecef';
+                                  e.target.style.color = '#495057';
+                                }}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            marginTop: '8px',
+                            paddingTop: '8px',
+                            borderTop: '1px solid #dee2e6'
+                          }}>
+                            <div style={{
+                              fontSize: '0.85rem',
+                              fontWeight: '600',
+                              color: '#495057',
+                              marginBottom: '4px'
+                            }}>
+                              Quick Months:
+                            </div>
+                            <div style={{
+                              display: 'flex',
+                              gap: '3px',
+                              flexWrap: 'wrap'
+                            }}>
+                              {/* All months for current year */}
+                              {[
+                                { label: 'Jan', month: 0 },
+                                { label: 'Feb', month: 1 },
+                                { label: 'Mar', month: 2 },
+                                { label: 'Apr', month: 3 },
+                                { label: 'May', month: 4 },
+                                { label: 'Jun', month: 5 },
+                                { label: 'Jul', month: 6 },
+                                { label: 'Aug', month: 7 },
+                                { label: 'Sep', month: 8 },
+                                { label: 'Oct', month: 9 },
+                                { label: 'Nov', month: 10 },
+                                { label: 'Dec', month: 11 }
+                              ].map(({ label, month }) => (
+                                <button
+                                  key={label}
+                                  onClick={() => changeMonth(month)}
+                                  style={{
+                                    padding: '3px 6px',
+                                    fontSize: '0.75rem',
+                                    background: '#f8f9fa',
+                                    border: '1px solid #dee2e6',
+                                    borderRadius: '3px',
+                                    cursor: 'pointer',
+                                    color: '#6c757d',
+                                    fontWeight: '500',
+                                    transition: 'all 0.2s',
+                                    minWidth: '28px',
+                                    textAlign: 'center'
+                                  }}
+                                  onMouseOver={e => {
+                                    e.target.style.background = '#28a745';
+                                    e.target.style.color = '#fff';
+                                    e.target.style.borderColor = '#28a745';
+                                  }}
+                                  onMouseOut={e => {
+                                    e.target.style.background = '#f8f9fa';
+                                    e.target.style.color = '#6c757d';
+                                    e.target.style.borderColor = '#dee2e6';
+                                  }}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     />
                   ) : (
                     c.start
@@ -842,8 +2105,180 @@ function PackagePage({ pkg, packages, setPackages }) {
                       dateFormat="MMMM d, yyyy"
                       className="react-datepicker__input"
                       popperPlacement="bottom"
-                      placeholderText="Select EOC date"
-                      style={{ padding: '0.5em 1em', borderRadius: 8, border: '1.5px solid #b6b6d8', fontSize: '1rem', minWidth: 120 }}
+                      placeholderText="Type: MM/DD/YYYY or click to pick"
+                      showYearDropdown
+                      showMonthDropdown
+                      dropdownMode="select"
+                      yearDropdownItemNumber={20}
+                      scrollableYearDropdown
+                      customInput={
+                        <input
+                          style={{
+                            padding: '0.5em 1em',
+                            borderRadius: 8,
+                            border: '1.5px solid #b6b6d8',
+                            fontSize: '1rem',
+                            minWidth: 120,
+                            outline: 'none'
+                          }}
+                          placeholder="Type: MM/DD/YYYY or click to pick"
+                        />
+                      }
+                      renderCustomHeader={({ date, changeYear, changeMonth }) => (
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          padding: '8px',
+                          background: '#f8f9fa',
+                          borderBottom: '1px solid #e9ecef',
+                          borderRadius: '4px 4px 0 0'
+                        }}>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontSize: '0.9rem',
+                            fontWeight: '600',
+                            color: '#495057'
+                          }}>
+                            <span>Quick Navigation:</span>
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px'
+                            }}>
+                              <button
+                                onClick={() => changeYear(date.getFullYear() - 1)}
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '0.8rem',
+                                  background: '#e9ecef',
+                                  border: '1px solid #dee2e6',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  color: '#495057',
+                                  fontWeight: '500',
+                                  transition: 'all 0.2s',
+                                  minWidth: '32px'
+                                }}
+                                onMouseOver={e => {
+                                  e.target.style.background = '#007bff';
+                                  e.target.style.color = '#fff';
+                                }}
+                                onMouseOut={e => {
+                                  e.target.style.background = '#e9ecef';
+                                  e.target.style.color = '#495057';
+                                }}
+                              >
+                                ←
+                              </button>
+                              <span style={{ 
+                                fontSize: '1rem', 
+                                fontWeight: '600', 
+                                color: '#495057',
+                                minWidth: '60px',
+                                textAlign: 'center'
+                              }}>
+                                {date.getFullYear()}
+                              </span>
+                              <button
+                                onClick={() => changeYear(date.getFullYear() + 1)}
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '0.8rem',
+                                  background: '#e9ecef',
+                                  border: '1px solid #dee2e6',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  color: '#495057',
+                                  fontWeight: '500',
+                                  transition: 'all 0.2s',
+                                  minWidth: '32px'
+                                }}
+                                onMouseOver={e => {
+                                  e.target.style.background = '#007bff';
+                                  e.target.style.color = '#fff';
+                                }}
+                                onMouseOut={e => {
+                                  e.target.style.background = '#e9ecef';
+                                  e.target.style.color = '#495057';
+                                }}
+                              >
+                                →
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px',
+                            marginTop: '8px',
+                            paddingTop: '8px',
+                            borderTop: '1px solid #dee2e6'
+                          }}>
+                            <div style={{
+                              fontSize: '0.85rem',
+                              fontWeight: '600',
+                              color: '#495057',
+                              marginBottom: '4px'
+                            }}>
+                              Quick Months:
+                            </div>
+                            <div style={{
+                              display: 'flex',
+                              gap: '3px',
+                              flexWrap: 'wrap'
+                            }}>
+                              {/* All months for current year */}
+                              {[
+                                { label: 'Jan', month: 0 },
+                                { label: 'Feb', month: 1 },
+                                { label: 'Mar', month: 2 },
+                                { label: 'Apr', month: 3 },
+                                { label: 'May', month: 4 },
+                                { label: 'Jun', month: 5 },
+                                { label: 'Jul', month: 6 },
+                                { label: 'Aug', month: 7 },
+                                { label: 'Sep', month: 8 },
+                                { label: 'Oct', month: 9 },
+                                { label: 'Nov', month: 10 },
+                                { label: 'Dec', month: 11 }
+                              ].map(({ label, month }) => (
+                                <button
+                                  key={label}
+                                  onClick={() => changeMonth(month)}
+                                  style={{
+                                    padding: '3px 6px',
+                                    fontSize: '0.75rem',
+                                    background: '#f8f9fa',
+                                    border: '1px solid #dee2e6',
+                                    borderRadius: '3px',
+                                    cursor: 'pointer',
+                                    color: '#6c757d',
+                                    fontWeight: '500',
+                                    transition: 'all 0.2s',
+                                    minWidth: '28px',
+                                    textAlign: 'center'
+                                  }}
+                                  onMouseOver={e => {
+                                    e.target.style.background = '#28a745';
+                                    e.target.style.color = '#fff';
+                                    e.target.style.borderColor = '#28a745';
+                                  }}
+                                  onMouseOut={e => {
+                                    e.target.style.background = '#f8f9fa';
+                                    e.target.style.color = '#6c757d';
+                                    e.target.style.borderColor = '#dee2e6';
+                                  }}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     />
                   ) : (
                     c.eoc || getEOC(c.start)
@@ -853,18 +2288,7 @@ function PackagePage({ pkg, packages, setPackages }) {
                   <select
                     className={`status-select ${c.status === 'Active' ? 'status-active' : 'status-onhold'}`}
                     value={c.status}
-                    onChange={e => {
-                      const newStatus = e.target.value;
-                      // Update in localStorage and state
-                      getPackages().then(packages => {
-                        const updatedCompanies = (packages[pkg] || []).map(row =>
-                          row.id === c.id ? { ...row, status: newStatus } : row
-                        );
-                        packages[pkg] = updatedCompanies;
-                        savePackages(packages);
-                        setCompanies(updatedCompanies);
-                      });
-                    }}
+                    onChange={e => handleStatusChange(c.id, e.target.value)}
                   >
                     <option value="Active">🟢 Active</option>
                     <option value="OnHold">🟣 OnHold</option>
@@ -872,15 +2296,47 @@ function PackagePage({ pkg, packages, setPackages }) {
                 </td>
                 {taskKeys.map((key, i) => (
                   <td key={key} style={{ minWidth: key === 'businessProfileClaiming' ? 180 : 140 }}>
-                    <select
-                      value={c.tasks?.[key] || (key === 'businessProfileClaiming' ? 'Ticket' : 'Pending')}
-                      onChange={e => handleTaskChange(c.id, key, e.target.value)}
-                      style={{ minWidth: 120 }}
-                    >
-                      {(key === 'businessProfileClaiming' ? businessProfileClaimingOptions : taskOptions).map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <select
+                        value={c.tasks?.[key] || 'Pending'}
+                        onChange={e => handleTaskChange(c.id, key, e.target.value)}
+                        style={{ minWidth: 120 }}
+                      >
+                        {(key === 'businessProfileClaiming' ? businessProfileClaimingOptions : taskOptions).map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      {key === 'businessProfileClaiming' && c.tasks?.[key] === 'Ticket' && c.ticketId && (
+                        <button
+                          onClick={() => window.location.href = `/tickets?ticket=${c.ticketId}`}
+                          title="View Ticket in Tickets Page"
+                          style={{
+                            padding: '4px 8px',
+                            background: '#007bff',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: '500',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseOver={e => {
+                            e.currentTarget.style.background = '#0056b3';
+                            e.currentTarget.style.transform = 'scale(1.05)';
+                          }}
+                          onMouseOut={e => {
+                            e.currentTarget.style.background = '#007bff';
+                            e.currentTarget.style.transform = 'scale(1)';
+                          }}
+                        >
+                          🎫 View
+                        </button>
+                      )}
+                    </div>
                   </td>
                 ))}
                 <td>
@@ -953,6 +2409,63 @@ function PackagePage({ pkg, packages, setPackages }) {
           </div>
         </div>
       )}
+
+      {/* Revert Confirmation Modal */}
+      {revertModal && (
+        <div className="confirm-modal-overlay">
+          <div className="confirm-modal-box">
+            <div className="confirm-title">Revert Change?</div>
+            <div className="confirm-desc">
+              Are you sure you want to revert "{revertModal.companyName}" {revertModal.field} from "{revertModal.newValue}" back to "{revertModal.oldValue}"?
+            </div>
+            <div className="confirm-btns">
+              <button className="confirm-btn delete" onClick={confirmRevert}>Yes, Revert</button>
+              <button className="confirm-btn cancel" onClick={() => setRevertModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear History Confirmation Modal */}
+      {clearHistoryModal && (
+        <div className="confirm-modal-overlay">
+          <div className="confirm-modal-box">
+            <div className="confirm-title">Clear History?</div>
+            <div className="confirm-desc">
+              Are you sure you want to clear all history for {pkg}? This action cannot be undone.
+            </div>
+            <div className="confirm-btns">
+              <button className="confirm-btn delete" onClick={handleClearHistory}>Yes, Clear</button>
+              <button className="confirm-btn cancel" onClick={() => setClearHistoryModal(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ticket Modal */}
+      {ticketModal && (
+        <div className="confirm-modal-overlay">
+          <div className="confirm-modal-box" style={{ maxWidth: '600px', width: '90%' }}>
+            <div className="confirm-title">
+              Finalize Ticket Details
+            </div>
+            <div className="confirm-desc" style={{ marginBottom: '20px' }}>
+              <strong>Company:</strong> {ticketModal.company.name}<br/>
+              <strong>Package:</strong> {ticketModal.package}<br/>
+              <strong>Ticket ID:</strong> {ticketModal.ticket.id}<br/>
+              <em style={{ color: '#6c757d', fontSize: '0.9rem' }}>Please fill in the required details below. This ticket will be created once you click Save.</em>
+            </div>
+            
+            <TicketModalForm 
+              ticket={ticketModal.ticket}
+              onSave={handleTicketModalSave}
+              onCancel={() => setTicketModal(null)}
+              isViewMode={false}
+            />
+          </div>
+        </div>
+      )}
+
     </section>
   );
 }
@@ -963,16 +2476,45 @@ function Report({ packages, setPackages }) {
   const [filterII, setFilterII] = useState({});
   // Add search state for each package
   const [search, setSearch] = useState({});
-  const [confirmRemove, setConfirmRemove] = useState({ pkg: null, companyId: null, companyName: '' });
+  // Remove confirmRemove state since we're removing X buttons
   // Add per-package page state
   const [page, setPage] = useState({});
   const PAGE_SIZE = 15;
+  
+  // History system states
+  const [history, setHistory] = useState([]); // Array of history entries
+  const [showHistory, setShowHistory] = useState(false);
+  const [recentChanges, setRecentChanges] = useState(new Set()); // Track recently changed companies
+  const [confirmModal, setConfirmModal] = useState(null); // For confirmation modal
+  const [revertModal, setRevertModal] = useState(null); // For revert confirmation modal
+  const [clearHistoryModal, setClearHistoryModal] = useState(false);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
   const currentMonth = monthNames[new Date().getMonth()];
+
+  // Load history from Firestore on mount
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadHistoryLog('report');
+      console.log('Loaded history from Firestore:', loaded);
+      // Ensure we're getting the array from the log field
+      const historyArray = loaded?.log || loaded || [];
+      setHistory(Array.isArray(historyArray) ? historyArray : []);
+    })();
+  }, []);
+
+  // Save history to Firestore on every change
+  useEffect(() => {
+    if (history && history.length > 0) {
+      console.log('Saving history to Firestore:', history);
+      saveHistoryLog('report', history).catch(err => {
+        console.error('Error saving history:', err);
+      });
+    }
+  }, [history]);
 
   useEffect(() => {
     // Monthly reset logic only
@@ -995,14 +2537,131 @@ function Report({ packages, setPackages }) {
 
   const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
 
+  // History entry structure
+  const createHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    companyId,
+    companyName,
+    packageName,
+    field,
+    oldValue,
+    newValue,
+    action
+  });
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const addToHistory = (entry) => {
+    console.log('Adding new history entry:', entry);
+    setHistory(prev => [entry, ...prev.slice(0, 49)]); // Keep last 50 entries
+    // Mark as recently changed
+    setRecentChanges(prev => new Set([...prev, entry.companyId]));
+    // Remove from recent changes after 5 seconds
+    setTimeout(() => {
+      setRecentChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.companyId);
+        return newSet;
+      });
+    }, 5000);
+  };
+
+  const revertChange = async (historyEntry) => {
+    setRevertModal(historyEntry);
+  };
+
+  const confirmRevert = async () => {
+    const historyEntry = revertModal;
+    try {
+      const field = historyEntry.field === 'Report I' ? 'reportI' : 'reportII';
+      const value = historyEntry.oldValue;
+      
+      // Update in packages
+      const updatedPackages = { ...packages };
+      updatedPackages[historyEntry.packageName] = (updatedPackages[historyEntry.packageName] || []).map(c =>
+        c.id === historyEntry.companyId ? { ...c, [field]: value } : c
+      );
+      setPackages(updatedPackages);
+      await savePackages(updatedPackages);
+      
+      // Add revert entry to history
+      const revertEntry = createHistoryEntry(
+        historyEntry.companyId,
+        historyEntry.companyName,
+        historyEntry.packageName,
+        historyEntry.field,
+        historyEntry.newValue,
+        historyEntry.oldValue,
+        'reverted'
+      );
+      addToHistory(revertEntry);
+      
+      setRevertModal(null);
+      
+    } catch (err) {
+      console.error('Error reverting change:', err);
+      alert('Failed to revert change. Please try again.');
+    }
+  };
+
   // Helper to update report status in shared state
   const handleReportStatusChange = async (pkg, companyId, reportKey, value) => {
+    const oldValue = packages[pkg]?.find(c => c.id === companyId)?.[reportKey] || 'Pending';
+    const company = packages[pkg]?.find(c => c.id === companyId);
+    
+    if (value === 'Completed' && reportKey === 'reportII') {
+      // Show confirmation modal only for Report II completion
+      setConfirmModal({
+        type: 'complete',
+        company,
+        packageName: pkg,
+        field: 'Report II',
+        oldValue,
+        newValue: value
+      });
+      return;
+    }
+    
+    // For Report I completion or reverting to Pending, proceed directly
+    await performStatusUpdate(pkg, companyId, reportKey, value, company, oldValue);
+  };
+
+  const performStatusUpdate = async (pkg, companyId, reportKey, value, company, oldValue) => {
     const updatedPackages = { ...packages };
     updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
       c.id === companyId ? { ...c, [reportKey]: value } : c
     );
     setPackages(updatedPackages); // Optimistically update UI
     await savePackages(updatedPackages); // Persist to Firestore
+    
+    // Add to history
+    const historyEntry = createHistoryEntry(
+      companyId,
+      company?.name || 'Unknown Company',
+      pkg,
+      reportKey === 'reportI' ? 'Report I' : 'Report II',
+      oldValue,
+      value
+    );
+    addToHistory(historyEntry);
+  };
+
+  const confirmStatusChange = async () => {
+    const { company, packageName, field, newValue, oldValue } = confirmModal;
+    const reportKey = field === 'Report I' ? 'reportI' : 'reportII';
+    
+    await performStatusUpdate(packageName, company.id, reportKey, newValue, company, oldValue);
+    setConfirmModal(null);
   };
 
   // Helper for dropdown color
@@ -1034,25 +2693,315 @@ function Report({ packages, setPackages }) {
     setPage(p => ({ ...p, [pkg]: 1 }));
   };
 
-  // Remove company from package in Report page
-  const handleRemoveFromReport = (pkg, companyId, companyName) => {
-    setConfirmRemove({ pkg, companyId, companyName });
+  // Remove the remove functions since we're removing X buttons
+
+  const handleClearHistory = async () => {
+    setHistory([]);
+    await clearHistoryLog('report');
+    setClearHistoryModal(false);
   };
-  const handleRemoveConfirm = async () => {
-    const { pkg, companyId } = confirmRemove;
-    const updatedPackages = { ...packages };
-    updatedPackages[pkg] = (updatedPackages[pkg] || []).filter(c => c.id !== companyId);
-    setPackages(updatedPackages);
-    if (window.fetchAlerts) fetchAlerts();
-    await savePackages(updatedPackages);
-    setConfirmRemove({ pkg: null, companyId: null, companyName: '' });
-  };
-  const handleRemoveCancel = () => setConfirmRemove({ pkg: null, companyId: null, companyName: '' });
 
   return (
     <section className="company-tracker-page" style={{paddingTop: 12}}>
+      {/* Header with History Button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
       <h1 className="fancy-title">Report for {currentMonth}</h1>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          style={{
+            padding: '8px 16px',
+            background: showHistory ? '#007bff' : '#f8f9fa',
+            color: showHistory ? '#ffffff' : '#495057',
+            border: '1px solid #dee2e6',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
+        </button>
+      </div>
+      {/* Clear History Confirmation Modal */}
+      {clearHistoryModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 400,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Clear History Log?</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to clear the entire history log? This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={handleClearHistory}
+                style={{
+                  padding: '10px 25px',
+                  background: '#dc3545',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Clear All
+              </button>
+              <button
+                onClick={() => setClearHistoryModal(false)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#6c757d',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <p className="hero-desc" style={{marginBottom: 10}}>All companies, sorted by SEO package.</p>
+      
+      {/* History Panel */}
+      {showHistory && (
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e0e7ef',
+          borderRadius: '16px',
+          padding: '32px',
+          marginBottom: '30px',
+          position: 'relative',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          width: '100%',
+          maxWidth: '1200px',
+          margin: '0 auto 30px'
+        }}>
+          {/* Icon-only Clear History button in upper right */}
+          <button
+            onClick={() => setClearHistoryModal(true)}
+            title="Clear History"
+            style={{
+              position: 'absolute',
+              top: '24px',
+              right: '24px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              margin: 0,
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              transition: 'background 0.18s',
+              zIndex: 1
+            }}
+            onMouseOver={e => e.currentTarget.style.background = '#f8d7da'}
+            onMouseOut={e => e.currentTarget.style.background = 'none'}
+          >
+            {/* Trash can SVG icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+          <div style={{ paddingRight: '40px' }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#495057' }}>History Log</h3>
+          </div>
+          <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '16px', marginTop: '20px' }}>
+            {history.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', margin: '30px 0', fontSize: '1.1rem' }}>
+                No history entries yet
+              </p>
+            ) : (
+              <div>
+                {history.map((entry, index) => (
+                                      <div
+                    key={entry.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      border: '1px solid #e9ecef',
+                      borderRadius: '10px',
+                      marginBottom: '12px',
+                      background: entry.action === 'reverted' ? '#fff3cd' : '#ffffff',
+                      borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : 
+                                 entry.packageName === 'SEO - BASIC' ? '4px solid #4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '4px solid #00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '4px solid #8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '4px solid #1A237E' : '4px solid #007bff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      transition: 'all 0.2s ease',
+                      gap: '16px'
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontWeight: '600', 
+                        color: '#495057', 
+                        marginBottom: '6px', 
+                        fontSize: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        <span style={{ 
+                          flex: '1', 
+                          minWidth: 0, 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          color: entry.packageName === 'SEO - BASIC' ? '#4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '#00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '#8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '#1A237E' : '#495057',
+                          fontWeight: '600'
+                        }}>
+                          {entry.companyName}
+                        </span>
+                        <span style={{ 
+                          color: entry.packageName === 'SEO - BASIC' ? '#4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '#00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '#8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '#1A237E' : '#6c757d',
+                          fontWeight: '500', 
+                          whiteSpace: 'nowrap',
+                          opacity: 0.85
+                        }}>
+                          {entry.packageName}
+                        </span>
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.95rem', 
+                        color: '#6c757d', 
+                        marginBottom: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span style={{ whiteSpace: 'nowrap' }}>{entry.field}:</span>
+                        <span style={{ 
+                          color: entry.oldValue === 'Completed' ? '#28a745' : entry.oldValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.oldValue}</span>
+                        <span style={{ color: '#adb5bd', margin: '0 2px' }}>→</span>
+                        <span style={{ 
+                          color: entry.newValue === 'Completed' ? '#28a745' : entry.newValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.newValue}</span>
+                        {entry.action === 'reverted' && (
+                          <span style={{ 
+                            color: '#ffc107', 
+                            marginLeft: '4px', 
+                            fontWeight: '500',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '2px'
+                          }}>
+                            <span style={{ fontSize: '1.1em', lineHeight: 1 }}>🔄</span> Reverted
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.85rem', 
+                        color: '#adb5bd',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span style={{ fontSize: '0.9em' }}>🕒</span>
+                        {formatTimestamp(entry.timestamp)}
+                      </div>
+                    </div>
+                    {entry.action !== 'reverted' && (
+                      <button
+                        onClick={() => revertChange(entry)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#f8f9fa',
+                          color: '#6c757d',
+                          border: '1px solid #dee2e6',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          fontWeight: '500',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease',
+                          marginLeft: '8px',
+                          alignSelf: 'center',
+                          whiteSpace: 'nowrap',
+                          height: '32px'
+                        }}
+                        onMouseOver={e => {
+                          e.currentTarget.style.background = '#e9ecef';
+                          e.currentTarget.style.borderColor = '#ced4da';
+                          e.currentTarget.style.color = '#495057';
+                        }}
+                        onMouseOut={e => {
+                          e.currentTarget.style.background = '#f8f9fa';
+                          e.currentTarget.style.borderColor = '#dee2e6';
+                          e.currentTarget.style.color = '#6c757d';
+                        }}
+                      >
+                        <span style={{ fontSize: '1.1em', lineHeight: 1, marginRight: '1px' }}>↩️</span>
+                        Revert
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
       {packageNames.map(pkg => {
         // Filter companies by report status for this package
         const filtered = (packages[pkg] || [])
@@ -1164,12 +3113,12 @@ function Report({ packages, setPackages }) {
                       </div>
                     </th>
                     <th className="report-col" style={{minWidth:120}}>Start Date</th>
-                    <th className="report-col" style={{minWidth:60}}></th>
+                    {/* Remove the action column header */}
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 && (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', color: '#aaa' }}>No companies in this package.</td></tr>
+                    <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies in this package.</td></tr>
                   )}
                   {paginated.map(c => {
                     // Parse start date
@@ -1187,9 +3136,18 @@ function Report({ packages, setPackages }) {
                         }
                       }
                     }
+                    const isRecentlyChanged = recentChanges.has(c.id);
+                    
                     return (
-                      <tr key={c.id}>
-                        <td className="company-name company-col">{c.name}</td>
+                      <tr key={c.id} style={{ 
+                        transition: 'background 0.18s',
+                        background: isRecentlyChanged ? '#fff3cd' : 'transparent',
+                        borderLeft: isRecentlyChanged ? '4px solid #ffc107' : 'none'
+                      }}>
+                        <td className="company-name company-col">
+                          {c.name}
+                          {isRecentlyChanged && <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#ffc107' }}>🔄</span>}
+                        </td>
                         <td className="package-col">
                           <span className={
                             c.package === 'SEO - BASIC' ? 'package-basic' :
@@ -1252,16 +3210,7 @@ function Report({ packages, setPackages }) {
                             }}>Ready for Report II</span>
                           )}
                         </td>
-                        <td className="report-col" style={{textAlign:'center'}}>
-                          <button
-                            className="remove-btn"
-                            style={{ background: '#ffeaea', color: '#c00', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '1.2em', cursor: 'pointer', padding: '0.2em 0.8em', marginLeft: 4 }}
-                            title="Remove company from report"
-                            onClick={() => handleRemoveFromReport(pkg, c.id, c.name)}
-                          >
-                            ×
-                          </button>
-                        </td>
+                        {/* Remove the action column with X button */}
                       </tr>
                     );
                   })}
@@ -1290,15 +3239,144 @@ function Report({ packages, setPackages }) {
           </div>
         );
       })}
-      {/* Confirmation Modal for Remove in Report page */}
-      {confirmRemove.companyId && (
-        <div className="confirm-modal-overlay">
-          <div className="confirm-modal-box">
-            <div className="confirm-title">Remove Company?</div>
-            <div className="confirm-desc">Are you sure you want to remove <b>{confirmRemove.companyName}</b> from <b>{confirmRemove.pkg}</b>?</div>
-            <div className="confirm-btns">
-              <button className="confirm-btn delete" onClick={handleRemoveConfirm}>Yes, Remove</button>
-              <button className="confirm-btn cancel" onClick={handleRemoveCancel}>Cancel</button>
+      
+      {/* Confirmation Modal */}
+      {confirmModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 450,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm Report Completion</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to mark "{confirmModal.company?.name} - {confirmModal.packageName}" {confirmModal.field} as "{confirmModal.newValue}"?
+              This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={confirmStatusChange}
+                style={{
+                  padding: '10px 25px',
+                  background: '#28a745',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Mark as {confirmModal.newValue}
+              </button>
+              <button
+                onClick={() => setConfirmModal(null)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#dc3545',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revert Confirmation Modal */}
+      {revertModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 450,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm Revert</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to revert "{revertModal.companyName} - {revertModal.packageName}" {revertModal.field} from "{revertModal.newValue}" back to "{revertModal.oldValue}"?
+              This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={confirmRevert}
+                style={{
+                  padding: '10px 25px',
+                  background: '#ffc107',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Revert
+              </button>
+              <button
+                onClick={() => setRevertModal(null)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#dc3545',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -1313,11 +3391,19 @@ function Bookmarking({ packages, setPackages }) {
   const [filterSubmission, setFilterSubmission] = useState({});
   // Add search state for each package
   const [search, setSearch] = useState({});
-  const [confirmRemove, setConfirmRemove] = useState({ pkg: null, companyId: null, companyName: '' });
+  // Remove confirmRemove state since we're removing X buttons
   const [showDeleteToast, setShowDeleteToast] = useState(false);
   // Add per-package page state
   const [page, setPage] = useState({});
   const PAGE_SIZE = 15;
+  
+  // History system states
+  const [history, setHistory] = useState([]); // Array of history entries
+  const [showHistory, setShowHistory] = useState(false);
+  const [recentChanges, setRecentChanges] = useState(new Set()); // Track recently changed companies
+  const [confirmModal, setConfirmModal] = useState(null); // For confirmation modal
+  const [revertModal, setRevertModal] = useState(null); // For revert confirmation modal
+  const [clearHistoryModal, setClearHistoryModal] = useState(false);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -1326,14 +3412,131 @@ function Bookmarking({ packages, setPackages }) {
   const currentMonth = monthNames[new Date().getMonth()];
   const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
 
+  // History entry structure
+  const createHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    companyId,
+    companyName,
+    packageName,
+    field,
+    oldValue,
+    newValue,
+    action
+  });
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const addToHistory = (entry) => {
+    console.log('Adding new history entry:', entry);
+    setHistory(prev => [entry, ...prev.slice(0, 49)]); // Keep last 50 entries
+    // Mark as recently changed
+    setRecentChanges(prev => new Set([...prev, entry.companyId]));
+    // Remove from recent changes after 5 seconds
+    setTimeout(() => {
+      setRecentChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.companyId);
+        return newSet;
+      });
+    }, 5000);
+  };
+
+  const revertChange = async (historyEntry) => {
+    setRevertModal(historyEntry);
+  };
+
+  const confirmRevert = async () => {
+    const historyEntry = revertModal;
+    try {
+      const field = historyEntry.field === 'BM Creation' ? 'bmCreation' : 'bmSubmission';
+      const value = historyEntry.oldValue;
+      
+      // Update in packages
+      const updatedPackages = { ...packages };
+      updatedPackages[historyEntry.packageName] = (updatedPackages[historyEntry.packageName] || []).map(c =>
+        c.id === historyEntry.companyId ? { ...c, [field]: value } : c
+      );
+      setPackages(updatedPackages);
+      await savePackages(updatedPackages);
+      
+      // Add revert entry to history
+      const revertEntry = createHistoryEntry(
+        historyEntry.companyId,
+        historyEntry.companyName,
+        historyEntry.packageName,
+        historyEntry.field,
+        historyEntry.newValue,
+        historyEntry.oldValue,
+        'reverted'
+      );
+      addToHistory(revertEntry);
+      
+      setRevertModal(null);
+      
+    } catch (err) {
+      console.error('Error reverting change:', err);
+      alert('Failed to revert change. Please try again.');
+    }
+  };
+
   // Helper to update BM status in shared state
   const handleBMStatusChange = async (pkg, companyId, bmKey, value) => {
+    const oldValue = packages[pkg]?.find(c => c.id === companyId)?.[bmKey] || 'Pending';
+    const company = packages[pkg]?.find(c => c.id === companyId);
+    
+    if (value === 'Completed' && bmKey === 'bmCreation') {
+      // Show confirmation modal only for BM Creation completion
+      setConfirmModal({
+        type: 'complete',
+        company,
+        packageName: pkg,
+        field: 'BM Creation',
+        oldValue,
+        newValue: value
+      });
+      return;
+    }
+    
+    // For BM Submission completion or reverting to Pending, proceed directly
+    await performStatusUpdate(pkg, companyId, bmKey, value, company, oldValue);
+  };
+
+  const performStatusUpdate = async (pkg, companyId, bmKey, value, company, oldValue) => {
     const updatedPackages = { ...packages };
     updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
       c.id === companyId ? { ...c, [bmKey]: value } : c
     );
     setPackages(updatedPackages); // Optimistically update UI
     await savePackages(updatedPackages); // Persist to Firestore
+    
+    // Add to history
+    const historyEntry = createHistoryEntry(
+      companyId,
+      company?.name || 'Unknown Company',
+      pkg,
+      bmKey === 'bmCreation' ? 'BM Creation' : 'BM Submission',
+      oldValue,
+      value
+    );
+    addToHistory(historyEntry);
+  };
+
+  const confirmStatusChange = async () => {
+    const { company, packageName, field, newValue, oldValue } = confirmModal;
+    const bmKey = field === 'BM Creation' ? 'bmCreation' : 'bmSubmission';
+    
+    await performStatusUpdate(packageName, company.id, bmKey, newValue, company, oldValue);
+    setConfirmModal(null);
   };
 
   // Handlers for per-package filters
@@ -1346,23 +3549,7 @@ function Bookmarking({ packages, setPackages }) {
     setPage(p => ({ ...p, [pkg]: 1 }));
   };
 
-  // Remove company from package in Bookmarking page
-  const handleRemoveFromBM = (pkg, companyId, companyName) => {
-    setConfirmRemove({ pkg, companyId, companyName });
-  };
-
-  const handleRemoveConfirm = async () => {
-    const { pkg, companyId } = confirmRemove;
-    const updatedPackages = { ...packages };
-    updatedPackages[pkg] = (updatedPackages[pkg] || []).filter(c => c.id !== companyId);
-    setPackages(updatedPackages);
-    if (window.fetchAlerts) fetchAlerts();
-    savePackages(updatedPackages);
-    setConfirmRemove({ pkg: null, companyId: null, companyName: '' });
-    setShowDeleteToast(true);
-    setTimeout(() => setShowDeleteToast(false), 1800);
-  };
-  const handleRemoveCancel = () => setConfirmRemove({ pkg: null, companyId: null, companyName: '' });
+  // Remove the remove functions since we're removing X buttons
 
   const getDropdownStyle = value => ({
     borderRadius: 8,
@@ -1382,10 +3569,332 @@ function Bookmarking({ packages, setPackages }) {
     transition: 'background 0.18s, color 0.18s',
   });
 
+  // Load history from Firestore on mount
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadHistoryLog('bookmarking');
+      console.log('Loaded history from Firestore:', loaded);
+      // Ensure we're getting the array from the log field
+      const historyArray = loaded?.log || loaded || [];
+      setHistory(Array.isArray(historyArray) ? historyArray : []);
+    })();
+  }, []);
+
+  // Save history to Firestore on every change
+  useEffect(() => {
+    if (history && history.length > 0) {
+      console.log('Saving history to Firestore:', history);
+      saveHistoryLog('bookmarking', history).catch(err => {
+        console.error('Error saving history:', err);
+      });
+    }
+  }, [history]);
+
+  const handleClearHistory = async () => {
+    setHistory([]);
+    await clearHistoryLog('bookmarking');
+    setClearHistoryModal(false);
+  };
+
   return (
     <section className="company-tracker-page" style={{paddingTop: 12}}>
+      {/* Header with History Button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
       <h1 className="fancy-title">Bookmarking for {currentMonth}</h1>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          style={{
+            padding: '8px 16px',
+            background: showHistory ? '#007bff' : '#f8f9fa',
+            color: showHistory ? '#ffffff' : '#495057',
+            border: '1px solid #dee2e6',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
+        </button>
+      </div>
+      {/* Clear History Confirmation Modal */}
+      {clearHistoryModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 400,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Clear History Log?</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to clear the entire history log? This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={handleClearHistory}
+                style={{
+                  padding: '10px 25px',
+                  background: '#dc3545',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Clear All
+              </button>
+              <button
+                onClick={() => setClearHistoryModal(false)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#6c757d',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <p className="hero-desc" style={{marginBottom: 10}}>All companies, sorted by SEO package.</p>
+      
+      {/* History Panel */}
+      {showHistory && (
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e0e7ef',
+          borderRadius: '16px',
+          padding: '32px',
+          marginBottom: '30px',
+          position: 'relative',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          width: '100%',
+          maxWidth: '1200px',
+          margin: '0 auto 30px'
+        }}>
+          {/* Icon-only Clear History button in upper right */}
+          <button
+            onClick={() => setClearHistoryModal(true)}
+            title="Clear History"
+            style={{
+              position: 'absolute',
+              top: '24px',
+              right: '24px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              margin: 0,
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              transition: 'background 0.18s',
+              zIndex: 1
+            }}
+            onMouseOver={e => e.currentTarget.style.background = '#f8d7da'}
+            onMouseOut={e => e.currentTarget.style.background = 'none'}
+          >
+            {/* Trash can SVG icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+          <div style={{ paddingRight: '40px' }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#495057' }}>History Log</h3>
+          </div>
+          <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '16px', marginTop: '20px' }}>
+            {history.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', margin: '30px 0', fontSize: '1.1rem' }}>
+                No history entries yet
+              </p>
+            ) : (
+              <div>
+                {history.map((entry, index) => (
+                  <div
+                    key={entry.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      border: '1px solid #e9ecef',
+                      borderRadius: '10px',
+                      marginBottom: '12px',
+                      background: entry.action === 'reverted' ? '#fff3cd' : '#ffffff',
+                      borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : 
+                                 entry.packageName === 'SEO - BASIC' ? '4px solid #4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '4px solid #00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '4px solid #8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '4px solid #1A237E' : '4px solid #007bff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      transition: 'all 0.2s ease',
+                      gap: '16px'
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontWeight: '600', 
+                        color: '#495057', 
+                        marginBottom: '6px', 
+                        fontSize: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        <span style={{ 
+                          flex: '1', 
+                          minWidth: 0, 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          color: entry.packageName === 'SEO - BASIC' ? '#4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '#00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '#8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '#1A237E' : '#495057',
+                          fontWeight: '600'
+                        }}>
+                          {entry.companyName}
+                        </span>
+                        <span style={{ 
+                          color: entry.packageName === 'SEO - BASIC' ? '#4A3C31' :
+                                 entry.packageName === 'SEO - PREMIUM' ? '#00897B' :
+                                 entry.packageName === 'SEO - PRO' ? '#8E24AA' :
+                                 entry.packageName === 'SEO - ULTIMATE' ? '#1A237E' : '#6c757d',
+                          fontWeight: '500', 
+                          whiteSpace: 'nowrap',
+                          opacity: 0.85
+                        }}>
+                          {entry.packageName}
+                        </span>
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.95rem', 
+                        color: '#6c757d', 
+                        marginBottom: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span style={{ whiteSpace: 'nowrap' }}>{entry.field}:</span>
+                        <span style={{ 
+                          color: entry.oldValue === 'Completed' ? '#28a745' : entry.oldValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.oldValue}</span>
+                        <span style={{ color: '#adb5bd', margin: '0 2px' }}>→</span>
+                        <span style={{ 
+                          color: entry.newValue === 'Completed' ? '#28a745' : entry.newValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.newValue}</span>
+                        {entry.action === 'reverted' && (
+                          <span style={{ 
+                            color: '#ffc107', 
+                            marginLeft: '4px', 
+                            fontWeight: '500',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '2px'
+                          }}>
+                            <span style={{ fontSize: '1.1em', lineHeight: 1 }}>🔄</span> Reverted
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.85rem', 
+                        color: '#adb5bd',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span style={{ fontSize: '0.9em' }}>🕒</span>
+                        {formatTimestamp(entry.timestamp)}
+                      </div>
+                    </div>
+                    {entry.action !== 'reverted' && (
+                      <button
+                        onClick={() => revertChange(entry)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#f8f9fa',
+                          color: '#6c757d',
+                          border: '1px solid #dee2e6',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          fontWeight: '500',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease',
+                          marginLeft: '8px',
+                          alignSelf: 'center',
+                          whiteSpace: 'nowrap',
+                          height: '32px'
+                        }}
+                        onMouseOver={e => {
+                          e.currentTarget.style.background = '#e9ecef';
+                          e.currentTarget.style.borderColor = '#ced4da';
+                          e.currentTarget.style.color = '#495057';
+                        }}
+                        onMouseOut={e => {
+                          e.currentTarget.style.background = '#f8f9fa';
+                          e.currentTarget.style.borderColor = '#dee2e6';
+                          e.currentTarget.style.color = '#6c757d';
+                        }}
+                      >
+                        ↩️ Revert
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {packageNames.map(pkg => {
         // Filter companies by BM status for this package
         const filtered = (packages[pkg] || [])
@@ -1520,16 +4029,26 @@ function Bookmarking({ packages, setPackages }) {
                       </div>
                     </th>
                     <th className="report-col" style={{minWidth:120}}>Start Date</th>
-                    <th className="report-col" style={{minWidth:60}}></th>
+                    {/* Remove the action column header */}
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 && (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', color: '#aaa' }}>No companies in this package.</td></tr>
+                    <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies in this package.</td></tr>
                   )}
-                  {paginated.map(c => (
-                    <tr key={c.id}>
-                      <td className="company-name company-col">{c.name}</td>
+                  {paginated.map(c => {
+                    const isRecentlyChanged = recentChanges.has(c.id);
+                    
+                    return (
+                      <tr key={c.id} style={{ 
+                        transition: 'background 0.18s',
+                        background: isRecentlyChanged ? '#fff3cd' : 'transparent',
+                        borderLeft: isRecentlyChanged ? '4px solid #ffc107' : 'none'
+                      }}>
+                        <td className="company-name company-col">
+                          {c.name}
+                          {isRecentlyChanged && <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#ffc107' }}>🔄</span>}
+                        </td>
                       <td className="package-col">
                         <span className={
                           c.package === 'SEO - BASIC' ? 'package-basic' :
@@ -1577,18 +4096,10 @@ function Bookmarking({ packages, setPackages }) {
                       <td className="report-col" style={{textAlign:'center', fontWeight:500, fontSize:'1em'}}>
                         {c.start || '-'}
                       </td>
-                      <td className="report-col" style={{textAlign:'center'}}>
-                        <button
-                          className="remove-btn"
-                          style={{ background: '#ffeaea', color: '#c00', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '1.2em', cursor: 'pointer', padding: '0.2em 0.8em', marginLeft: 4 }}
-                          title="Remove company from bookmarking"
-                          onClick={() => handleRemoveFromBM(pkg, c.id, c.name)}
-                        >
-                          ×
-                        </button>
-                      </td>
+                        {/* Remove the action column with X button */}
                     </tr>
-                  ))}
+                    );
+                  })}
                   {filtered.length > 15 && filtered.slice(15).map((c, i) => (
                     <tr key={c.id} style={{display:'none'}}></tr>
                   ))}
@@ -1614,19 +4125,149 @@ function Bookmarking({ packages, setPackages }) {
           </div>
         );
       })}
-      {/* Confirmation Modal for Remove in Bookmarking page */}
-      {confirmRemove.companyId && (
-        <div className="confirm-modal-overlay">
-          <div className="confirm-modal-box">
-            <div className="confirm-title">Remove Company?</div>
-            <div className="confirm-desc">Are you sure you want to remove <b>{confirmRemove.companyName}</b> from <b>{confirmRemove.pkg}</b>?</div>
-            <div className="confirm-btns">
-              <button className="confirm-btn delete" onClick={handleRemoveConfirm}>Yes, Remove</button>
-              <button className="confirm-btn cancel" onClick={handleRemoveCancel}>Cancel</button>
+      {/* Confirmation Modal */}
+      {confirmModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 450,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm Bookmarking Creation</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to mark "{confirmModal.company?.name} - {confirmModal.packageName}" {confirmModal.field} as "{confirmModal.newValue}"?
+              This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={confirmStatusChange}
+                style={{
+                  padding: '10px 25px',
+                  background: '#28a745',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Mark as {confirmModal.newValue}
+              </button>
+              <button
+                onClick={() => setConfirmModal(null)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#dc3545',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Revert Confirmation Modal */}
+      {revertModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 450,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm Revert</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to revert "{revertModal.companyName} - {revertModal.packageName}" {revertModal.field} from "{revertModal.newValue}" back to "{revertModal.oldValue}"?
+              This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={confirmRevert}
+                style={{
+                  padding: '10px 25px',
+                  background: '#ffc107',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Revert
+              </button>
+              <button
+                onClick={() => setRevertModal(null)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#dc3545',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Remove the confirmation modal since we're removing X buttons */}
       {showDeleteToast && (
         <div className="copy-toast-dialog" style={{zIndex:2002}}>Company moved to Trash.</div>
       )}
@@ -1850,6 +4491,7 @@ function App() {
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState([]);
   const [showAlerts, setShowAlerts] = useState(false);
+  const [readAlerts, setReadAlerts] = useState(new Set());
   const [ticketsChanged, setTicketsChanged] = useState(0);
   const [sessionTimeDisplay, setSessionTimeDisplay] = useState('');
   const bellRef = useRef();
@@ -1859,6 +4501,113 @@ function App() {
   const setAlertsRef = useRef(setAlerts);
   useEffect(() => { packagesRef.current = packages; }, [packages]);
   useEffect(() => { setAlertsRef.current = setAlerts; }, [setAlerts]);
+
+  // Global toast function
+  const showGlobalToast = (message) => {
+    const toast = document.createElement('div');
+    toast.className = 'copy-toast-dialog';
+    toast.style.zIndex = '2002';
+    toast.innerHTML = `✅ ${message}`;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      if (document.body.contains(toast)) {
+        document.body.removeChild(toast);
+      }
+    }, 3000);
+  };
+
+  // Make toast function globally available
+  useEffect(() => {
+    window.showToast = showGlobalToast;
+    return () => {
+      delete window.showToast;
+    };
+  }, []);
+
+  // Load read alerts from Firestore
+  useEffect(() => {
+    if (user?.uid) {
+      getDoc(firestoreDoc(db, 'users', user.uid)).then(docSnap => {
+        if (docSnap.exists() && docSnap.data().readAlerts) {
+          setReadAlerts(new Set(docSnap.data().readAlerts));
+        }
+      });
+    }
+  }, [user]);
+
+  // Save read alerts to Firestore
+  const saveReadAlerts = async (readAlertsSet) => {
+    if (user?.uid) {
+      try {
+        await updateDoc(firestoreDoc(db, 'users', user.uid), {
+          readAlerts: Array.from(readAlertsSet)
+        });
+      } catch (error) {
+        console.error('Error saving read alerts:', error);
+      }
+    }
+  };
+
+  // Mark all alerts as read
+  const markAllAsRead = () => {
+    const allAlertIds = alerts.map(alert => alert.id);
+    const newReadAlerts = new Set([...readAlerts, ...allAlertIds]);
+    setReadAlerts(newReadAlerts);
+    saveReadAlerts(newReadAlerts);
+  };
+
+  // Mark single alert as read
+  const markAsRead = (alertId) => {
+    const newReadAlerts = new Set([...readAlerts, alertId]);
+    setReadAlerts(newReadAlerts);
+    saveReadAlerts(newReadAlerts);
+  };
+
+  // Get unread alerts count
+  const unreadAlerts = alerts.filter(alert => !readAlerts.has(alert.id));
+
+
+
+  // Track notification changes and handle read status intelligently
+  const [previousAlerts, setPreviousAlerts] = useState([]);
+  
+  const handleAlertChanges = (newAlerts) => {
+    // Compare with previous alerts to detect changes
+    const currentAlertIds = new Set(newAlerts.map(alert => alert.id));
+    const previousAlertIds = new Set(previousAlerts.map(alert => alert.id));
+    
+    // Find alerts that are new or have changed content
+    const newOrChangedAlerts = newAlerts.filter(alert => {
+      const previousAlert = previousAlerts.find(prev => prev.id === alert.id);
+      return !previousAlert || previousAlert.message !== alert.message;
+    });
+    
+    // If there are new/changed alerts, ensure they're unread
+    if (newOrChangedAlerts.length > 0) {
+      console.log(`New/changed notifications: ${newOrChangedAlerts.map(a => a.id).join(', ')}`);
+      // New alerts are automatically unread (not in readAlerts set)
+    }
+    
+    setPreviousAlerts(newAlerts);
+  };
+
+  // Mark notifications as unread when new activities happen
+  const markNotificationsAsUnreadForNewActivity = () => {
+    // Mark all non-ticket notifications as unread when new activities happen
+    const relevantAlertIds = alerts
+      .filter(alert => alert.type !== 'tickets') // Don't mark ticket alerts as unread for package changes
+      .map(alert => alert.id);
+    
+    // Remove these alerts from readAlerts set
+    const newReadAlerts = new Set(readAlerts);
+    relevantAlertIds.forEach(id => newReadAlerts.delete(id));
+    setReadAlerts(newReadAlerts);
+    saveReadAlerts(newReadAlerts);
+    
+    console.log(`Marked ${relevantAlertIds.length} notifications as unread due to new activity`);
+  };
+
   useEffect(() => {
     setFetchAlertsImpl(async () => {
       let allAlerts = [];
@@ -1893,6 +4642,7 @@ function App() {
           link: '/tickets',
           color: '#ff9800',
           icon: '⏰',
+          timestamp: Date.now(),
         });
       }
       if (todayFollowUps.length > 0) {
@@ -1903,6 +4653,7 @@ function App() {
           link: '/tickets',
           color: '#d32f2f',
           icon: '⏰',
+          timestamp: Date.now(),
         });
       }
       if (overdueFollowUps.length > 0) {
@@ -1913,6 +4664,7 @@ function App() {
           link: '/tickets',
           color: '#b26a00',
           icon: '⚠️',
+          timestamp: Date.now(),
         });
       }
       // Summarize Report, Bookmarking, Link Building alerts by type
@@ -1942,6 +4694,7 @@ function App() {
           link: '/report',
           color: '#1976d2',
           icon: '📊',
+          timestamp: Date.now(),
         });
       }
       if (Object.keys(summary.bm).length > 0) {
@@ -1953,6 +4706,7 @@ function App() {
           link: '/social-bookmarking',
           color: '#388e3c',
           icon: '🔖',
+          timestamp: Date.now(),
         });
       }
       // --- BM Creation Alert ---
@@ -1966,6 +4720,7 @@ function App() {
           link: '/social-bookmarking',
           color: '#c00',
           icon: '📝',
+          timestamp: Date.now(),
         });
       }
       // --- BM Submission Alert ---
@@ -1979,6 +4734,7 @@ function App() {
           link: '/social-bookmarking',
           color: '#b26a00',
           icon: '🔖',
+          timestamp: Date.now(),
         });
       }
       // --- Link Building Alert ---
@@ -2025,6 +4781,7 @@ function App() {
         });
       }
       setAlertsRef.current(allAlerts);
+      handleAlertChanges(allAlerts);
     });
   }, [packages, setAlerts]);
 
@@ -2117,6 +4874,8 @@ function App() {
   // Fetch alerts whenever packages change (for non-ticket alerts)
   useEffect(() => {
     fetchAlerts();
+    // Mark notifications as unread when packages change (new activities)
+    markNotificationsAsUnreadForNewActivity();
   }, [packages]);
 
   // Real-time listener for tickets (alerts)
@@ -2368,7 +5127,7 @@ function App() {
                 <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
-              {alerts && alerts.length > 0 && (
+              {unreadAlerts.length > 0 && (
                 <span style={{
                   position: 'absolute',
                   top: -6,
@@ -2387,7 +5146,7 @@ function App() {
                   zIndex: 2,
                   boxShadow: '0 2px 8px #e0e7ef',
                   padding: '0 4px',
-                }}>{alerts.length}</span>
+                }}>{unreadAlerts.length}</span>
               )}
             </button>
             {showAlerts && alerts.length > 0 && (
@@ -2397,49 +5156,300 @@ function App() {
                   position: 'absolute',
                   top: 58,
                   right: 0,
-                  background: '#fff',
-                  border: '1.5px solid #e0e7ef',
-                  borderRadius: 12,
-                  boxShadow: '0 4px 24px #e0e7ef',
-                  minWidth: 320,
-                  maxWidth: 420,
-                  padding: '0.7em 0.5em',
-                  zIndex: 2001,
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                  border: '2px solid #e0e7ef',
+                  borderRadius: 16,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08)',
+                  minWidth: 380,
+                  maxWidth: 480,
+                  padding: '0',
+                  zIndex: 9999,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 8,
+                  animation: 'slideDown 0.3s ease-out',
+                  backdropFilter: 'blur(10px)',
                 }}
               >
-                {alerts.map(alert => (
+                {/* Enhanced Header */}
+                <div style={{
+                  background: 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)',
+                  color: '#fff',
+                  padding: '1.2em 1.5em',
+                  borderTopLeftRadius: 14,
+                  borderTopRightRadius: 14,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: 'rgba(255,255,255,0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px'
+                    }}>
+                      🔔
+                    </div>
+                    <div>
+                      <div style={{
+                        fontSize: '1.1em',
+                        fontWeight: '700',
+                        marginBottom: '2px'
+                      }}>
+                        Notifications
+                      </div>
+                      <div style={{
+                        fontSize: '0.85em',
+                        opacity: 0.9,
+                        fontWeight: '500'
+                      }}>
+                        {unreadAlerts.length} unread • {alerts.length} total
+                      </div>
+                    </div>
+                  </div>
+                  {unreadAlerts.length > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      style={{
+                        background: 'rgba(255,255,255,0.15)',
+                        color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.3)',
+                        borderRadius: '8px',
+                        padding: '8px 16px',
+                        fontSize: '0.85em',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backdropFilter: 'blur(10px)'
+                      }}
+                      onMouseOver={e => {
+                        e.target.style.background = 'rgba(255,255,255,0.25)';
+                        e.target.style.transform = 'translateY(-1px)';
+                      }}
+                      onMouseOut={e => {
+                        e.target.style.background = 'rgba(255,255,255,0.15)';
+                        e.target.style.transform = 'translateY(0)';
+                      }}
+                    >
+                      <span style={{ fontSize: '14px' }}>✓</span>
+                      Mark All Read
+                    </button>
+                  )}
+                </div>
+
+                {/* Notifications List */}
+                <div style={{
+                  maxHeight: '400px',
+                  overflowY: 'auto',
+                  padding: '0.8em 0'
+                }}>
+                  {alerts.map((alert, index) => (
                   <div
                     key={alert.id}
                     style={{
-                      padding: '0.7em 1.2em',
-                      margin: '2px 0',
-                      borderRadius: 10,
-                      fontWeight: 600,
-                      color: alert.color,
-                      background: '#f7f6f2',
+                        margin: '0.4em 1.2em',
+                        padding: '1em 1.2em',
+                        borderRadius: 12,
+                        background: readAlerts.has(alert.id) 
+                          ? 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' 
+                          : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                        border: readAlerts.has(alert.id) 
+                          ? '1px solid #e9ecef' 
+                          : '1px solid #e0e7ef',
                       cursor: 'pointer',
-                      fontSize: '1.08em',
+                        fontSize: '0.95em',
                       display: 'flex',
-                      alignItems: 'center',
+                        alignItems: 'flex-start',
                       gap: 12,
-                      boxShadow: '0 1px 6px #ececec',
-                      borderLeft: `5px solid ${alert.color}`,
-                      transition: 'background 0.18s',
+                        boxShadow: readAlerts.has(alert.id) 
+                          ? '0 2px 8px rgba(0,0,0,0.04)' 
+                          : '0 4px 12px rgba(0,0,0,0.08)',
+                        transition: 'all 0.2s ease',
+                        position: 'relative',
+                        opacity: readAlerts.has(alert.id) ? 0.8 : 1,
+                        animation: `slideInRight ${0.1 * (index + 1)}s ease-out`
                     }}
                     onClick={() => {
+                        markAsRead(alert.id);
                       setShowAlerts(false);
                       navigate(alert.link);
                     }}
+                      onMouseEnter={e => {
+                        if (!readAlerts.has(alert.id)) {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.12)';
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = readAlerts.has(alert.id) 
+                          ? '0 2px 8px rgba(0,0,0,0.04)' 
+                          : '0 4px 12px rgba(0,0,0,0.08)';
+                    }}
                     tabIndex={0}
-                    onKeyDown={e => { if (e.key === 'Enter') { setShowAlerts(false); navigate(alert.link); } }}
-                  >
-                    <span style={{fontSize:'1.3em',marginRight:4}}>{alert.icon}</span>
+                      onKeyDown={e => { 
+                        if (e.key === 'Enter') { 
+                          markAsRead(alert.id);
+                          setShowAlerts(false); 
+                          navigate(alert.link); 
+                        } 
+                      }}
+                    >
+                      {/* Unread Indicator */}
+                      {!readAlerts.has(alert.id) && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '6px',
+                          right: '6px',
+                          width: '4px',
+                          height: '4px',
+                          borderRadius: '50%',
+                          backgroundColor: '#ff4444',
+                          flexShrink: 0,
+                          zIndex: 1
+                        }}>
+                          <div style={{
+                            position: 'absolute',
+                            top: '-2px',
+                            left: '-2px',
+                            right: '-2px',
+                            bottom: '-2px',
+                            borderRadius: '50%',
+                            background: 'transparent',
+                            boxShadow: '0 0 2px #ff4444, 0 0 4px #ff4444',
+                            animation: 'pulse 2s infinite',
+                            pointerEvents: 'none'
+                          }} />
+                        </div>
+                      )}
+
+                      {/* Icon */}
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        background: readAlerts.has(alert.id) 
+                          ? 'linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%)' 
+                          : `linear-gradient(135deg, ${alert.color}20 0%, ${alert.color}10 100%)`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '18px',
+                        marginTop: '2px',
+                        border: readAlerts.has(alert.id) 
+                          ? '1px solid #dee2e6' 
+                          : `1px solid ${alert.color}30`,
+                        flexShrink: 0
+                      }}>
+                        {alert.icon}
+                      </div>
+
+                      {/* Content */}
+                      <div style={{
+                        flex: 1,
+                        minWidth: 0
+                      }}>
+                        <div style={{
+                          fontWeight: readAlerts.has(alert.id) ? '500' : '600',
+                          color: readAlerts.has(alert.id) ? '#6c757d' : '#495057',
+                          marginBottom: '4px',
+                          lineHeight: '1.4'
+                        }}>
                     <span dangerouslySetInnerHTML={{__html: alert.message}} />
+                        </div>
+                        
+                        {/* Status indicator */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginTop: '6px'
+                        }}>
+                          <div style={{
+                            fontSize: '0.8em',
+                            color: readAlerts.has(alert.id) ? '#adb5bd' : '#6c757d',
+                            fontWeight: '500'
+                          }}>
+                            {new Date().toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true
+                            })}
+                          </div>
+                          {readAlerts.has(alert.id) && (
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '0.75em',
+                              color: '#28a745',
+                              fontWeight: '600'
+                            }}>
+                              <span>✓</span>
+                              <span>Read</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                   </div>
                 ))}
+                </div>
+
+                {/* Footer */}
+                <div style={{
+                  padding: '1em 1.5em',
+                  borderTop: '1px solid #e9ecef',
+                  background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+                  borderBottomLeftRadius: 14,
+                  borderBottomRightRadius: 14,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div style={{
+                    fontSize: '0.85em',
+                    color: '#6c757d',
+                    fontWeight: '500'
+                  }}>
+                    Click to mark as read
+                  </div>
+                  <button
+                    onClick={() => setShowAlerts(false)}
+                    style={{
+                      background: 'none',
+                      border: '1px solid #dee2e6',
+                      borderRadius: '6px',
+                      padding: '6px 12px',
+                      fontSize: '0.8em',
+                      color: '#6c757d',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      fontWeight: '500'
+                    }}
+                    onMouseOver={e => {
+                      e.target.style.background = '#e9ecef';
+                      e.target.style.color = '#495057';
+                    }}
+                    onMouseOut={e => {
+                      e.target.style.background = 'none';
+                      e.target.style.color = '#6c757d';
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             )}
             {/* Profile Icon with Mini Dropdown */}
@@ -2610,7 +5620,7 @@ function App() {
                     <Route path="/company-overview" element={user ? <CompanyOverview darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
                     <Route path="/notes" element={user ? <NotesPage darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
                     <Route path="/profile" element={user ? <ProfilePage onProfileUpdate={u => setUser(prev => ({ ...prev, ...u }))} /> : <Navigate to="/login" replace />} />
-                    <Route path="/chat-users" element={<ChatUsersPage />} />
+                    <Route path="/chat-users" element={user ? <ChatUsersPage /> : <Navigate to="/login" replace />} />
                     <Route path="/eoc-accounts" element={user ? <EOCAccounts darkMode={darkMode} /> : <Navigate to="/login" replace />} />
                   </Routes>
                 </main>
@@ -2647,7 +5657,7 @@ function ChatUsersFloatingButton() {
   else if (onlineCount === 1) onlineText = '1 User Online';
   else onlineText = `${onlineCount} Users Online`;
   return (
-    <div style={{ position: 'fixed', right: 32, bottom: 32, zIndex: 3000, display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div style={{ position: 'fixed', right: 32, bottom: 32, zIndex: 1000, display: 'flex', alignItems: 'center', gap: 10 }}>
       <button
         onClick={() => navigate('/chat-users')}
         aria-label="Chat Users"

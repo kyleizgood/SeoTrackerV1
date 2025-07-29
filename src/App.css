@@ -2239,3 +2239,76 @@ body.login-bg, html.login-bg {
   transform: translateY(0) !important;
   background: #e2e8f0 !important;
 }
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 4px #ff4444, 0 0 8px #ff4444;
+  }
+  50% {
+    box-shadow: 0 0 8px #ff4444, 0 0 16px #ff4444;
+  }
+  100% {
+    box-shadow: 0 0 4px #ff4444, 0 0 8px #ff4444;
+  }
+}
+
+@keyframes slideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  0% {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

@@ -56,6 +56,9 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(null); // category name or null
+  // Add toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   // LocalStorage cache key
   const TEMPLATES_CACHE_KEY = 'templates_cache_v1';
@@ -120,48 +123,78 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
 
   const handleAdd = async (e) => {
     e.preventDefault();
-    if (!newTemplate.title || !newTemplate.content) return;
-    let category = newTemplate.category;
-    if (category === 'Other') {
-      category = newTemplate.customCategory.trim() || 'Other';
+    if (!newTemplate.title.trim() || !newTemplate.content.trim()) return;
+
+    const template = {
+      ...newTemplate,
+      id: Date.now(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await saveTemplate(template);
+      setTemplates(prev => [template, ...prev]);
+      setNewTemplate({ title: '', content: '', category: DEFAULT_CATEGORIES[0], customCategory: '' });
+      // Add toast for add
+      setToastMessage('Template added successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('Error adding template:', error);
+      alert('Error adding template');
     }
-    const newT = { id: Date.now(), title: newTemplate.title, content: newTemplate.content, category };
-    await saveTemplate(newT);
-    setTemplates(await getTemplates());
-    setTimeout(() => {
-    }, 500);
-    setNewTemplate({ title: '', content: '', category: categories[0], customCategory: '' });
   };
 
   const handleEdit = (template) => {
-    setIsEditing(true);
     setNewTemplate({
       title: template.title,
       content: template.content,
-      category: categories.includes(template.category) ? template.category : 'Other',
-      customCategory: categories.includes(template.category) ? '' : template.category,
+      category: template.category || DEFAULT_CATEGORIES[0],
+      customCategory: template.customCategory || ''
     });
+    setIsEditing(true);
     setSelectedTemplate(template.id);
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
-    let category = newTemplate.category;
-    if (category === 'Other') {
-      category = newTemplate.customCategory.trim() || 'Other';
+    if (!newTemplate.title.trim() || !newTemplate.content.trim()) return;
+
+    const updatedTemplate = {
+      ...newTemplate,
+      id: selectedTemplate,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await saveTemplate(updatedTemplate);
+      setTemplates(prev => prev.map(t => t.id === selectedTemplate ? updatedTemplate : t));
+      setNewTemplate({ title: '', content: '', category: DEFAULT_CATEGORIES[0], customCategory: '' });
+      setIsEditing(false);
+      setSelectedTemplate(null);
+      // Add toast for update
+      setToastMessage('Template updated successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('Error updating template:', error);
+      alert('Error updating template');
     }
-    await saveTemplate({ id: selectedTemplate, title: newTemplate.title, content: newTemplate.content, category });
-    setTemplates(await getTemplates());
-    setIsEditing(false);
-    setNewTemplate({ title: '', content: '', category: categories[0], customCategory: '' });
-    setSelectedTemplate(null);
   };
 
   const handleDelete = async (id) => {
-    const template = templates.find(t => t.id === id);
-    await deleteTemplate(id);
-    await addToTrash(template);
-    setTemplates(await getTemplates());
+    try {
+      await deleteTemplate(id);
+      setTemplates(prev => prev.filter(t => t.id !== id));
+      // Add toast for delete
+      setToastMessage('Template deleted successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      alert('Error deleting template');
+    }
   };
 
   const handleCopy = (content) => {
@@ -175,24 +208,22 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
     setConfirmRemoveId(id);
   };
 
-  const handleRemoveConfirm = () => {
-    const template = templates.find(t => t.id === confirmRemoveId);
-    if (template) {
-      // Optimistically update UI
-      setTemplates(templates.filter(t => t.id !== confirmRemoveId));
-      setConfirmRemoveId(null);
-      if (selectedTemplate === confirmRemoveId) setSelectedTemplate(null);
-      if (isEditing && selectedTemplate === confirmRemoveId) {
-        setIsEditing(false);
-        setNewTemplate({ title: '', content: '' });
-      }
-      // Perform Firestore deletion and trash update in background
-      (async () => {
-        await deleteTemplate(confirmRemoveId);
+  const handleRemoveConfirm = async () => {
+    try {
+      const template = templates.find(t => t.id === confirmRemoveId);
+      if (template) {
         await addToTrash(template);
-      })();
-    } else {
+      }
+      await deleteTemplate(confirmRemoveId);
+      setTemplates(prev => prev.filter(t => t.id !== confirmRemoveId));
       setConfirmRemoveId(null);
+      // Add toast for remove
+      setToastMessage('Template moved to trash successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('Error removing template:', error);
+      alert('Error removing template');
     }
   };
 
@@ -206,14 +237,22 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
 
   const handleAddCategory = async (e) => {
     e.preventDefault();
-    const name = newCategoryName.trim();
-    if (!name || categories.includes(name)) return;
-    const updated = [name, ...categories];
-    setCategories(updated);
-    await saveCategories(updated);
-    setNewTemplate(nt => ({ ...nt, category: name }));
-    setShowCategoryInput(false);
-    setNewCategoryName('');
+    if (!newCategoryName.trim()) return;
+
+    try {
+      const updatedCategories = [...categories, newCategoryName];
+      await saveCategories(updatedCategories);
+      setCategories(updatedCategories);
+      setNewCategoryName('');
+      setShowCategoryInput(false);
+      // Add toast for category add
+      setToastMessage('Category added successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('Error adding category:', error);
+      alert('Error adding category');
+    }
   };
 
   // Replace handleDeleteCategory to show confirmation dialog
@@ -223,27 +262,18 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
 
   // Confirm and cancel handlers
   const handleDeleteCategoryConfirm = async () => {
-    if (confirmDeleteCategory) {
-      // This part needs to be implemented based on your actual deleteCategory function
-      // For now, we'll just remove it from the UI and add to trash
+    try {
       const updatedCategories = categories.filter(c => c !== confirmDeleteCategory);
+      await saveCategories(updatedCategories);
       setCategories(updatedCategories);
       setConfirmDeleteCategory(null);
-      // Add deleted category to trash
-      const trash = await getTrash();
-      trash.push({ type: 'category', name: confirmDeleteCategory, deletedAt: Date.now() });
-      await saveTrash(trash);
-      // Async: update Firestore and delete templates in the background
-      saveCategories(updatedCategories);
-      const templatesToDelete = templates.filter(t => t.category === confirmDeleteCategory);
-      Promise.all(templatesToDelete.map(t => deleteTemplate(t.id))).then(() => {
-        getTemplates().then(setTemplates);
-        getCategories().then(dbCategories => {
-          if (dbCategories && Array.isArray(dbCategories) && dbCategories.length > 0) {
-            setCategories(dbCategories);
-          }
-        });
-      });
+      // Add toast for category delete
+      setToastMessage('Category deleted successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      alert('Error deleting category');
     }
   };
   const handleDeleteCategoryCancel = () => {
@@ -463,6 +493,12 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
               <button className="confirm-btn cancel" onClick={handleDeleteCategoryCancel}>Cancel</button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Add toast notification */}
+      {showToast && (
+        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
+          ✅ {toastMessage}
         </div>
       )}
     </div>

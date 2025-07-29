@@ -630,3 +630,37 @@ export async function updateEOCDate(companyId, pkg, newEOCDate) {
   
   return { id: companyId, package: pkg, eocDate: newEOCDate };
 } 
+
+// --- HISTORY LOG HELPERS ---
+
+/**
+ * Save a history log array for a given page (e.g., 'report', 'bookmarking', 'linkbuilding')
+ */
+export async function saveHistoryLog(pageKey, historyArr) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  await setDoc(doc(db, 'users', user.uid, 'history', pageKey), { log: historyArr });
+}
+
+/**
+ * Load a history log array for a given page
+ */
+export async function loadHistoryLog(pageKey) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  const docSnap = await getDoc(doc(db, 'users', user.uid, 'history', pageKey));
+  if (docSnap.exists()) {
+    const data = docSnap.data();
+    return data.log || [];
+  }
+  return [];
+}
+
+/**
+ * Clear a history log for a given page
+ */
+export async function clearHistoryLog(pageKey) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  await setDoc(doc(db, 'users', user.uid, 'history', pageKey), { log: [] });
+} 

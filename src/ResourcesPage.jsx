@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getTrash, saveTrash, getResourcesPaginated, saveResource, deleteResource, getResourceSections, saveResourceSections } from './firestoreHelpers';
+import { getTrash, saveTrash, getResourcesPaginated, saveResource, deleteResource, getResourceSections, saveResourceSections, saveHistoryLog, loadHistoryLog, clearHistoryLog } from './firestoreHelpers';
 
 const initialLinks = {
   'Site Audit': [
@@ -34,6 +34,83 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
   const [showAddTable, setShowAddTable] = useState(false);
   const [newTableName, setNewTableName] = useState('');
   const [deleteTableModal, setDeleteTableModal] = useState({ open: false, section: null });
+  // Add toast state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  // --- History Log State ---
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [recentChanges, setRecentChanges] = useState(new Set());
+  const [revertModal, setRevertModal] = useState(null);
+  const [clearHistoryModal, setClearHistoryModal] = useState(false);
+
+  // History entry structure
+  const createHistoryEntry = (resourceId, section, name, field, oldValue, newValue, action = 'changed') => ({
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    resourceId,
+    section,
+    name,
+    field,
+    oldValue,
+    newValue,
+    action
+  });
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const addToHistory = (entry) => {
+    setHistory(prev => [entry, ...prev.slice(0, 49)]);
+    setRecentChanges(prev => new Set([...prev, entry.resourceId]));
+    setTimeout(() => {
+      setRecentChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.resourceId);
+        return newSet;
+      });
+    }, 5000);
+  };
+
+  const revertChange = async (historyEntry) => {
+    setRevertModal(historyEntry);
+  };
+
+  const confirmRevert = async () => {
+    const historyEntry = revertModal;
+    try {
+      const field = historyEntry.field;
+      const value = historyEntry.oldValue;
+      setLinks(prev => {
+        const newLinks = { ...prev };
+        newLinks[historyEntry.section] = (newLinks[historyEntry.section] || []).map(r => r.id === historyEntry.resourceId ? { ...r, [field]: value } : r);
+        return newLinks;
+      });
+      await saveResource({ ...links[historyEntry.section].find(r => r.id === historyEntry.resourceId), [field]: value });
+      const revertEntry = createHistoryEntry(
+        historyEntry.resourceId,
+        historyEntry.section,
+        historyEntry.name,
+        historyEntry.field,
+        historyEntry.newValue,
+        historyEntry.oldValue,
+        'reverted'
+      );
+      addToHistory(revertEntry);
+      setRevertModal(null);
+    } catch (err) {
+      alert('Failed to revert change. Please try again.');
+    }
+  };
 
   // LocalStorage cache key
   const RESOURCES_CACHE_KEY = 'resources_cache_v1';
@@ -98,6 +175,22 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
     })();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadHistoryLog('resources');
+      const historyArray = loaded?.log || loaded || [];
+      setHistory(Array.isArray(historyArray) ? historyArray : []);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (history && history.length > 0) {
+      saveHistoryLog('resources', history).catch(err => {
+        console.error('Error saving history:', err);
+      });
+    }
+  }, [history]);
+
   const handleCopy = (section, url) => {
     navigator.clipboard.writeText(url);
     setCopied({ ...copied, [section]: url });
@@ -106,8 +199,47 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
 
   const handleModalAdd = () => {
     if (!modalTitle.trim() || !modalUrl.trim()) return;
-    setPendingLink({ name: modalTitle.trim(), url: modalUrl.trim() });
-    setModalStep(2);
+    
+    const newResource = {
+      name: modalTitle.trim(),
+      url: modalUrl.trim(),
+      id: Date.now(),
+      createdAt: new Date().toISOString()
+    };
+
+    // Optimistically update UI
+    setLinks(l => ({
+      ...l,
+      [pendingLink]: [...(l[pendingLink] || []), newResource]
+    }));
+    setModalOpen(false);
+    setModalStep(1);
+    setModalTitle('');
+    setModalUrl('');
+    setPendingLink(null);
+    
+    // Add toast for add resource
+    setToastMessage('Resource added successfully');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+
+    // Add to history for add
+    addToHistory(createHistoryEntry(newResource.id, pendingLink, newResource.name, 'created', '', 'Resource created'));
+
+    // Firestore operations in background
+    (async () => {
+      try {
+        await saveResource(newResource);
+      } catch (e) {
+        // Revert optimistic update on error
+        setLinks(l => ({
+          ...l,
+          [pendingLink]: l[pendingLink].filter(r => r.id !== newResource.id)
+        }));
+        alert('Failed to save resource to database. Please try again.');
+        console.error('Failed to save resource:', e);
+      }
+    })();
   };
 
   const handleSectionSelect = async (section) => {
@@ -129,6 +261,8 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
     setModalTitle('');
     setModalUrl('');
     setPendingLink(null);
+    // Add to history for add
+    addToHistory(createHistoryEntry(resource.id, section, resource.name, 'created', '', 'Resource created'));
     // Save to Firestore in background
     saveResource(resource).catch(e => {
       // Remove from UI if save fails
@@ -158,6 +292,12 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
       [section]: l[section].filter((_, i) => i !== idx)
     }));
     setDeleteModal({ open: false, section: null, idx: null, link: null });
+    // Add toast for delete
+    setToastMessage('Resource deleted successfully');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
+    // Add to history for delete
+    addToHistory(createHistoryEntry(link.id, section, link.name, 'deleted', '', 'Resource deleted'));
     // Firestore operations in background
     (async () => {
       try {
@@ -198,6 +338,10 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
     setLinks(l => ({ ...l, [name]: [] }));
     setShowAddTable(false);
     setNewTableName('');
+    // Add toast for add table
+    setToastMessage('Table added successfully');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
     // Save to Firestore
     try {
       await saveResourceSections(updatedSections);
@@ -227,6 +371,10 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
       return newLinks;
     });
     setDeleteTableModal({ open: false, section: null });
+    // Add toast for delete table
+    setToastMessage('Table deleted successfully');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
     // Firestore operations in background
     (async () => {
       try {
@@ -267,8 +415,37 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
     setDeleteTableModal({ open: false, section: null });
   };
 
+  const handleClearHistory = async () => {
+    setHistory([]);
+    await clearHistoryLog('resources');
+    setClearHistoryModal(false);
+  };
+
   return (
     <div className="resources-page" style={{ minHeight: '100vh', background: darkMode ? '#181a1b' : '#f7f6f2' }}>
+      {/* Header with History Button */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', maxWidth: 900, width: '100%', margin: '0 auto 24px auto', paddingTop: 36 }}>
+        <h1 className="fancy-title" style={{ fontSize: '2.1em', fontWeight: 800, letterSpacing: '0.04em', margin: 0 }}>Resources</h1>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          style={{
+            padding: '8px 16px',
+            background: showHistory ? '#1976d2' : '#f8f9fa',
+            color: showHistory ? '#ffffff' : '#495057',
+            border: '1px solid #dee2e6',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
+        </button>
+      </div>
       {loading && (
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 2000 }}>
           <div className="spinner" style={{
@@ -280,6 +457,199 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
             animation: 'spin 1s linear infinite',
           }} />
           <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+      {/* History Panel */}
+      {showHistory && (
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e0e7ef',
+          borderRadius: '16px',
+          padding: '32px',
+          marginBottom: '30px',
+          position: 'relative',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          width: '100%',
+          maxWidth: '900px',
+          margin: '0 auto 30px'
+        }}>
+          {/* Icon-only Clear History button in upper right */}
+          <button
+            onClick={() => setClearHistoryModal(true)}
+            title="Clear History"
+            style={{
+              position: 'absolute',
+              top: '24px',
+              right: '24px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              margin: 0,
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              transition: 'background 0.18s',
+              zIndex: 1
+            }}
+            onMouseOver={e => e.currentTarget.style.background = '#f8d7da'}
+            onMouseOut={e => e.currentTarget.style.background = 'none'}
+          >
+            {/* Trash can SVG icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+          <div style={{ paddingRight: '40px' }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#495057' }}>History Log</h3>
+          </div>
+          <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '16px', marginTop: '20px' }}>
+            {history.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', margin: '30px 0', fontSize: '1.1rem' }}>
+                No history entries yet
+              </p>
+            ) : (
+              <div>
+                {history.map((entry, index) => (
+                  <div
+                    key={entry.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      border: '1px solid #e9ecef',
+                      borderRadius: '10px',
+                      marginBottom: '12px',
+                      background: entry.action === 'reverted' ? '#fff3cd' : '#ffffff',
+                      borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : '4px solid #1976d2',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      transition: 'all 0.2s ease',
+                      gap: '16px'
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontWeight: '600', 
+                        color: '#495057', 
+                        marginBottom: '6px', 
+                        fontSize: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        <span style={{ 
+                          flex: '1', 
+                          minWidth: 0, 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          color: '#1976d2',
+                          fontWeight: '600'
+                        }}>
+                          {entry.name}
+                        </span>
+                        <span style={{ 
+                          color: '#1976d2',
+                          fontWeight: '500', 
+                          whiteSpace: 'nowrap',
+                          opacity: 0.85
+                        }}>
+                          {entry.section}
+                        </span>
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.95rem', 
+                        color: '#6c757d', 
+                        marginBottom: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span style={{ whiteSpace: 'nowrap' }}>{entry.field}:</span>
+                        <span style={{ 
+                          color: entry.oldValue === 'Completed' ? '#28a745' : entry.oldValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.oldValue}</span>
+                        <span style={{ color: '#adb5bd', margin: '0 2px' }}>→</span>
+                        <span style={{ 
+                          color: entry.newValue === 'Completed' ? '#28a745' : entry.newValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.newValue}</span>
+                        {entry.action === 'reverted' && (
+                          <span style={{ 
+                            color: '#ffc107', 
+                            marginLeft: '4px', 
+                            fontWeight: '500',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '2px'
+                          }}>
+                            <span style={{ fontSize: '1.1em', lineHeight: 1 }}>🔄</span> Reverted
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.85rem', 
+                        color: '#adb5bd',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span style={{ fontSize: '0.9em' }}>🕒</span>
+                        {formatTimestamp(entry.timestamp)}
+                      </div>
+                    </div>
+                    {entry.action !== 'reverted' && (
+                      <button
+                        onClick={() => revertChange(entry)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#f8f9fa',
+                          color: '#6c757d',
+                          border: '1px solid #dee2e6',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          fontWeight: '500',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease',
+                          marginLeft: '8px',
+                          alignSelf: 'center',
+                          whiteSpace: 'nowrap',
+                          height: '32px'
+                        }}
+                        onMouseOver={e => {
+                          e.currentTarget.style.background = '#e9ecef';
+                          e.currentTarget.style.borderColor = '#ced4da';
+                          e.currentTarget.style.color = '#495057';
+                        }}
+                        onMouseOut={e => {
+                          e.currentTarget.style.background = '#f8f9fa';
+                          e.currentTarget.style.borderColor = '#dee2e6';
+                          e.currentTarget.style.color = '#6c757d';
+                        }}
+                      >
+                        <span style={{ fontSize: '1.1em', lineHeight: 1, marginRight: '1px' }}>↩️</span>
+                        Revert
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
       {/* Delete confirmation modal */}
@@ -677,6 +1047,50 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+      {/* Add toast notification */}
+      {showToast && (
+        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
+          ✅ {toastMessage}
+        </div>
+      )}
+      {/* Clear History Confirmation Modal */}
+      {clearHistoryModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.18)',
+          zIndex: 1100,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 18,
+            boxShadow: '0 4px 32px #e0e7ef',
+            padding: '2em 2.5em 2em 2.5em',
+            minWidth: 320,
+            minHeight: 120,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 24,
+            position: 'relative',
+          }}>
+            <div style={{ fontWeight: 800, fontSize: '1.1em', color: '#d32f2f', marginBottom: 8 }}>Are you sure you want to clear all history?</div>
+            <div style={{ display: 'flex', gap: 18 }}>
+              <button
+                style={{ background: '#d32f2f', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '1em', padding: '0.5em 1.3em', cursor: 'pointer' }}
+                onClick={handleClearHistory}
+              >Yes, Clear</button>
+              <button
+                style={{ background: '#bdbdbd', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '1em', padding: '0.5em 1.3em', cursor: 'pointer' }}
+                onClick={() => setClearHistoryModal(false)}
+              >Cancel</button>
+            </div>
           </div>
         </div>
       )}

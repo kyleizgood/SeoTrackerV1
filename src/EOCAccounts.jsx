@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getEOCAccounts, reactivateEOCAccount, updateEOCDate } from './firestoreHelpers';
+import { getEOCAccounts, reactivateEOCAccount, updateEOCDate, saveHistoryLog, loadHistoryLog, clearHistoryLog } from './firestoreHelpers';
 import * as XLSX from 'xlsx';
 
 const PACKAGE_COLORS = {
@@ -24,6 +24,98 @@ export default function EOCAccounts({ darkMode }) {
   const [editDate, setEditDate] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const PAGE_SIZE = 10;
+
+  // --- History Log State ---
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [recentChanges, setRecentChanges] = useState(new Set());
+  const [revertModal, setRevertModal] = useState(null);
+  const [clearHistoryModal, setClearHistoryModal] = useState(false);
+
+  // History entry structure
+  const createHistoryEntry = (companyId, name, pkg, field, oldValue, newValue, action = 'changed') => ({
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    companyId,
+    name,
+    pkg,
+    field,
+    oldValue,
+    newValue,
+    action
+  });
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const addToHistory = (entry) => {
+    setHistory(prev => [entry, ...prev.slice(0, 49)]);
+    setRecentChanges(prev => new Set([...prev, entry.companyId]));
+    setTimeout(() => {
+      setRecentChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.companyId);
+        return newSet;
+      });
+    }, 5000);
+  };
+
+  const revertChange = async (historyEntry) => {
+    setRevertModal(historyEntry);
+  };
+
+  const confirmRevert = async () => {
+    const historyEntry = revertModal;
+    try {
+      const field = historyEntry.field;
+      const value = historyEntry.oldValue;
+      setEocAccounts(prev => prev.map(a => a.id === historyEntry.companyId ? { ...a, [field]: value } : a));
+      await updateEOCDate(historyEntry.companyId, historyEntry.pkg, value);
+      const revertEntry = createHistoryEntry(
+        historyEntry.companyId,
+        historyEntry.name,
+        historyEntry.pkg,
+        historyEntry.field,
+        historyEntry.newValue,
+        historyEntry.oldValue,
+        'reverted'
+      );
+      addToHistory(revertEntry);
+      setRevertModal(null);
+    } catch (err) {
+      alert('Failed to revert change. Please try again.');
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadHistoryLog('eocaccounts');
+      const historyArray = loaded?.log || loaded || [];
+      setHistory(Array.isArray(historyArray) ? historyArray : []);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (history && history.length > 0) {
+      saveHistoryLog('eocaccounts', history).catch(err => {
+        console.error('Error saving history:', err);
+      });
+    }
+  }, [history]);
+
+  const handleClearHistory = async () => {
+    setHistory([]);
+    await clearHistoryLog('eocaccounts');
+    setClearHistoryModal(false);
+  };
 
   useEffect(() => {
     loadEOCAccounts();
@@ -66,13 +158,15 @@ export default function EOCAccounts({ darkMode }) {
         alert('Please enter a valid date');
         return;
       }
-
+      const oldValue = editModal.eocDate || '';
       await updateEOCDate(editModal.id, editModal.package, editDate);
       await loadEOCAccounts();
       setEditModal(null);
       setToastMessage('EOC date updated successfully');
       setShowSuccessToast(true);
       setTimeout(() => setShowSuccessToast(false), 3000);
+      // Add to history
+      addToHistory(createHistoryEntry(editModal.id, editModal.name, editModal.package, 'eocDate', oldValue, editDate));
     } catch (error) {
       console.error('Error updating EOC date:', error);
       alert('Error updating EOC date');
@@ -194,6 +288,221 @@ export default function EOCAccounts({ darkMode }) {
       minHeight: '100vh',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
     }}>
+      {/* Header with History Button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px', width: '100%', maxWidth: '900px', margin: '0 auto 20px' }}>
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          style={{
+            padding: '8px 16px',
+            background: showHistory ? '#1976d2' : '#f8f9fa',
+            color: showHistory ? '#ffffff' : '#495057',
+            border: '1px solid #dee2e6',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
+        </button>
+      </div>
+      {/* History Panel */}
+      {showHistory && (
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e0e7ef',
+          borderRadius: '16px',
+          padding: '32px',
+          marginBottom: '30px',
+          position: 'relative',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+          width: '100%',
+          maxWidth: '900px',
+          margin: '0 auto 30px'
+        }}>
+          {/* Icon-only Clear History button in upper right */}
+          <button
+            onClick={() => setClearHistoryModal(true)}
+            title="Clear History"
+            style={{
+              position: 'absolute',
+              top: '24px',
+              right: '24px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              margin: 0,
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              transition: 'background 0.18s',
+              zIndex: 1
+            }}
+            onMouseOver={e => e.currentTarget.style.background = '#f8d7da'}
+            onMouseOut={e => e.currentTarget.style.background = 'none'}
+          >
+            {/* Trash can SVG icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+              <line x1="10" y1="11" x2="10" y2="17" />
+              <line x1="14" y1="11" x2="14" y2="17" />
+            </svg>
+          </button>
+          <div style={{ paddingRight: '40px' }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#495057' }}>History Log</h3>
+          </div>
+          <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '16px', marginTop: '20px' }}>
+            {history.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', margin: '30px 0', fontSize: '1.1rem' }}>
+                No history entries yet
+              </p>
+            ) : (
+              <div>
+                {history.map((entry, index) => (
+                  <div
+                    key={entry.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      padding: '16px 20px',
+                      border: '1px solid #e9ecef',
+                      borderRadius: '10px',
+                      marginBottom: '12px',
+                      background: entry.action === 'reverted' ? '#fff3cd' : '#ffffff',
+                      borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : '4px solid #1976d2',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      transition: 'all 0.2s ease',
+                      gap: '16px'
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontWeight: '600', 
+                        color: '#495057', 
+                        marginBottom: '6px', 
+                        fontSize: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}>
+                        <span style={{ 
+                          flex: '1', 
+                          minWidth: 0, 
+                          whiteSpace: 'nowrap', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis',
+                          color: '#1976d2',
+                          fontWeight: '600'
+                        }}>
+                          {entry.name}
+                        </span>
+                        <span style={{ 
+                          color: '#1976d2',
+                          fontWeight: '500', 
+                          whiteSpace: 'nowrap',
+                          opacity: 0.85
+                        }}>
+                          {entry.pkg}
+                        </span>
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.95rem', 
+                        color: '#6c757d', 
+                        marginBottom: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span style={{ whiteSpace: 'nowrap' }}>{entry.field}:</span>
+                        <span style={{ 
+                          color: entry.oldValue === 'Completed' ? '#28a745' : entry.oldValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.oldValue}</span>
+                        <span style={{ color: '#adb5bd', margin: '0 2px' }}>→</span>
+                        <span style={{ 
+                          color: entry.newValue === 'Completed' ? '#28a745' : entry.newValue === 'Pending' ? '#dc3545' : '#6c757d', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap'
+                        }}>{entry.newValue}</span>
+                        {entry.action === 'reverted' && (
+                          <span style={{ 
+                            color: '#ffc107', 
+                            marginLeft: '4px', 
+                            fontWeight: '500',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '2px'
+                          }}>
+                            <span style={{ fontSize: '1.1em', lineHeight: 1 }}>🔄</span> Reverted
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ 
+                        fontSize: '0.85rem', 
+                        color: '#adb5bd',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <span style={{ fontSize: '0.9em' }}>🕒</span>
+                        {formatTimestamp(entry.timestamp)}
+                      </div>
+                    </div>
+                    {entry.action !== 'reverted' && (
+                      <button
+                        onClick={() => revertChange(entry)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#f8f9fa',
+                          color: '#6c757d',
+                          border: '1px solid #dee2e6',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.9rem',
+                          fontWeight: '500',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease',
+                          marginLeft: '8px',
+                          alignSelf: 'center',
+                          whiteSpace: 'nowrap',
+                          height: '32px'
+                        }}
+                        onMouseOver={e => {
+                          e.currentTarget.style.background = '#e9ecef';
+                          e.currentTarget.style.borderColor = '#ced4da';
+                          e.currentTarget.style.color = '#495057';
+                        }}
+                        onMouseOut={e => {
+                          e.currentTarget.style.background = '#f8f9fa';
+                          e.currentTarget.style.borderColor = '#dee2e6';
+                          e.currentTarget.style.color = '#6c757d';
+                        }}
+                      >
+                        <span style={{ fontSize: '1.1em', lineHeight: 1, marginRight: '1px' }}>↩️</span>
+                        Revert
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* Header Section */}
       <div style={{ 
         display: 'flex', 

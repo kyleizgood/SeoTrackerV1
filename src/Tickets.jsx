@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { getTicketsPaginated, saveTicket, deleteTicket, getTrash, saveTrash } from './firestoreHelpers';
-import { auth } from './firebase';
+import { getTicketsPaginated, saveTicket, deleteTicket, getTrash, saveTrash, saveHistoryLog, loadHistoryLog, clearHistoryLog } from './firestoreHelpers';
+import { auth, db } from './firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -25,22 +26,124 @@ function Tickets({ darkMode, setDarkMode }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showAlert, setShowAlert] = useState(true);
   const [activeTab, setActiveTab] = useState('open'); // 'open' or 'closed'
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   // LocalStorage cache key
   const TICKETS_CACHE_KEY = 'tickets_cache_v1';
+
+  // --- History Log State ---
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [recentChanges, setRecentChanges] = useState(new Set());
+  const [revertModal, setRevertModal] = useState(null);
+  const [clearHistoryModal, setClearHistoryModal] = useState(false);
+
+  // History entry structure
+  const createHistoryEntry = (ticketId, company, subject, field, oldValue, newValue, action = 'changed') => ({
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    ticketId,
+    company,
+    subject,
+    field,
+    oldValue,
+    newValue,
+    action
+  });
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const addToHistory = (entry) => {
+    setHistory(prev => [entry, ...prev.slice(0, 49)]);
+    setRecentChanges(prev => new Set([...prev, entry.ticketId]));
+    setTimeout(() => {
+      setRecentChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.ticketId);
+        return newSet;
+      });
+    }, 5000);
+  };
+
+  const revertChange = async (historyEntry) => {
+    setRevertModal(historyEntry);
+  };
+
+  const confirmRevert = async () => {
+    const historyEntry = revertModal;
+    try {
+      const field = historyEntry.field;
+      const value = historyEntry.oldValue;
+      // Update in tickets
+      setTickets(prev => prev.map(t => t.id === historyEntry.ticketId ? { ...t, [field]: value } : t));
+      await saveTicket({ ...tickets.find(t => t.id === historyEntry.ticketId), [field]: value });
+      // Add revert entry to history
+      const revertEntry = createHistoryEntry(
+        historyEntry.ticketId,
+        historyEntry.company,
+        historyEntry.subject,
+        historyEntry.field,
+        historyEntry.newValue,
+        historyEntry.oldValue,
+        'reverted'
+      );
+      addToHistory(revertEntry);
+      setRevertModal(null);
+    } catch (err) {
+      alert('Failed to revert change. Please try again.');
+    }
+  };
 
   // Fetch paginated tickets (initial or more)
   const fetchTickets = async (loadMore = false) => {
     if (loadMore) setLoadingMore(true);
     else setLoading(true);
+    
+    // Preserve current selection before re-fetching
+    const currentSelectedId = selectedId;
+    
     try {
       let startAfterDoc = loadMore ? lastDoc : null;
       const { items: fetched, lastDoc: newLastDoc, hasMore: more } = await getTicketsPaginated(20, startAfterDoc);
+      console.log('Fetched tickets:', fetched);
+      console.log('Number of tickets fetched:', fetched.length);
+      if (fetched.length > 0) {
+        console.log('First ticket sample:', fetched[0]);
+        console.log('Last ticket sample:', fetched[fetched.length - 1]);
+      }
       setTickets(prev => loadMore ? [...prev, ...fetched] : fetched);
       setLastDoc(newLastDoc);
       setHasMore(more);
-      // Cache in localStorage
-      if (!loadMore) localStorage.setItem(TICKETS_CACHE_KEY, JSON.stringify({ tickets: fetched, lastDocId: newLastDoc?.id || null, ts: Date.now() }));
+      
+      // Handle URL parameter for specific ticket selection
+      if (!loadMore) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const ticketParam = urlParams.get('ticket');
+        
+        // Priority: URL parameter > current selection > first ticket
+        if (ticketParam && fetched.find(t => t.id === ticketParam)) {
+          setSelectedId(ticketParam);
+        } else if (currentSelectedId && fetched.find(t => t.id === currentSelectedId)) {
+          // Preserve current selection if the ticket still exists
+          setSelectedId(currentSelectedId);
+        } else if (fetched.length > 0) {
+          // Only auto-select first ticket if no current selection
+          setSelectedId(fetched[0].id);
+        }
+        
+        // Cache in localStorage
+        localStorage.setItem(TICKETS_CACHE_KEY, JSON.stringify({ tickets: fetched, lastDocId: newLastDoc?.id || null, ts: Date.now() }));
+      }
     } catch (e) {
       // Optionally handle error
     }
@@ -50,12 +153,21 @@ function Tickets({ darkMode, setDarkMode }) {
 
   // On mount: try cache, then fetch
   useEffect(() => {
+    // Check for URL parameter to select specific ticket
+    const urlParams = new URLSearchParams(window.location.search);
+    const ticketParam = urlParams.get('ticket');
+    
     const cache = localStorage.getItem(TICKETS_CACHE_KEY);
     if (cache) {
       const { tickets: cachedTickets, lastDocId, ts } = JSON.parse(cache);
       if (Array.isArray(cachedTickets) && Date.now() - ts < 1000 * 60 * 10) { // 10 min cache
         setTickets(cachedTickets);
-        setSelectedId(cachedTickets[0]?.id || null);
+        // Select specific ticket if provided in URL, otherwise first ticket
+        if (ticketParam && cachedTickets.find(t => t.id === ticketParam)) {
+          setSelectedId(ticketParam);
+        } else {
+          setSelectedId(cachedTickets[0]?.id || null);
+        }
         setLoading(false);
         // Still fetch latest in background
         fetchTickets(false);
@@ -64,6 +176,44 @@ function Tickets({ darkMode, setDarkMode }) {
     }
     fetchTickets(false);
   }, []);
+
+  // Load history from Firestore on mount
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadHistoryLog('tickets');
+      const historyArray = loaded?.log || loaded || [];
+      setHistory(Array.isArray(historyArray) ? historyArray : []);
+    })();
+  }, []);
+
+  // Save history to Firestore on every change
+  useEffect(() => {
+    if (history && history.length > 0) {
+      saveHistoryLog('tickets', history).catch(err => {
+        console.error('Error saving history:', err);
+      });
+    }
+  }, [history]);
+
+  // Real-time listener for tickets
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    
+    const ticketsColRef = collection(db, 'users', auth.currentUser.uid, 'tickets');
+    const unsubscribe = onSnapshot(ticketsColRef, (snapshot) => {
+      console.log('Tickets collection changed, refreshing...');
+      // Clear cache when tickets change
+      localStorage.removeItem(TICKETS_CACHE_KEY);
+      // Refresh tickets with a small delay to prevent rapid refreshes
+      setTimeout(() => {
+        fetchTickets(false);
+      }, 500);
+    }, (error) => {
+      console.error('Error listening to tickets:', error);
+    });
+    
+    return () => unsubscribe();
+  }, [auth.currentUser]);
 
   const selectedTicket = tickets.find(t => t.id === selectedId);
 
@@ -103,7 +253,7 @@ function Tickets({ darkMode, setDarkMode }) {
 
   // Modal logic
   const handleAdd = () => {
-    setModalData({ company: '', subject: '', ticketId: '', followUpDate: '', status: 'open', priority: 'medium' });
+    setModalData({ company: '', subject: '', ticketId: '', followUpDate: '', description: '', status: 'open', priority: 'medium' });
     setShowModal(true);
   };
   const handleEdit = (ticket) => {
@@ -113,9 +263,57 @@ function Tickets({ darkMode, setDarkMode }) {
   const handleModalSave = async (data) => {
     const ticketWithDefaults = { ...data, priority: data.priority || 'medium', status: data.status || 'open' };
     let newTicket = null;
+    let oldTicket = null;
+    
     if (ticketWithDefaults.id) {
+      oldTicket = tickets.find(t => t.id === ticketWithDefaults.id);
       setTickets(tickets => tickets.map(t => t.id === ticketWithDefaults.id ? { ...t, ...ticketWithDefaults, updatedAt: new Date().toISOString() } : t));
       newTicket = { ...ticketWithDefaults, updatedAt: new Date().toISOString() };
+      
+      // Add to history for edit
+      if (oldTicket) {
+        if (oldTicket.company !== ticketWithDefaults.company) addToHistory(createHistoryEntry(ticketWithDefaults.id, oldTicket.company, oldTicket.subject, 'company', oldTicket.company, ticketWithDefaults.company));
+        if (oldTicket.subject !== ticketWithDefaults.subject) addToHistory(createHistoryEntry(ticketWithDefaults.id, oldTicket.company, oldTicket.subject, 'subject', oldTicket.subject, ticketWithDefaults.subject));
+        if (oldTicket.ticketId !== ticketWithDefaults.ticketId) addToHistory(createHistoryEntry(ticketWithDefaults.id, oldTicket.company, oldTicket.subject, 'ticketId', oldTicket.ticketId, ticketWithDefaults.ticketId));
+        if (oldTicket.followUpDate !== ticketWithDefaults.followUpDate) addToHistory(createHistoryEntry(ticketWithDefaults.id, oldTicket.company, oldTicket.subject, 'followUpDate', oldTicket.followUpDate, ticketWithDefaults.followUpDate));
+        if (oldTicket.description !== ticketWithDefaults.description) addToHistory(createHistoryEntry(ticketWithDefaults.id, oldTicket.company, oldTicket.subject, 'description', oldTicket.description, ticketWithDefaults.description));
+        if (oldTicket.status !== ticketWithDefaults.status) addToHistory(createHistoryEntry(ticketWithDefaults.id, oldTicket.company, oldTicket.subject, 'status', oldTicket.status, ticketWithDefaults.status));
+        
+        // Sync with packages if this is a Business Profile Claiming ticket
+        if (oldTicket.taskType === 'businessProfileClaiming' && oldTicket.status !== ticketWithDefaults.status) {
+          try {
+            const { getPackages, savePackages } = await import('./firestoreHelpers');
+            const packages = await getPackages();
+            let updated = false;
+            
+            // Find and update the company in the correct package
+            for (const [pkgName, pkgCompanies] of Object.entries(packages)) {
+              const companyIndex = pkgCompanies.findIndex(c => c.ticketId === ticketWithDefaults.id);
+              if (companyIndex !== -1) {
+                if (ticketWithDefaults.status === 'closed') {
+                  // Mark Business Profile Claiming as Completed
+                  packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Completed';
+                  updated = true;
+                } else if (ticketWithDefaults.status === 'open' && oldTicket.status === 'closed') {
+                  // Mark Business Profile Claiming as Ticket if reopened
+                  packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Ticket';
+                  updated = true;
+                }
+                break;
+              }
+            }
+            
+            if (updated) {
+              await savePackages(packages);
+              setToastMessage(`Package task updated for ${ticketWithDefaults.company}`);
+              setShowToast(true);
+              setTimeout(() => setShowToast(false), 3000);
+            }
+          } catch (error) {
+            console.error('Error syncing with packages:', error);
+          }
+        }
+      }
     } else {
       newTicket = {
         ...ticketWithDefaults,
@@ -124,13 +322,31 @@ function Tickets({ darkMode, setDarkMode }) {
         updatedAt: new Date().toISOString(),
       };
       setTickets(tickets => [newTicket, ...tickets]);
+      // Add to history for add
+      addToHistory(createHistoryEntry(newTicket.id, newTicket.company, newTicket.subject, 'created', '', 'Ticket created'));
     }
+    
     setShowModal(false);
+    
+    // Preserve the selected ticket ID (either the edited ticket or the new ticket)
+    const ticketToSelect = newTicket.id;
+    
     try {
       await saveTicket(newTicket);
+      setToastMessage('Ticket saved successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+      
+      // Ensure the saved ticket remains selected after the real-time refresh
+      setTimeout(() => {
+        setSelectedId(ticketToSelect);
+      }, 600); // Slightly longer than the real-time listener delay
+      
     } catch (err) {
       alert('Failed to save ticket. Please try again.');
       setTickets(tickets => tickets.filter(t => t.id !== newTicket.id));
+      setAlertMessage('Error saving ticket');
+      setShowAlert(true);
     }
   };
   const handleDelete = async (id) => {
@@ -152,14 +368,25 @@ function Tickets({ darkMode, setDarkMode }) {
       await saveTrash([trashedTicket, ...trash]);
       // Remove from tickets collection
       await deleteTicket(ticket.id);
+      setToastMessage('Ticket deleted successfully');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
     } catch (err) {
       // Optionally show an error, but do not delay UI
+      setAlertMessage('Error deleting ticket');
+      setShowAlert(true);
     }
   };
   const cancelDelete = () => setConfirmDeleteId(null);
 
   // Sidebar ticket click
   const handleSidebarClick = (id) => setSelectedId(id);
+
+  const handleClearHistory = async () => {
+    setHistory([]);
+    await clearHistoryLog('tickets');
+    setClearHistoryModal(false);
+  };
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: darkMode ? '#181a1b' : '#f7f6f2' }} className={darkMode ? 'dark' : ''}>
@@ -287,6 +514,12 @@ function Tickets({ darkMode, setDarkMode }) {
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ fontWeight: 700, fontSize: '1.08em', color: darkMode ? '#e3e3e3' : '#232323', marginBottom: 2 }}>{ticket.subject}</div>
+                  {/* Business Profile Claiming indicator */}
+                  {ticket.taskType === 'businessProfileClaiming' && (
+                    <span title="Business Profile Claiming Task" style={{ marginLeft: 4, fontSize: '1.1em', color: '#1976d2', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      🏢 <span style={{ fontSize: '0.92em', fontWeight: 500, color: '#1976d2' }}>BPC</span>
+                    </span>
+                  )}
                   {/* Alert icon for follow-up with text (only for open tickets) */}
                   {activeTab === 'open' && isTodayFollowUp && (
                     <span title="Needs follow up today" style={{ marginLeft: 4, fontSize: '1.1em', color: '#ff9800', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -386,6 +619,221 @@ function Tickets({ darkMode, setDarkMode }) {
             </div>
           )}
         </div>
+        {/* Header with History Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px', width: '100%', maxWidth: '900px' }}>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            style={{
+              padding: '8px 16px',
+              background: showHistory ? '#1976d2' : '#f8f9fa',
+              color: showHistory ? '#ffffff' : '#495057',
+              border: '1px solid #dee2e6',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: '600',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
+          </button>
+        </div>
+        {/* History Panel */}
+        {showHistory && (
+          <div style={{
+            background: '#ffffff',
+            border: '1px solid #e0e7ef',
+            borderRadius: '16px',
+            padding: '32px',
+            marginBottom: '30px',
+            position: 'relative',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+            width: '100%',
+            maxWidth: '900px',
+            margin: '0 auto 30px'
+          }}>
+            {/* Icon-only Clear History button in upper right */}
+            <button
+              onClick={() => setClearHistoryModal(true)}
+              title="Clear History"
+              style={{
+                position: 'absolute',
+                top: '24px',
+                right: '24px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                margin: 0,
+                width: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                transition: 'background 0.18s',
+                zIndex: 1
+              }}
+              onMouseOver={e => e.currentTarget.style.background = '#f8d7da'}
+              onMouseOut={e => e.currentTarget.style.background = 'none'}
+            >
+              {/* Trash can SVG icon */}
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </button>
+            <div style={{ paddingRight: '40px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#495057' }}>History Log</h3>
+            </div>
+            <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '16px', marginTop: '20px' }}>
+              {history.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', margin: '30px 0', fontSize: '1.1rem' }}>
+                  No history entries yet
+                </p>
+              ) : (
+                <div>
+                  {history.map((entry, index) => (
+                    <div
+                      key={entry.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        padding: '16px 20px',
+                        border: '1px solid #e9ecef',
+                        borderRadius: '10px',
+                        marginBottom: '12px',
+                        background: entry.action === 'reverted' ? '#fff3cd' : '#ffffff',
+                        borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : '4px solid #1976d2',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        transition: 'all 0.2s ease',
+                        gap: '16px'
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ 
+                          fontWeight: '600', 
+                          color: '#495057', 
+                          marginBottom: '6px', 
+                          fontSize: '1rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <span style={{ 
+                            flex: '1', 
+                            minWidth: 0, 
+                            whiteSpace: 'nowrap', 
+                            overflow: 'hidden', 
+                            textOverflow: 'ellipsis',
+                            color: '#1976d2',
+                            fontWeight: '600'
+                          }}>
+                            {entry.company} - {entry.subject}
+                          </span>
+                          <span style={{ 
+                            color: '#1976d2',
+                            fontWeight: '500', 
+                            whiteSpace: 'nowrap',
+                            opacity: 0.85
+                          }}>
+                            {entry.ticketId}
+                          </span>
+                        </div>
+                        <div style={{ 
+                          fontSize: '0.95rem', 
+                          color: '#6c757d', 
+                          marginBottom: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          flexWrap: 'wrap'
+                        }}>
+                          <span style={{ whiteSpace: 'nowrap' }}>{entry.field}:</span>
+                          <span style={{ 
+                            color: entry.oldValue === 'Closed' ? '#28a745' : entry.oldValue === 'Open' ? '#dc3545' : '#6c757d', 
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap'
+                          }}>{entry.oldValue}</span>
+                          <span style={{ color: '#adb5bd', margin: '0 2px' }}>→</span>
+                          <span style={{ 
+                            color: entry.newValue === 'Closed' ? '#28a745' : entry.newValue === 'Open' ? '#dc3545' : '#6c757d', 
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap'
+                          }}>{entry.newValue}</span>
+                          {entry.action === 'reverted' && (
+                            <span style={{ 
+                              color: '#ffc107', 
+                              marginLeft: '4px', 
+                              fontWeight: '500',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '2px'
+                            }}>
+                              <span style={{ fontSize: '1.1em', lineHeight: 1 }}>🔄</span> Reverted
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ 
+                          fontSize: '0.85rem', 
+                          color: '#adb5bd',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          <span style={{ fontSize: '0.9em' }}>🕒</span>
+                          {formatTimestamp(entry.timestamp)}
+                        </div>
+                      </div>
+                      {entry.action !== 'reverted' && (
+                        <button
+                          onClick={() => revertChange(entry)}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#f8f9fa',
+                            color: '#6c757d',
+                            border: '1px solid #dee2e6',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '0.9rem',
+                            fontWeight: '500',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'all 0.2s ease',
+                            marginLeft: '8px',
+                            alignSelf: 'center',
+                            whiteSpace: 'nowrap',
+                            height: '32px'
+                          }}
+                          onMouseOver={e => {
+                            e.currentTarget.style.background = '#e9ecef';
+                            e.currentTarget.style.borderColor = '#ced4da';
+                            e.currentTarget.style.color = '#495057';
+                          }}
+                          onMouseOut={e => {
+                            e.currentTarget.style.background = '#f8f9fa';
+                            e.currentTarget.style.borderColor = '#dee2e6';
+                            e.currentTarget.style.color = '#6c757d';
+                          }}
+                        >
+                          <span style={{ fontSize: '1.1em', lineHeight: 1, marginRight: '1px' }}>↩️</span>
+                          Revert
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+                  </div>
+      )}
         {selectedTicket ? (
           <div style={{
             width: '100%',
@@ -446,7 +894,53 @@ function Tickets({ darkMode, setDarkMode }) {
               <>
                 <div style={{ fontSize: '1.13em', color: darkMode ? '#bdbdbd' : '#232323', marginBottom: 18, whiteSpace: 'pre-line' }}>
                   <b>Company:</b> {selectedTicket.company}<br />
-                  <b>Ticket ID:</b> {selectedTicket.ticketId}<br />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <b>Ticket ID:</b> {selectedTicket.ticketId}
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedTicket.ticketId);
+                        if (window.showToast) {
+                          window.showToast('Ticket ID copied to clipboard!');
+                        }
+                      }}
+                      title="Copy Ticket ID"
+                      style={{
+                        padding: '4px 6px',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        borderRadius: '3px',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseOver={e => {
+                        e.currentTarget.style.background = darkMode ? '#404040' : '#f0f0f0';
+                      }}
+                      onMouseOut={e => {
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      📋
+                    </button>
+                  </div>
+                  {/* Show description if available */}
+                  {selectedTicket.description && (
+                    <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                      <b>Description:</b><br />
+                      <div style={{ 
+                        marginLeft: '12px', 
+                        marginTop: '4px', 
+                        padding: '8px 12px', 
+                        background: darkMode ? '#2a2a2a' : '#f8f9fa', 
+                        borderRadius: '6px',
+                        border: `1px solid ${darkMode ? '#404040' : '#e9ecef'}`,
+                        fontSize: '0.95em',
+                        lineHeight: '1.4'
+                      }}>
+                        {selectedTicket.description}
+                      </div>
+                    </div>
+                  )}
                   {/* Only show follow up for open tickets */}
                   {activeTab === 'open' && <><b>Follow Up:</b> {selectedTicket.followUpDate ? formatDate(selectedTicket.followUpDate) : 'N/A'}<br /></>}
                   {/* Show status and date closed for closed tickets */}
@@ -497,42 +991,227 @@ function Tickets({ darkMode, setDarkMode }) {
               </label>
               <label style={{ fontWeight: 700, fontSize: '1.08em', color: '#232323', marginBottom: 8 }}>
                 Ticket ID
-                <input
-                  type="text"
-                  name="ticketId"
-                  placeholder="Ticket ID"
-                  value={modalData?.ticketId || ''}
-                  onChange={e => setModalData(d => ({ ...d, ticketId: e.target.value }))}
-                  style={{ marginTop: 10, marginBottom: 10, width: '100%', padding: '16px 20px', borderRadius: 8, border: '1.5px solid #bdbdbd', fontSize: '1.08em', fontWeight: 700, background: darkMode ? '#23272e' : '#23232310', color: darkMode ? '#e3e3e3' : '#232323' }}
-                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="text"
+                    name="ticketId"
+                    placeholder="Ticket ID"
+                    value={modalData?.ticketId || ''}
+                    onChange={e => setModalData(d => ({ ...d, ticketId: e.target.value }))}
+                    style={{ flex: 1, marginTop: 10, marginBottom: 10, padding: '16px 20px', borderRadius: 8, border: '1.5px solid #bdbdbd', fontSize: '1.08em', fontWeight: 700, background: darkMode ? '#23272e' : '#23232310', color: darkMode ? '#e3e3e3' : '#232323' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(modalData?.ticketId || '');
+                      if (window.showToast) {
+                        window.showToast('Ticket ID copied to clipboard!');
+                      }
+                    }}
+                    title="Copy Ticket ID"
+                    style={{
+                      padding: '8px',
+                      background: '#f8f9fa',
+                      border: '1px solid #ced4da',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease',
+                      minWidth: '36px',
+                      height: '36px',
+                      marginTop: '10px',
+                      marginBottom: '10px'
+                    }}
+                    onMouseOver={e => {
+                      e.currentTarget.style.background = '#e9ecef';
+                      e.currentTarget.style.borderColor = '#adb5bd';
+                    }}
+                    onMouseOut={e => {
+                      e.currentTarget.style.background = '#f8f9fa';
+                      e.currentTarget.style.borderColor = '#ced4da';
+                    }}
+                  >
+                    📋
+                  </button>
+                </div>
               </label>
               <label style={{ fontWeight: 700, fontSize: '1.08em', color: '#232323', marginBottom: 8 }}>
                 Follow Up Date
                 <DatePicker
                   selected={modalData?.followUpDate ? new Date(modalData.followUpDate) : null}
                   onChange={date => setModalData(d => ({ ...d, followUpDate: date ? date.toISOString() : '' }))}
-                  showTimeSelect
-                  timeFormat="HH:mm"
-                  timeIntervals={15}
-                  dateFormat="MMMM d, yyyy h:mm aa"
-                  placeholderText="Select date and time"
-                  className="custom-datepicker-input styled-datepicker"
-                  style={{
-                    marginLeft: 0,
-                    marginTop: 6,
-                    marginBottom: 6,
-                    width: '100%',
-                    padding: '0.7em 1.2em',
-                    borderRadius: 10,
-                    border: '1.5px solid #bdbdbd',
-                    fontSize: '1.08em',
-                    fontWeight: 600,
-                    background: darkMode ? '#23272e' : '#f7f6f2',
+                  showYearDropdown
+                  showMonthDropdown
+                  dropdownMode="select"
+                  yearDropdownItemNumber={20}
+                  scrollableYearDropdown
+                  onClickOutside={e => e.preventDefault()}
+                  onInputClick={e => e.preventDefault()}
+                  customInput={
+                    <input
+                      style={{
+                        marginLeft: 0,
+                        marginTop: 6,
+                        marginBottom: 6,
+                        width: '100%',
+                        padding: '0.7em 1.2em',
+                        borderRadius: 10,
+                        border: '1.5px solid #bdbdbd',
+                        fontSize: '1.08em',
+                        fontWeight: 600,
+                        background: darkMode ? '#23272e' : '#f7f6f2',
+                        color: darkMode ? '#e3e3e3' : '#232323',
+                        boxShadow: '0 2px 8px #ececec',
+                        minHeight: 44,
+                        outline: 'none'
+                      }}
+                      placeholder="Follow Up Date"
+                    />
+                  }
+                  renderCustomHeader={({ date, changeYear, changeMonth }) => (
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      padding: '8px',
+                      background: '#f8f9fa',
+                      borderBottom: '1px solid #e9ecef',
+                      borderRadius: '4px 4px 0 0'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '0.9rem',
+                        fontWeight: '600',
+                        color: '#495057'
+                      }}>
+                        <span>Quick Navigation:</span>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <button
+                            type="button"
+                            onClick={e => { e.preventDefault(); e.stopPropagation(); changeYear(date.getFullYear() - 1); }}
+                            style={{
+                              padding: '4px 8px',
+                              fontSize: '0.8rem',
+                              background: '#e9ecef',
+                              border: '1px solid #dee2e6',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              color: '#495057',
+                              fontWeight: '500',
+                              transition: 'all 0.2s',
+                              minWidth: '32px'
+                            }}
+                            onMouseOver={e => { e.target.style.background = '#007bff'; e.target.style.color = '#fff'; }}
+                            onMouseOut={e => { e.target.style.background = '#e9ecef'; e.target.style.color = '#495057'; }}
+                          >
+                            ←
+                          </button>
+                          <span style={{ fontSize: '1rem', fontWeight: '600', color: '#495057', minWidth: '60px', textAlign: 'center' }}>{date.getFullYear()}</span>
+                          <button
+                            type="button"
+                            onClick={e => { e.preventDefault(); e.stopPropagation(); changeYear(date.getFullYear() + 1); }}
+                            style={{
+                              padding: '4px 8px',
+                              fontSize: '0.8rem',
+                              background: '#e9ecef',
+                              border: '1px solid #dee2e6',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              color: '#495057',
+                              fontWeight: '500',
+                              transition: 'all 0.2s',
+                              minWidth: '32px'
+                            }}
+                            onMouseOver={e => { e.target.style.background = '#007bff'; e.target.style.color = '#fff'; }}
+                            onMouseOut={e => { e.target.style.background = '#e9ecef'; e.target.style.color = '#495057'; }}
+                          >
+                            →
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px',
+                        marginTop: '8px',
+                        paddingTop: '8px',
+                        borderTop: '1px solid #dee2e6'
+                      }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#495057', marginBottom: '4px' }}>Quick Months:</div>
+                        <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
+                          {[
+                            { label: 'Jan', month: 0 },
+                            { label: 'Feb', month: 1 },
+                            { label: 'Mar', month: 2 },
+                            { label: 'Apr', month: 3 },
+                            { label: 'May', month: 4 },
+                            { label: 'Jun', month: 5 },
+                            { label: 'Jul', month: 6 },
+                            { label: 'Aug', month: 7 },
+                            { label: 'Sep', month: 8 },
+                            { label: 'Oct', month: 9 },
+                            { label: 'Nov', month: 10 },
+                            { label: 'Dec', month: 11 }
+                          ].map(({ label, month }) => (
+                            <button
+                              key={label}
+                              type="button"
+                              onClick={e => { e.preventDefault(); e.stopPropagation(); changeMonth(month); }}
+                              style={{
+                                padding: '3px 6px',
+                                fontSize: '0.75rem',
+                                background: '#f8f9fa',
+                                border: '1px solid #dee2e6',
+                                borderRadius: '3px',
+                                cursor: 'pointer',
+                                color: '#6c757d',
+                                fontWeight: '500',
+                                transition: 'all 0.2s',
+                                minWidth: '28px',
+                                textAlign: 'center'
+                              }}
+                              onMouseOver={e => { e.target.style.background = '#28a745'; e.target.style.color = '#fff'; e.target.style.borderColor = '#28a745'; }}
+                              onMouseOut={e => { e.target.style.background = '#f8f9fa'; e.target.style.color = '#6c757d'; e.target.style.borderColor = '#dee2e6'; }}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                />
+              </label>
+              <label style={{ fontWeight: 700, fontSize: '1.08em', color: '#232323', marginBottom: 8 }}>
+                Description
+                <textarea
+                  name="ticketDescription"
+                  placeholder="Enter ticket description (optional)"
+                  value={modalData?.description || ''}
+                  onChange={e => setModalData(d => ({ ...d, description: e.target.value }))}
+                  style={{ 
+                    marginTop: 10, 
+                    marginBottom: 10, 
+                    width: '100%', 
+                    padding: '16px 20px', 
+                    borderRadius: 8, 
+                    border: '1.5px solid #bdbdbd', 
+                    fontSize: '1.08em', 
+                    fontWeight: 700, 
+                    background: darkMode ? '#23272e' : '#23232310', 
                     color: darkMode ? '#e3e3e3' : '#232323',
-                    boxShadow: '0 2px 8px #ececec',
-                    minHeight: 44,
+                    minHeight: '80px',
+                    resize: 'vertical',
+                    fontFamily: 'inherit'
                   }}
-                  popperPlacement="bottom"
                 />
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap', marginTop: 2, marginBottom: 2 }}>
@@ -555,6 +1234,25 @@ function Tickets({ darkMode, setDarkMode }) {
             <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end' }}>
               <button onClick={confirmDelete} style={{ background: '#c00', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 28px', fontWeight: 700, fontSize: '1.08em', cursor: 'pointer' }}>Delete</button>
               <button onClick={cancelDelete} style={{ background: '#eee', color: '#232323', border: 'none', borderRadius: 8, padding: '10px 28px', fontWeight: 700, fontSize: '1.08em', cursor: 'pointer' }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Add toast notification */}
+      {showToast && (
+        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
+          ✅ {toastMessage}
+        </div>
+      )}
+      {/* Clear History Confirmation Modal */}
+      {clearHistoryModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: darkMode ? 'rgba(24,26,27,0.88)' : 'rgba(44,62,80,0.18)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: darkMode ? '#23272e' : '#fff', borderRadius: 18, boxShadow: darkMode ? '0 2px 24px #181a1b' : '0 2px 24px #ececec', padding: 36, minWidth: 320, maxWidth: 400, color: darkMode ? '#e3e3e3' : '#232323' }}>
+            <div style={{ fontWeight: 800, fontSize: '1.15em', marginBottom: 18, color: '#c00' }}>Clear History?</div>
+            <div style={{ fontSize: '1.08em', color: '#232323', marginBottom: 24 }}>Are you sure you want to clear all history entries? This action cannot be undone.</div>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end' }}>
+              <button onClick={handleClearHistory} style={{ background: '#c00', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 28px', fontWeight: 700, fontSize: '1.08em', cursor: 'pointer' }}>Clear</button>
+              <button onClick={() => setClearHistoryModal(false)} style={{ background: '#eee', color: '#232323', border: 'none', borderRadius: 8, padding: '10px 28px', fontWeight: 700, fontSize: '1.08em', cursor: 'pointer' }}>Cancel</button>
             </div>
           </div>
         </div>
