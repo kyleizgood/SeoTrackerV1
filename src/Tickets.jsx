@@ -108,10 +108,6 @@ function Tickets({ darkMode, setDarkMode }) {
   const fetchTickets = async (loadMore = false) => {
     if (loadMore) setLoadingMore(true);
     else setLoading(true);
-    
-    // Preserve current selection before re-fetching
-    const currentSelectedId = selectedId;
-    
     try {
       let startAfterDoc = loadMore ? lastDoc : null;
       const { items: fetched, lastDoc: newLastDoc, hasMore: more } = await getTicketsPaginated(20, startAfterDoc);
@@ -129,15 +125,9 @@ function Tickets({ darkMode, setDarkMode }) {
       if (!loadMore) {
         const urlParams = new URLSearchParams(window.location.search);
         const ticketParam = urlParams.get('ticket');
-        
-        // Priority: URL parameter > current selection > first ticket
         if (ticketParam && fetched.find(t => t.id === ticketParam)) {
           setSelectedId(ticketParam);
-        } else if (currentSelectedId && fetched.find(t => t.id === currentSelectedId)) {
-          // Preserve current selection if the ticket still exists
-          setSelectedId(currentSelectedId);
-        } else if (fetched.length > 0) {
-          // Only auto-select first ticket if no current selection
+        } else if (!selectedId && fetched.length > 0) {
           setSelectedId(fetched[0].id);
         }
         
@@ -327,21 +317,11 @@ function Tickets({ darkMode, setDarkMode }) {
     }
     
     setShowModal(false);
-    
-    // Preserve the selected ticket ID (either the edited ticket or the new ticket)
-    const ticketToSelect = newTicket.id;
-    
     try {
       await saveTicket(newTicket);
       setToastMessage('Ticket saved successfully');
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
-      
-      // Ensure the saved ticket remains selected after the real-time refresh
-      setTimeout(() => {
-        setSelectedId(ticketToSelect);
-      }, 600); // Slightly longer than the real-time listener delay
-      
     } catch (err) {
       alert('Failed to save ticket. Please try again.');
       setTickets(tickets => tickets.filter(t => t.id !== newTicket.id));
