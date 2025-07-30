@@ -5,6 +5,7 @@ import { getNotesPaginated, saveNote, deleteNote, getTrash, saveTrash, saveHisto
 import { getDocs, collection } from 'firebase/firestore';
 import { db } from './firebase';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const mockNotes = [
   {
@@ -56,9 +57,7 @@ export default function NotesPage({ darkMode, setDarkMode }) {
   const [trashNotes, setTrashNotes] = useState([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const navigate = useNavigate();
-  // Add toast state
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+
 
   // LocalStorage cache key
   const NOTES_CACHE_KEY = 'notes_cache_v1';
@@ -238,9 +237,8 @@ export default function NotesPage({ darkMode, setDarkMode }) {
     setShowModal(false);
     try {
       await saveNote(newNote);
-      setToastMessage('Note saved successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Note saved successfully');
+
     } catch (err) {
       alert('Failed to save note. Please try again.');
       setNotes(notes => notes.filter(n => n.id !== newNote.id));
@@ -265,12 +263,10 @@ export default function NotesPage({ darkMode, setDarkMode }) {
       await saveTrash([trashedNote, ...trash]);
       // Remove from notes collection
       await deleteNote(note.id);
-      await fetchTrash();
-      if (selectedId === id) setSelectedId(notes[0]?.id || null);
-      // Add toast for delete
-      setToastMessage('Note deleted successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+              await fetchTrash();
+        if (selectedId === id) setSelectedId(notes[0]?.id || null);
+        toast.success('Note deleted successfully');
+
     } catch (err) {
       // Optionally show an error, but do not delay UI
     }
@@ -792,12 +788,7 @@ export default function NotesPage({ darkMode, setDarkMode }) {
           </div>
         </div>
       )}
-      {/* Add toast notification */}
-      {showToast && (
-        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
-          ✅ {toastMessage}
-        </div>
-      )}
+
       {clearHistoryModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: darkMode ? 'rgba(24,26,27,0.88)' : 'rgba(44,62,80,0.18)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: darkMode ? '#23272e' : '#fff', borderRadius: 18, boxShadow: darkMode ? '0 2px 24px #181a1b' : '0 2px 24px #ececec', padding: 36, minWidth: 320, maxWidth: 400, color: darkMode ? '#e3e3e3' : '#232323' }}>

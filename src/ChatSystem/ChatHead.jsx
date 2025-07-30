@@ -8,6 +8,7 @@ import { storage } from '../firebase';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
+import { toast } from 'sonner';
 
 const ChatHead = forwardRef(({
   user,
@@ -333,9 +334,7 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
   const [currentMatch, setCurrentMatch] = useState(0);
   const searchInputRef = useRef(null);
 
-  // Toast notification state
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+
 
   const currentUserId = auth.currentUser?.uid;
 
@@ -560,12 +559,10 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
     await deleteMessage(conversationId, msg.id);
     setDeletedMessageIds(ids => [...ids, msg.id]);
     setConfirmDeleteFor(null);
-    cancelEditing();
+          cancelEditing();
+      toast.success('Message deleted successfully');
     
-    // Add toast notification
-    setToastMessage('Message deleted successfully');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+
   };
   const cancelDelete = () => setConfirmDeleteFor(null);
 
@@ -807,6 +804,17 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
         />
         {user?.status === 'away' && (
           <span style={{ color: '#fbc02d', fontWeight: 600, fontSize: 14, marginLeft: 6 }}>Away</span>
+        )}
+        {(user?.status === 'offline' || !user?.status) && user?.lastOnlineText && (
+          <span style={{ 
+            color: '#999', 
+            fontWeight: 500, 
+            fontSize: 12, 
+            marginLeft: 6,
+            fontStyle: 'italic'
+          }}>
+            Last online {user.lastOnlineText}
+          </span>
         )}
       </div>
       {/* Messages Area */}
@@ -1344,12 +1352,7 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
       {sendError && (
         <div style={{ color: '#d32f2f', fontSize: 13, textAlign: 'center', marginBottom: 8 }}>{sendError}</div>
       )}
-      {/* Toast notification */}
-      {showToast && (
-        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
-          ✅ {toastMessage}
-        </div>
-      )}
+
     </div>
   );
 };

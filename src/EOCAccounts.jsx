@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getEOCAccounts, reactivateEOCAccount, updateEOCDate, saveHistoryLog, loadHistoryLog, clearHistoryLog } from './firestoreHelpers';
 import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 
 const PACKAGE_COLORS = {
   'SEO - BASIC': '#4E342E',
@@ -19,10 +20,10 @@ export default function EOCAccounts({ darkMode }) {
   const [packageFilter, setPackageFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [confirmModal, setConfirmModal] = useState(null); // For confirmation modal
-  const [showSuccessToast, setShowSuccessToast] = useState(false); // For success message
+
   const [editModal, setEditModal] = useState(null);
   const [editDate, setEditDate] = useState('');
-  const [toastMessage, setToastMessage] = useState('');
+
   const PAGE_SIZE = 10;
 
   // --- History Log State ---
@@ -138,8 +139,7 @@ export default function EOCAccounts({ darkMode }) {
       await reactivateEOCAccount(account.id, account.package);
       await loadEOCAccounts();
       setConfirmModal(null);
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 3000);
+      toast.success('Account reactivated successfully');
     } catch (error) {
       console.error('Error reactivating account:', error);
     }
@@ -162,9 +162,8 @@ export default function EOCAccounts({ darkMode }) {
       await updateEOCDate(editModal.id, editModal.package, editDate);
       await loadEOCAccounts();
       setEditModal(null);
-      setToastMessage('EOC date updated successfully');
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 3000);
+      toast.success('EOC date updated successfully');
+
       // Add to history
       addToHistory(createHistoryEntry(editModal.id, editModal.name, editModal.package, 'eocDate', oldValue, editDate));
     } catch (error) {
@@ -173,7 +172,7 @@ export default function EOCAccounts({ darkMode }) {
     }
   };
 
-  // Add styles for modal and toast
+  // Add styles for modal
   const styles = {
     modalOverlay: {
       position: 'fixed',
@@ -231,18 +230,7 @@ export default function EOCAccounts({ darkMode }) {
       fontSize: '0.95em',
       fontWeight: '500',
     },
-    successToast: {
-      position: 'fixed',
-      top: '24px',
-      right: '24px',
-      padding: '12px 24px',
-      background: '#4caf50',
-      color: '#fff',
-      borderRadius: '8px',
-      boxShadow: '0 2px 12px rgba(0, 0, 0, 0.1)',
-      zIndex: 1000,
-      animation: 'slideIn 0.3s ease-out',
-    },
+
   };
 
   // Export to Excel
@@ -938,12 +926,7 @@ export default function EOCAccounts({ darkMode }) {
         </div>
       )}
 
-      {/* Success Toast */}
-      {showSuccessToast && (
-        <div style={styles.successToast}>
-          ✅ {toastMessage || 'Operation completed successfully'}
-        </div>
-      )}
+
 
       {/* Add CSS for animation */}
       <style>

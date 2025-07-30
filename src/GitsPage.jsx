@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { getGits, saveGits } from './firestoreHelpers';
+import { toast } from 'sonner';
 
 export default function GitsPage({ darkMode }) {
   const [gitServers, setGitServers] = useState([]);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editData, setEditData] = useState({ name: '', ip: '' });
   const [loading, setLoading] = useState(true);
-  // Add toast state
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+
 
   useEffect(() => {
     getGits().then(gits => {
@@ -41,10 +40,7 @@ export default function GitsPage({ darkMode }) {
       await saveGits(updatedServers);
       setEditingIndex(null);
       setEditData({ name: '', ip: '' });
-      // Add toast for save
-      setToastMessage('Git server updated successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Git server updated successfully');
     } catch (error) {
       console.error('Error updating git server:', error);
       alert('Error updating git server');
@@ -137,12 +133,7 @@ export default function GitsPage({ darkMode }) {
           ))}
         </div>
       </div>
-      {/* Add toast notification */}
-      {showToast && (
-        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
-          ✅ {toastMessage}
-        </div>
-      )}
+
     </section>
   );
 }

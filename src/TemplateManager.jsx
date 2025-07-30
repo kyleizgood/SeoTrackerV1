@@ -3,6 +3,7 @@ import { getTemplates, saveTemplate, deleteTemplate, getTrash, saveTrash, getCat
 // Add paginated fetcher for templates
 import { getDocs, collection, query, orderBy, limit as fsLimit, startAfter as fsStartAfter } from 'firebase/firestore';
 import { db, auth } from './firebase';
+import { toast } from 'sonner';
 
 async function getTemplatesPaginated(limitCount = 20, startAfterDoc = null) {
   const user = auth.currentUser;
@@ -51,14 +52,12 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [newTemplate, setNewTemplate] = useState({ title: '', content: '', category: DEFAULT_CATEGORIES[0], customCategory: '' });
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
-  const [showCopyDialog, setShowCopyDialog] = useState(false);
+
   const [openCategory, setOpenCategory] = useState(DEFAULT_CATEGORIES[0]);
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(null); // category name or null
-  // Add toast state
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+
 
   // LocalStorage cache key
   const TEMPLATES_CACHE_KEY = 'templates_cache_v1';
@@ -136,10 +135,8 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       await saveTemplate(template);
       setTemplates(prev => [template, ...prev]);
       setNewTemplate({ title: '', content: '', category: DEFAULT_CATEGORIES[0], customCategory: '' });
-      // Add toast for add
-      setToastMessage('Template added successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Template added successfully');
+
     } catch (error) {
       console.error('Error adding template:', error);
       alert('Error adding template');
@@ -173,10 +170,8 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       setNewTemplate({ title: '', content: '', category: DEFAULT_CATEGORIES[0], customCategory: '' });
       setIsEditing(false);
       setSelectedTemplate(null);
-      // Add toast for update
-      setToastMessage('Template updated successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Template updated successfully');
+
     } catch (error) {
       console.error('Error updating template:', error);
       alert('Error updating template');
@@ -187,10 +182,8 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
     try {
       await deleteTemplate(id);
       setTemplates(prev => prev.filter(t => t.id !== id));
-      // Add toast for delete
-      setToastMessage('Template deleted successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Template deleted successfully');
+
     } catch (error) {
       console.error('Error deleting template:', error);
       alert('Error deleting template');
@@ -199,8 +192,7 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
 
   const handleCopy = (content) => {
     navigator.clipboard.writeText(content);
-    setShowCopyDialog(true);
-    setTimeout(() => setShowCopyDialog(false), 1500);
+    toast.success('Template copied to clipboard!');
   };
 
   // Remove logic with confirmation
@@ -217,10 +209,8 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       await deleteTemplate(confirmRemoveId);
       setTemplates(prev => prev.filter(t => t.id !== confirmRemoveId));
       setConfirmRemoveId(null);
-      // Add toast for remove
-      setToastMessage('Template moved to trash successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Template moved to trash successfully');
+
     } catch (error) {
       console.error('Error removing template:', error);
       alert('Error removing template');
@@ -245,10 +235,8 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       setCategories(updatedCategories);
       setNewCategoryName('');
       setShowCategoryInput(false);
-      // Add toast for category add
-      setToastMessage('Category added successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Category added successfully');
+
     } catch (error) {
       console.error('Error adding category:', error);
       alert('Error adding category');
@@ -267,10 +255,8 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       await saveCategories(updatedCategories);
       setCategories(updatedCategories);
       setConfirmDeleteCategory(null);
-      // Add toast for category delete
-      setToastMessage('Category deleted successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Category deleted successfully');
+
     } catch (error) {
       console.error('Error deleting category:', error);
       alert('Error deleting category');
@@ -468,9 +454,7 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
           </div>
         ))}
       </div>
-      {showCopyDialog && (
-        <div className="copy-toast-dialog">Template copied to clipboard!</div>
-      )}
+
       {confirmRemoveId && (
         <div className="confirm-modal-overlay">
           <div className="confirm-modal-box">
@@ -495,12 +479,7 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
           </div>
         </div>
       )}
-      {/* Add toast notification */}
-      {showToast && (
-        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
-          ✅ {toastMessage}
-        </div>
-      )}
+
     </div>
   );
 };

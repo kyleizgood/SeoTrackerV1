@@ -5,6 +5,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import { getTicketsPaginated, saveTicket, deleteTicket, getTrash, saveTrash, saveHistoryLog, loadHistoryLog, clearHistoryLog } from './firestoreHelpers';
 import { auth, db } from './firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
+import { toast } from 'sonner';
 
 function formatDate(dateStr) {
   if (!dateStr) return '';
@@ -26,8 +27,7 @@ function Tickets({ darkMode, setDarkMode }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showAlert, setShowAlert] = useState(true);
   const [activeTab, setActiveTab] = useState('open'); // 'open' or 'closed'
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+
 
   // LocalStorage cache key
   const TICKETS_CACHE_KEY = 'tickets_cache_v1';
@@ -295,9 +295,7 @@ function Tickets({ darkMode, setDarkMode }) {
             
             if (updated) {
               await savePackages(packages);
-              setToastMessage(`Package task updated for ${ticketWithDefaults.company}`);
-              setShowToast(true);
-              setTimeout(() => setShowToast(false), 3000);
+              toast.success(`Package task updated for ${ticketWithDefaults.company}`);
             }
           } catch (error) {
             console.error('Error syncing with packages:', error);
@@ -319,9 +317,7 @@ function Tickets({ darkMode, setDarkMode }) {
     setShowModal(false);
     try {
       await saveTicket(newTicket);
-      setToastMessage('Ticket saved successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Ticket saved successfully');
     } catch (err) {
       alert('Failed to save ticket. Please try again.');
       setTickets(tickets => tickets.filter(t => t.id !== newTicket.id));
@@ -348,9 +344,7 @@ function Tickets({ darkMode, setDarkMode }) {
       await saveTrash([trashedTicket, ...trash]);
       // Remove from tickets collection
       await deleteTicket(ticket.id);
-      setToastMessage('Ticket deleted successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Ticket deleted successfully');
     } catch (err) {
       // Optionally show an error, but do not delay UI
       setAlertMessage('Error deleting ticket');
@@ -839,9 +833,44 @@ function Tickets({ darkMode, setDarkMode }) {
                   value={selectedTicket.status || 'open'}
                   onChange={async (e) => {
                     const newStatus = e.target.value;
+                    const oldStatus = selectedTicket.status || 'open';
                     setTickets(tickets => tickets.map(t => t.id === selectedTicket.id ? { ...t, status: newStatus, updatedAt: new Date().toISOString() } : t));
                     try {
                       await saveTicket({ ...selectedTicket, status: newStatus, updatedAt: new Date().toISOString() });
+                      
+                      // Sync with packages if this is a Business Profile Claiming ticket
+                      if (selectedTicket.taskType === 'businessProfileClaiming' && oldStatus !== newStatus) {
+                        try {
+                          const { getPackages, savePackages } = await import('./firestoreHelpers');
+                          const packages = await getPackages();
+                          let updated = false;
+                          
+                          // Find and update the company in the correct package
+                          for (const [pkgName, pkgCompanies] of Object.entries(packages)) {
+                            const companyIndex = pkgCompanies.findIndex(c => c.ticketId === selectedTicket.id);
+                            if (companyIndex !== -1) {
+                              if (newStatus === 'closed') {
+                                // Mark Business Profile Claiming as Completed
+                                packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Completed';
+                                updated = true;
+                              } else if (newStatus === 'open' && oldStatus === 'closed') {
+                                // Mark Business Profile Claiming as Ticket if reopened
+                                packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Ticket';
+                                updated = true;
+                              }
+                              break;
+                            }
+                          }
+                          
+                          if (updated) {
+                            await savePackages(packages);
+                            toast.success(`✅ Package task updated for ${selectedTicket.company}`);
+                          }
+                        } catch (error) {
+                          console.error('Error syncing with packages:', error);
+                        }
+                      }
+                      
                       // If ticket moved out of current tab, clear selection
                       const isNowClosed = newStatus === 'closed';
                       const isNowOpen = newStatus !== 'closed';
@@ -877,12 +906,10 @@ function Tickets({ darkMode, setDarkMode }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                     <b>Ticket ID:</b> {selectedTicket.ticketId}
                     <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(selectedTicket.ticketId);
-                        if (window.showToast) {
-                          window.showToast('Ticket ID copied to clipboard!');
-                        }
-                      }}
+                                              onClick={() => {
+                          navigator.clipboard.writeText(selectedTicket.ticketId);
+                          toast.success('Ticket ID copied to clipboard!');
+                        }}
                       title="Copy Ticket ID"
                       style={{
                         padding: '4px 6px',
@@ -982,12 +1009,10 @@ function Tickets({ darkMode, setDarkMode }) {
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(modalData?.ticketId || '');
-                      if (window.showToast) {
-                        window.showToast('Ticket ID copied to clipboard!');
-                      }
-                    }}
+                                          onClick={() => {
+                        navigator.clipboard.writeText(modalData?.ticketId || '');
+                        toast.success('Ticket ID copied to clipboard!');
+                      }}
                     title="Copy Ticket ID"
                     style={{
                       padding: '8px',
@@ -1119,6 +1144,26 @@ function Tickets({ darkMode, setDarkMode }) {
                       </div>
                       <div style={{
                         display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        background: '#fff3cd',
+                        border: '2px solid #ffc107',
+                        borderRadius: '6px',
+                        fontSize: '1rem',
+                        color: '#856404',
+                        fontWeight: '700',
+                        margin: '8px 0',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                      }}>
+                        📅 {date.toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          year: 'numeric' 
+                        })}
+                      </div>
+                      <div style={{
+                        display: 'flex',
                         flexDirection: 'column',
                         gap: '4px',
                         marginTop: '8px',
@@ -1140,30 +1185,58 @@ function Tickets({ darkMode, setDarkMode }) {
                             { label: 'Oct', month: 9 },
                             { label: 'Nov', month: 10 },
                             { label: 'Dec', month: 11 }
-                          ].map(({ label, month }) => (
-                            <button
-                              key={label}
-                              type="button"
-                              onClick={e => { e.preventDefault(); e.stopPropagation(); changeMonth(month); }}
-                              style={{
-                                padding: '3px 6px',
-                                fontSize: '0.75rem',
-                                background: '#f8f9fa',
-                                border: '1px solid #dee2e6',
-                                borderRadius: '3px',
-                                cursor: 'pointer',
-                                color: '#6c757d',
-                                fontWeight: '500',
-                                transition: 'all 0.2s',
-                                minWidth: '28px',
-                                textAlign: 'center'
-                              }}
-                              onMouseOver={e => { e.target.style.background = '#28a745'; e.target.style.color = '#fff'; e.target.style.borderColor = '#28a745'; }}
-                              onMouseOut={e => { e.target.style.background = '#f8f9fa'; e.target.style.color = '#6c757d'; e.target.style.borderColor = '#dee2e6'; }}
-                            >
-                              {label}
-                            </button>
-                          ))}
+                          ].map(({ label, month }) => {
+                            const isCurrentMonth = date.getMonth() === month;
+                            return (
+                              <button
+                                key={label}
+                                type="button"
+                                onClick={e => { e.preventDefault(); e.stopPropagation(); changeMonth(month); }}
+                                style={{
+                                  padding: '3px 6px',
+                                  fontSize: '0.75rem',
+                                  background: isCurrentMonth ? '#007bff' : '#f8f9fa',
+                                  border: `1px solid ${isCurrentMonth ? '#007bff' : '#dee2e6'}`,
+                                  borderRadius: '3px',
+                                  cursor: 'pointer',
+                                  color: isCurrentMonth ? '#fff' : '#6c757d',
+                                  fontWeight: isCurrentMonth ? '600' : '500',
+                                  transition: 'all 0.2s',
+                                  minWidth: '28px',
+                                  textAlign: 'center',
+                                  position: 'relative'
+                                }}
+                                onMouseOver={e => {
+                                  if (!isCurrentMonth) {
+                                    e.target.style.background = '#28a745';
+                                    e.target.style.color = '#fff';
+                                    e.target.style.borderColor = '#28a745';
+                                  }
+                                }}
+                                onMouseOut={e => {
+                                  if (!isCurrentMonth) {
+                                    e.target.style.background = '#f8f9fa';
+                                    e.target.style.color = '#6c757d';
+                                    e.target.style.borderColor = '#dee2e6';
+                                  }
+                                }}
+                              >
+                                {label}
+                                {isCurrentMonth && (
+                                  <span style={{
+                                    position: 'absolute',
+                                    top: '-2px',
+                                    right: '-2px',
+                                    width: '6px',
+                                    height: '6px',
+                                    background: '#fff',
+                                    borderRadius: '50%',
+                                    border: '1px solid #007bff'
+                                  }} />
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
@@ -1218,12 +1291,7 @@ function Tickets({ darkMode, setDarkMode }) {
           </div>
         </div>
       )}
-      {/* Add toast notification */}
-      {showToast && (
-        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
-          ✅ {toastMessage}
-        </div>
-      )}
+
       {/* Clear History Confirmation Modal */}
       {clearHistoryModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: darkMode ? 'rgba(24,26,27,0.88)' : 'rgba(44,62,80,0.18)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

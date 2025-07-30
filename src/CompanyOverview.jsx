@@ -12,6 +12,7 @@ import {
 } from './firestoreHelpers';
 import * as XLSX from 'xlsx';
 import { getEOC } from './App.jsx';
+import { toast } from 'sonner';
 
 const PACKAGE_COLORS = {
   'SEO - BASIC': '#4E342E',
@@ -191,18 +192,7 @@ const styles = {
     fontSize: '0.95em',
     fontWeight: '500',
   },
-  successToast: {
-    position: 'fixed',
-    top: '80px', // Changed from '24px' to '80px' to appear below the navbar
-    right: '24px',
-    padding: '12px 24px',
-    background: '#ef5350',
-    color: '#fff',
-    borderRadius: '8px',
-    boxShadow: '0 2px 12px rgba(0, 0, 0, 0.1)',
-    zIndex: 1000,
-    animation: 'slideIn 0.3s ease-out'
-  },
+
   statusSelect: {
     padding: '8px 12px',
     borderRadius: '8px',
@@ -287,13 +277,13 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
   const PAGE_SIZE = 10;
   const GRID_COLUMNS = 2;
   const [confirmEOCModal, setConfirmEOCModal] = useState(null);
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
+
   // Add new state variables at the top of the component
   const [editingEOCDate, setEditingEOCDate] = useState(false);
   const [newEOCDate, setNewEOCDate] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
-  // 1. Add a new state for the toast message
-  const [toastMessage, setToastMessage] = useState('');
+
+
 
   // --- History Log State ---
   const [history, setHistory] = useState([]);
@@ -509,7 +499,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
     }
   };
 
-  // 2. Update handleEOCDateUpdate to set the correct toast message and update the local state only for the edited row
+  // Update handleEOCDateUpdate to update the local state only for the edited row
   const handleEOCDateUpdate = async (row) => {
     try {
       if (!selectedDate) {
@@ -545,9 +535,8 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
       
       setEditingEOCDate(false);
       setSelectedDate(null);
-      setToastMessage('EOC date updated successfully');
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 3000);
+      toast.success('EOC date updated successfully');
+
     } catch (error) {
       console.error('Error updating EOC date:', error);
       alert('Error updating EOC date');
@@ -560,7 +549,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
     return row.status !== 'OnHold' && (!row.extension || row.extension === 0);
   };
 
-  // 3. Update updateStatus to set the correct toast message for EOC status change
+  // Update updateStatus for EOC status change
   const updateStatus = async (row, fieldKey, value) => {
     try {
       const oldValue = row[fieldKey] || 'N/A';
@@ -604,13 +593,12 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
         );
         addToHistory(historyEntry);
         
-        setToastMessage('Company moved to EOC accounts');
+  
         await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
 
         if (value === 'EOC') {
           setSelectedRow(null);
-          setShowSuccessToast(true);
-          setTimeout(() => setShowSuccessToast(false), 3000);
+          toast.success('Company moved to EOC accounts');
         }
       } else {
         // For non-EOC status changes, update only the specific row
@@ -1472,7 +1460,26 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                                 </button>
                               </div>
                             </div>
-
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              padding: '8px 12px',
+                              background: '#fff3cd',
+                              border: '2px solid #ffc107',
+                              borderRadius: '6px',
+                              fontSize: '1rem',
+                              color: '#856404',
+                              fontWeight: '700',
+                              margin: '8px 0',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            }}>
+                              📅 {date.toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                              })}
+                            </div>
                             <div style={{
                               display: 'flex',
                               flexDirection: 'column',
@@ -1508,37 +1515,57 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                                   { label: 'Oct', month: 9 },
                                   { label: 'Nov', month: 10 },
                                   { label: 'Dec', month: 11 }
-                                ].map(({ label, month }) => (
-                                  <button
-                                    key={label}
-                                    onClick={() => changeMonth(month)}
-                                    style={{
-                                      padding: '3px 6px',
-                                      fontSize: '0.75rem',
-                                      background: '#f8f9fa',
-                                      border: '1px solid #dee2e6',
-                                      borderRadius: '3px',
-                                      cursor: 'pointer',
-                                      color: '#6c757d',
-                                      fontWeight: '500',
-                                      transition: 'all 0.2s',
-                                      minWidth: '28px',
-                                      textAlign: 'center'
-                                    }}
-                                    onMouseOver={e => {
-                                      e.target.style.background = '#28a745';
-                                      e.target.style.color = '#fff';
-                                      e.target.style.borderColor = '#28a745';
-                                    }}
-                                    onMouseOut={e => {
-                                      e.target.style.background = '#f8f9fa';
-                                      e.target.style.color = '#6c757d';
-                                      e.target.style.borderColor = '#dee2e6';
-                                    }}
-                                  >
-                                    {label}
-                                  </button>
-                                ))}
+                                ].map(({ label, month }) => {
+                                  const isCurrentMonth = date.getMonth() === month;
+                                  return (
+                                    <button
+                                      key={label}
+                                      onClick={() => changeMonth(month)}
+                                      style={{
+                                        padding: '3px 6px',
+                                        fontSize: '0.75rem',
+                                        background: isCurrentMonth ? '#007bff' : '#f8f9fa',
+                                        border: `1px solid ${isCurrentMonth ? '#007bff' : '#dee2e6'}`,
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                        color: isCurrentMonth ? '#fff' : '#6c757d',
+                                        fontWeight: isCurrentMonth ? '600' : '500',
+                                        transition: 'all 0.2s',
+                                        minWidth: '28px',
+                                        textAlign: 'center',
+                                        position: 'relative'
+                                      }}
+                                      onMouseOver={e => {
+                                        if (!isCurrentMonth) {
+                                          e.target.style.background = '#28a745';
+                                          e.target.style.color = '#fff';
+                                          e.target.style.borderColor = '#28a745';
+                                        }
+                                      }}
+                                      onMouseOut={e => {
+                                        if (!isCurrentMonth) {
+                                          e.target.style.background = '#f8f9fa';
+                                          e.target.style.color = '#6c757d';
+                                          e.target.style.borderColor = '#dee2e6';
+                                        }
+                                      }}
+                                    >
+                                      {label}
+                                      {isCurrentMonth && (
+                                        <span style={{
+                                          position: 'absolute',
+                                          top: '-2px',
+                                          right: '-2px',
+                                          width: '6px',
+                                          height: '6px',
+                                          background: '#fff',
+                                          borderRadius: '50%',
+                                          border: '1px solid #007bff'
+                                        }} />
+                                      )}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             </div>
                           </div>
@@ -1909,12 +1936,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
         </div>
       )}
 
-      {/* Success Toast */}
-      {showSuccessToast && (
-        <div style={styles.successToast}>
-          ✅ {toastMessage || 'Operation completed successfully'}
-        </div>
-      )}
+
 
       {/* Add CSS for animation */}
       <style>

@@ -1413,29 +1413,7 @@ html, body, #root {
   color: #6a1b9a;
 }
 
-.copy-toast-dialog {
-  position: fixed;
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #232323ee;
-  color: #fff;
-  padding: 0.85em 2.2em;
-  border-radius: 12px;
-  font-size: 1.08rem;
-  font-weight: 500;
-  z-index: 2001;
-  box-shadow: 0 2px 16px #23232322;
-  opacity: 1;
-  animation: fadeInOut 1.5s;
-  pointer-events: none;
-}
-@keyframes fadeInOut {
-  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-  10% { opacity: 1; transform: translateX(-50%) translateY(0); }
-  90% { opacity: 1; transform: translateX(-50%) translateY(0); }
-  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-}
+
 
 .templates-list {
   display: flex;

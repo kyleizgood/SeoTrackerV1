@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css'
+import { Toaster, toast } from 'sonner';
 import Sidebar from './Sidebar';
 import TemplateManager from './TemplateManager';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
@@ -351,20 +352,16 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
     if (editId) {
       const updated = { ...form, start, id: editId };
       await saveCompany(updated);
-      setCompanies(await getCompanies());
-      setEditId(null);
-      // Add toast for edit
-      if (window.showToast) {
-        window.showToast('Company updated successfully');
-      }
+              setCompanies(await getCompanies());
+        setEditId(null);
+        toast.success('Company updated successfully');
+
     } else {
       const newCompany = { ...form, start, id: Date.now(), siteAuditBStatus: 'Pending', siteAuditCStatus: 'Pending' };
-      await saveCompany(newCompany);
-      setCompanies(await getCompanies());
-      // Add toast for add
-      if (window.showToast) {
-        window.showToast('Company added successfully');
-      }
+              await saveCompany(newCompany);
+        setCompanies(await getCompanies());
+        toast.success('Company added successfully');
+
     }
     setForm({ name: '', startDate: null, status: 'Active' });
   };
@@ -441,10 +438,7 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
       });
       setPackages(updatedPackages);
       await savePackages(updatedPackages);
-      // Add toast for add to package
-      if (window.showToast) {
-        window.showToast(`Company added to ${pkg} successfully`);
-      }
+      toast.success(`Company added to ${pkg} successfully`);
     }
     setShowAddToPackage(null);
   };
@@ -606,6 +600,26 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
                   </button>
                 </div>
               </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: '8px 12px',
+                background: '#fff3cd',
+                border: '2px solid #ffc107',
+                borderRadius: '6px',
+                fontSize: '1rem',
+                color: '#856404',
+                fontWeight: '700',
+                margin: '8px 0',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}>
+                📅 {date.toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                })}
+              </div>
 
               <div style={{
                 display: 'flex',
@@ -642,42 +656,62 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
                     { label: 'Oct', month: 9 },
                     { label: 'Nov', month: 10 },
                     { label: 'Dec', month: 11 }
-                  ].map(({ label, month }) => (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        changeMonth(month);
-                      }}
-                      style={{
-                        padding: '3px 6px',
-                        fontSize: '0.75rem',
-                        background: '#f8f9fa',
-                        border: '1px solid #dee2e6',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        color: '#6c757d',
-                        fontWeight: '500',
-                        transition: 'all 0.2s',
-                        minWidth: '28px',
-                        textAlign: 'center'
-                      }}
-                      onMouseOver={e => {
-                        e.target.style.background = '#28a745';
-                        e.target.style.color = '#fff';
-                        e.target.style.borderColor = '#28a745';
-                      }}
-                      onMouseOut={e => {
-                        e.target.style.background = '#f8f9fa';
-                        e.target.style.color = '#6c757d';
-                        e.target.style.borderColor = '#dee2e6';
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  ].map(({ label, month }) => {
+                    const isCurrentMonth = date.getMonth() === month;
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          changeMonth(month);
+                        }}
+                        style={{
+                          padding: '3px 6px',
+                          fontSize: '0.75rem',
+                          background: isCurrentMonth ? '#007bff' : '#f8f9fa',
+                          border: `1px solid ${isCurrentMonth ? '#007bff' : '#dee2e6'}`,
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                          color: isCurrentMonth ? '#fff' : '#6c757d',
+                          fontWeight: isCurrentMonth ? '600' : '500',
+                          transition: 'all 0.2s',
+                          minWidth: '28px',
+                          textAlign: 'center',
+                          position: 'relative'
+                        }}
+                        onMouseOver={e => {
+                          if (!isCurrentMonth) {
+                            e.target.style.background = '#28a745';
+                            e.target.style.color = '#fff';
+                            e.target.style.borderColor = '#28a745';
+                          }
+                        }}
+                        onMouseOut={e => {
+                          if (!isCurrentMonth) {
+                            e.target.style.background = '#f8f9fa';
+                            e.target.style.color = '#6c757d';
+                            e.target.style.borderColor = '#dee2e6';
+                          }
+                        }}
+                      >
+                        {label}
+                        {isCurrentMonth && (
+                          <span style={{
+                            position: 'absolute',
+                            top: '-2px',
+                            right: '-2px',
+                            width: '6px',
+                            height: '6px',
+                            background: '#fff',
+                            borderRadius: '50%',
+                            border: '1px solid #007bff'
+                          }} />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -930,12 +964,10 @@ function TicketModalForm({ ticket, onSave, onCancel }) {
           />
           <button
             type="button"
-            onClick={() => {
-              navigator.clipboard.writeText(formData.ticketId);
-              if (window.showToast) {
-                window.showToast('Ticket ID copied to clipboard!');
-              }
-            }}
+                          onClick={() => {
+                navigator.clipboard.writeText(formData.ticketId);
+                toast.success('Ticket ID copied to clipboard!');
+              }}
             title="Copy Ticket ID"
             style={{
               padding: '8px',
@@ -1198,17 +1230,69 @@ function PackagePage({ pkg, packages, setPackages }) {
       };
       console.log('Final ticket to save:', ticketToSave);
       await saveTicket(ticketToSave);
-      console.log('Ticket saved successfully to Firestore');
-      setTicketModal(null);
-      if (window.showToast) {
-        window.showToast(`Ticket created successfully for ${updatedTicket.company}`);
-      }
-    } catch (error) {
-      console.error('Error creating ticket:', error);
-      if (window.showToast) {
-        window.showToast('Error creating ticket. Please try again.');
+              console.log('Ticket saved successfully to Firestore');
+        setTicketModal(null);
+        toast.success(`✅ Ticket created successfully for ${updatedTicket.company}`);
+
+          } catch (error) {
+        console.error('Error creating ticket:', error);
+        toast.error('Error creating ticket. Please try again.');
+
+    }
+  };
+
+  const handleTicketModalCancel = async () => {
+    // Rollback the Business Profile Claiming status to its previous value
+    if (ticketModal && ticketModal.company && ticketModal.package) {
+      const companyId = ticketModal.company.id;
+      const oldValue = ticketModal.oldValue || 'Pending';
+      
+      try {
+        // Update packages to rollback the status
+        const updatedPackages = { ...packages };
+        let pkgCompanies = (updatedPackages[ticketModal.package] || []).map(c => {
+          if (c.id === companyId) {
+            const updatedCompany = {
+              ...c,
+              tasks: { ...c.tasks, businessProfileClaiming: oldValue }
+            };
+            
+            // Remove the temporary ticketId if it was set, but don't set it to undefined
+            if (c.ticketId === ticketModal.ticket.id) {
+              // Use delete operator to remove the property entirely
+              delete updatedCompany.ticketId;
+            }
+            
+            return updatedCompany;
+          }
+          return c;
+        });
+        updatedPackages[ticketModal.package] = pkgCompanies;
+        setPackages(updatedPackages);
+        await savePackages(updatedPackages);
+        setCompanies(pkgCompanies);
+        
+        // Add to history for the rollback
+        const historyEntry = createHistoryEntry(
+          companyId,
+          ticketModal.company.name,
+          ticketModal.package,
+          'Business Profile Claiming',
+          'Ticket',
+          oldValue,
+          'cancelled'
+        );
+        addToHistory(historyEntry);
+        
+        
+              } catch (error) {
+          console.error('Error rolling back ticket creation:', error);
+          toast.error('Error cancelling ticket creation. Please try again.');
+        
       }
     }
+    
+    setTicketModal(null);
   };
 
   // Task columns
@@ -1278,7 +1362,19 @@ function PackagePage({ pkg, packages, setPackages }) {
     // Special handling for Business Profile Claiming
     if (taskKey === 'businessProfileClaiming' && value === 'Ticket') {
       // Check if a ticket already exists for this company
+      let existingTicket = null;
       if (company.ticketId) {
+        try {
+          // Verify the ticket actually exists in the database
+          const { getTickets } = await import('./firestoreHelpers');
+          const tickets = await getTickets();
+          existingTicket = tickets.find(t => t.id === company.ticketId);
+        } catch (error) {
+          console.error('Error checking existing ticket:', error);
+        }
+      }
+      
+      if (existingTicket) {
         // Ticket already exists, just update the status and show existing ticket
         const updatedPackages = { ...packages };
         let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
@@ -1307,12 +1403,27 @@ function PackagePage({ pkg, packages, setPackages }) {
         );
         addToHistory(historyEntry);
         
-        // Show success message for reactivating existing ticket
-        if (window.showToast) {
-          window.showToast(`Existing ticket reactivated for ${company.name}`);
-        }
+                  // Show success message for reactivating existing ticket
+          toast.success(`✅ Existing ticket reactivated for ${company.name}`);
+
         
         return;
+      } else if (company.ticketId) {
+        // Clean up orphaned ticketId reference
+        const updatedPackages = { ...packages };
+        let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
+          if (c.id === companyId) {
+            const updatedCompany = { ...c };
+            // Use delete operator to remove the property entirely
+            delete updatedCompany.ticketId;
+            return updatedCompany;
+          }
+          return c;
+        });
+        updatedPackages[pkg] = pkgCompanies;
+        setPackages(updatedPackages);
+        await savePackages(updatedPackages);
+        setCompanies(pkgCompanies);
       }
       
       // No existing ticket, create a new one
@@ -1365,7 +1476,8 @@ function PackagePage({ pkg, packages, setPackages }) {
       setTicketModal({
         ticket: ticketData,
         company: company,
-        package: pkg
+        package: pkg,
+        oldValue: oldValue // Store the old value for rollback
       });
       
       return;
@@ -1381,9 +1493,7 @@ function PackagePage({ pkg, packages, setPackages }) {
           const relatedTicket = tickets.find(t => t.id === companyWithTicket.ticketId);
           if (relatedTicket) {
             await saveTicket({ ...relatedTicket, status: 'closed' });
-            if (window.showToast) {
-              window.showToast(`Ticket for ${company.name} marked as closed`);
-            }
+            toast.success(`✅ Ticket for ${company.name} marked as closed`);
           }
         } catch (error) {
           console.error('Error updating ticket status:', error);
@@ -1393,11 +1503,10 @@ function PackagePage({ pkg, packages, setPackages }) {
     
     // Handle Pending status - keep existing ticket but hide the button
     if (taskKey === 'businessProfileClaiming' && value === 'Pending') {
-      // The ticket remains in the database but the button won't show
-      // This allows for easy reactivation later
-      if (window.showToast) {
-        window.showToast(`Ticket for ${company.name} is now pending`);
-      }
+          // The ticket remains in the database but the button won't show
+    // This allows for easy reactivation later
+    toast.success(`Ticket for ${company.name} is now pending`);
+      
     }
     
     // Regular task update
@@ -1492,10 +1601,7 @@ function PackagePage({ pkg, packages, setPackages }) {
     setEditName('');
     setEditStart(null);
     setEditEOC(null);
-    // Add toast for edit save
-    if (window.showToast) {
-      window.showToast('Company updated successfully');
-    }
+    toast.success('Company updated successfully');
   };
 
   const handleEditCancel = () => {
@@ -1537,10 +1643,7 @@ function PackagePage({ pkg, packages, setPackages }) {
       await saveTrash(trash);
     }
     setConfirmRemoveId(null);
-    // Add toast for remove
-    if (window.showToast) {
-      window.showToast('Company removed successfully');
-    }
+    toast.success('Company removed successfully');
   };
   const handleRemoveCancel = () => {
     setConfirmRemoveId(null);
@@ -1974,9 +2077,91 @@ function PackagePage({ pkg, packages, setPackages }) {
                             color: '#495057'
                           }}>
                             <span>Quick Navigation:</span>
-                            <span style={{ fontSize: '0.8rem', color: '#6c757d' }}>
-                              {date.getFullYear()}
-                            </span>
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px'
+                            }}>
+                              <button
+                                onClick={() => changeYear(date.getFullYear() - 1)}
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '0.8rem',
+                                  background: '#e9ecef',
+                                  border: '1px solid #dee2e6',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  color: '#495057',
+                                  fontWeight: '500',
+                                  transition: 'all 0.2s',
+                                  minWidth: '32px'
+                                }}
+                                onMouseOver={e => {
+                                  e.target.style.background = '#007bff';
+                                  e.target.style.color = '#fff';
+                                }}
+                                onMouseOut={e => {
+                                  e.target.style.background = '#e9ecef';
+                                  e.target.style.color = '#495057';
+                                }}
+                              >
+                                ←
+                              </button>
+                              <span style={{ 
+                                fontSize: '1rem', 
+                                fontWeight: '600', 
+                                color: '#495057',
+                                minWidth: '60px',
+                                textAlign: 'center'
+                              }}>
+                                {date.getFullYear()}
+                              </span>
+                              <button
+                                onClick={() => changeYear(date.getFullYear() + 1)}
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '0.8rem',
+                                  background: '#e9ecef',
+                                  border: '1px solid #dee2e6',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  color: '#495057',
+                                  fontWeight: '500',
+                                  transition: 'all 0.2s',
+                                  minWidth: '32px'
+                                }}
+                                onMouseOver={e => {
+                                  e.target.style.background = '#007bff';
+                                  e.target.style.color = '#fff';
+                                }}
+                                onMouseOut={e => {
+                                  e.target.style.background = '#e9ecef';
+                                  e.target.style.color = '#495057';
+                                }}
+                              >
+                                →
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            padding: '8px 12px',
+                            background: '#fff3cd',
+                            border: '2px solid #ffc107',
+                            borderRadius: '6px',
+                            fontSize: '1rem',
+                            color: '#856404',
+                            fontWeight: '700',
+                            margin: '8px 0',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                          }}>
+                            📅 {date.toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric', 
+                              year: 'numeric' 
+                            })}
                           </div>
                           <div style={{
                             display: 'flex',
@@ -2057,37 +2242,57 @@ function PackagePage({ pkg, packages, setPackages }) {
                                 { label: 'Oct', month: 9 },
                                 { label: 'Nov', month: 10 },
                                 { label: 'Dec', month: 11 }
-                              ].map(({ label, month }) => (
-                                <button
-                                  key={label}
-                                  onClick={() => changeMonth(month)}
-                                  style={{
-                                    padding: '3px 6px',
-                                    fontSize: '0.75rem',
-                                    background: '#f8f9fa',
-                                    border: '1px solid #dee2e6',
-                                    borderRadius: '3px',
-                                    cursor: 'pointer',
-                                    color: '#6c757d',
-                                    fontWeight: '500',
-                                    transition: 'all 0.2s',
-                                    minWidth: '28px',
-                                    textAlign: 'center'
-                                  }}
-                                  onMouseOver={e => {
-                                    e.target.style.background = '#28a745';
-                                    e.target.style.color = '#fff';
-                                    e.target.style.borderColor = '#28a745';
-                                  }}
-                                  onMouseOut={e => {
-                                    e.target.style.background = '#f8f9fa';
-                                    e.target.style.color = '#6c757d';
-                                    e.target.style.borderColor = '#dee2e6';
-                                  }}
-                                >
-                                  {label}
-                                </button>
-                              ))}
+                              ].map(({ label, month }) => {
+                                const isCurrentMonth = date.getMonth() === month;
+                                return (
+                                  <button
+                                    key={label}
+                                    onClick={() => changeMonth(month)}
+                                    style={{
+                                      padding: '3px 6px',
+                                      fontSize: '0.75rem',
+                                      background: isCurrentMonth ? '#007bff' : '#f8f9fa',
+                                      border: `1px solid ${isCurrentMonth ? '#007bff' : '#dee2e6'}`,
+                                      borderRadius: '3px',
+                                      cursor: 'pointer',
+                                      color: isCurrentMonth ? '#fff' : '#6c757d',
+                                      fontWeight: isCurrentMonth ? '600' : '500',
+                                      transition: 'all 0.2s',
+                                      minWidth: '28px',
+                                      textAlign: 'center',
+                                      position: 'relative'
+                                    }}
+                                    onMouseOver={e => {
+                                      if (!isCurrentMonth) {
+                                        e.target.style.background = '#28a745';
+                                        e.target.style.color = '#fff';
+                                        e.target.style.borderColor = '#28a745';
+                                      }
+                                    }}
+                                    onMouseOut={e => {
+                                      if (!isCurrentMonth) {
+                                        e.target.style.background = '#f8f9fa';
+                                        e.target.style.color = '#6c757d';
+                                        e.target.style.borderColor = '#dee2e6';
+                                      }
+                                    }}
+                                  >
+                                    {label}
+                                    {isCurrentMonth && (
+                                      <span style={{
+                                        position: 'absolute',
+                                        top: '-2px',
+                                        right: '-2px',
+                                        width: '6px',
+                                        height: '6px',
+                                        background: '#fff',
+                                        borderRadius: '50%',
+                                        border: '1px solid #007bff'
+                                      }} />
+                                    )}
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
@@ -2211,6 +2416,26 @@ function PackagePage({ pkg, packages, setPackages }) {
                           </div>
                           <div style={{
                             display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            padding: '8px 12px',
+                            background: '#fff3cd',
+                            border: '2px solid #ffc107',
+                            borderRadius: '6px',
+                            fontSize: '1rem',
+                            color: '#856404',
+                            fontWeight: '700',
+                            margin: '8px 0',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                          }}>
+                            📅 {date.toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric', 
+                              year: 'numeric' 
+                            })}
+                          </div>
+                          <div style={{
+                            display: 'flex',
                             flexDirection: 'column',
                             gap: '4px',
                             marginTop: '8px',
@@ -2244,37 +2469,57 @@ function PackagePage({ pkg, packages, setPackages }) {
                                 { label: 'Oct', month: 9 },
                                 { label: 'Nov', month: 10 },
                                 { label: 'Dec', month: 11 }
-                              ].map(({ label, month }) => (
-                                <button
-                                  key={label}
-                                  onClick={() => changeMonth(month)}
-                                  style={{
-                                    padding: '3px 6px',
-                                    fontSize: '0.75rem',
-                                    background: '#f8f9fa',
-                                    border: '1px solid #dee2e6',
-                                    borderRadius: '3px',
-                                    cursor: 'pointer',
-                                    color: '#6c757d',
-                                    fontWeight: '500',
-                                    transition: 'all 0.2s',
-                                    minWidth: '28px',
-                                    textAlign: 'center'
-                                  }}
-                                  onMouseOver={e => {
-                                    e.target.style.background = '#28a745';
-                                    e.target.style.color = '#fff';
-                                    e.target.style.borderColor = '#28a745';
-                                  }}
-                                  onMouseOut={e => {
-                                    e.target.style.background = '#f8f9fa';
-                                    e.target.style.color = '#6c757d';
-                                    e.target.style.borderColor = '#dee2e6';
-                                  }}
-                                >
-                                  {label}
-                                </button>
-                              ))}
+                              ].map(({ label, month }) => {
+                                const isCurrentMonth = date.getMonth() === month;
+                                return (
+                                  <button
+                                    key={label}
+                                    onClick={() => changeMonth(month)}
+                                    style={{
+                                      padding: '3px 6px',
+                                      fontSize: '0.75rem',
+                                      background: isCurrentMonth ? '#007bff' : '#f8f9fa',
+                                      border: `1px solid ${isCurrentMonth ? '#007bff' : '#dee2e6'}`,
+                                      borderRadius: '3px',
+                                      cursor: 'pointer',
+                                      color: isCurrentMonth ? '#fff' : '#6c757d',
+                                      fontWeight: isCurrentMonth ? '600' : '500',
+                                      transition: 'all 0.2s',
+                                      minWidth: '28px',
+                                      textAlign: 'center',
+                                      position: 'relative'
+                                    }}
+                                    onMouseOver={e => {
+                                      if (!isCurrentMonth) {
+                                        e.target.style.background = '#28a745';
+                                        e.target.style.color = '#fff';
+                                        e.target.style.borderColor = '#28a745';
+                                      }
+                                    }}
+                                    onMouseOut={e => {
+                                      if (!isCurrentMonth) {
+                                        e.target.style.background = '#f8f9fa';
+                                        e.target.style.color = '#6c757d';
+                                        e.target.style.borderColor = '#dee2e6';
+                                      }
+                                    }}
+                                  >
+                                    {label}
+                                    {isCurrentMonth && (
+                                      <span style={{
+                                        position: 'absolute',
+                                        top: '-2px',
+                                        right: '-2px',
+                                        width: '6px',
+                                        height: '6px',
+                                        background: '#fff',
+                                        borderRadius: '50%',
+                                        border: '1px solid #007bff'
+                                      }} />
+                                    )}
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         </div>
@@ -2459,7 +2704,7 @@ function PackagePage({ pkg, packages, setPackages }) {
             <TicketModalForm 
               ticket={ticketModal.ticket}
               onSave={handleTicketModalSave}
-              onCancel={() => setTicketModal(null)}
+              onCancel={handleTicketModalCancel}
               isViewMode={false}
             />
           </div>
@@ -3392,7 +3637,7 @@ function Bookmarking({ packages, setPackages }) {
   // Add search state for each package
   const [search, setSearch] = useState({});
   // Remove confirmRemove state since we're removing X buttons
-  const [showDeleteToast, setShowDeleteToast] = useState(false);
+
   // Add per-package page state
   const [page, setPage] = useState({});
   const PAGE_SIZE = 15;
@@ -4268,9 +4513,7 @@ function Bookmarking({ packages, setPackages }) {
       )}
       
       {/* Remove the confirmation modal since we're removing X buttons */}
-      {showDeleteToast && (
-        <div className="copy-toast-dialog" style={{zIndex:2002}}>Company moved to Trash.</div>
-      )}
+
     </section>
   );
 }
@@ -4502,28 +4745,7 @@ function App() {
   useEffect(() => { packagesRef.current = packages; }, [packages]);
   useEffect(() => { setAlertsRef.current = setAlerts; }, [setAlerts]);
 
-  // Global toast function
-  const showGlobalToast = (message) => {
-    const toast = document.createElement('div');
-    toast.className = 'copy-toast-dialog';
-    toast.style.zIndex = '2002';
-    toast.innerHTML = `✅ ${message}`;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-      if (document.body.contains(toast)) {
-        document.body.removeChild(toast);
-      }
-    }, 3000);
-  };
 
-  // Make toast function globally available
-  useEffect(() => {
-    window.showToast = showGlobalToast;
-    return () => {
-      delete window.showToast;
-    };
-  }, []);
 
   // Load read alerts from Firestore
   useEffect(() => {
@@ -4565,13 +4787,15 @@ function App() {
   };
 
   // Get unread alerts count
-  const unreadAlerts = alerts.filter(alert => !readAlerts.has(alert.id));
+  const unreadAlerts = alerts.filter(alert => alert && alert.id && !readAlerts.has(alert.id));
 
 
 
   // Track notification changes and handle read status intelligently
   const [previousAlerts, setPreviousAlerts] = useState([]);
-  
+  const [lastToastTime, setLastToastTime] = useState(0);
+  const [alertContentHashes, setAlertContentHashes] = useState(new Map());
+
   const handleAlertChanges = (newAlerts) => {
     // Compare with previous alerts to detect changes
     const currentAlertIds = new Set(newAlerts.map(alert => alert.id));
@@ -4583,36 +4807,70 @@ function App() {
       return !previousAlert || previousAlert.message !== alert.message;
     });
     
-    // If there are new/changed alerts, ensure they're unread
+    // Only show toast if there are genuinely new alerts (not just regeneration)
     if (newOrChangedAlerts.length > 0) {
       console.log(`New/changed notifications: ${newOrChangedAlerts.map(a => a.id).join(', ')}`);
+      
+      // Only show toast if we have previous alerts (meaning this isn't the first load)
+      // AND if the alerts are actually new (not just being regenerated)
+      // AND if we haven't shown a toast in the last 5 seconds
+      const now = Date.now();
+      if (previousAlerts.length > 0 && 
+          newOrChangedAlerts.some(alert => !previousAlertIds.has(alert.id)) &&
+          now - lastToastTime > 5000) {
+        if (newOrChangedAlerts.length === 1) {
+          toast.info(`New notification: ${newOrChangedAlerts[0].message}`);
+        } else if (newOrChangedAlerts.length > 1) {
+          toast.info(`${newOrChangedAlerts.length} new notifications`);
+        }
+        setLastToastTime(now);
+      }
       // New alerts are automatically unread (not in readAlerts set)
     }
     
     setPreviousAlerts(newAlerts);
   };
 
-  // Mark notifications as unread when new activities happen
-  const markNotificationsAsUnreadForNewActivity = () => {
-    // Mark all non-ticket notifications as unread when new activities happen
-    const relevantAlertIds = alerts
-      .filter(alert => alert.type !== 'tickets') // Don't mark ticket alerts as unread for package changes
-      .map(alert => alert.id);
+  // Smart function to mark notifications as unread when they have genuinely new content
+  const markNotificationsAsUnreadForNewContent = () => {
+    const relevantAlerts = alerts.filter(alert => alert.type !== 'tickets');
     
-    // Remove these alerts from readAlerts set
-    const newReadAlerts = new Set(readAlerts);
-    relevantAlertIds.forEach(id => newReadAlerts.delete(id));
-    setReadAlerts(newReadAlerts);
-    saveReadAlerts(newReadAlerts);
+    // Check each alert for new content
+    const alertsWithNewContent = relevantAlerts.filter(alert => {
+      // Use dynamic content if available, otherwise fall back to message + timestamp
+      const contentToHash = alert.dynamicContent || (alert.message + alert.timestamp);
+      const currentHash = JSON.stringify(contentToHash);
+      const previousHash = alertContentHashes.get(alert.id);
+      
+      // If this is a new alert or the content has changed
+      if (!previousHash || previousHash !== currentHash) {
+        // Update the hash for this alert
+        setAlertContentHashes(prev => new Map(prev).set(alert.id, currentHash));
+        return true;
+      }
+      return false;
+    });
     
-    console.log(`Marked ${relevantAlertIds.length} notifications as unread due to new activity`);
+    if (alertsWithNewContent.length > 0) {
+      console.log(`Detected ${alertsWithNewContent.length} alerts with new content:`, alertsWithNewContent.map(a => a.id));
+      
+      // Mark these alerts as unread by removing them from readAlerts
+      const newReadAlerts = new Set(readAlerts);
+      alertsWithNewContent.forEach(alert => {
+        newReadAlerts.delete(alert.id);
+      });
+      
+      setReadAlerts(newReadAlerts);
+      saveReadAlerts(newReadAlerts);
+    }
   };
 
   useEffect(() => {
     setFetchAlertsImpl(async () => {
-      let allAlerts = [];
-      // Tickets alerts
-      const tickets = await getTickets();
+      try {
+        let allAlerts = [];
+        // Tickets alerts
+        const tickets = await getTickets().catch(() => []);
       const today = new Date();
       const isToday = d => {
         if (!d) return false;
@@ -4643,6 +4901,8 @@ function App() {
           color: '#ff9800',
           icon: '⏰',
           timestamp: Date.now(),
+          // Add dynamic content that changes when data changes
+          dynamicContent: `${yesterdayFollowUps.length}-${yesterdayFollowUps.map(t => t.id).join(',')}`
         });
       }
       if (todayFollowUps.length > 0) {
@@ -4654,6 +4914,8 @@ function App() {
           color: '#d32f2f',
           icon: '⏰',
           timestamp: Date.now(),
+          // Add dynamic content that changes when data changes
+          dynamicContent: `${todayFollowUps.length}-${todayFollowUps.map(t => t.id).join(',')}`
         });
       }
       if (overdueFollowUps.length > 0) {
@@ -4665,6 +4927,8 @@ function App() {
           color: '#b26a00',
           icon: '⚠️',
           timestamp: Date.now(),
+          // Add dynamic content that changes when data changes
+          dynamicContent: `${overdueFollowUps.length}-${overdueFollowUps.map(t => t.id).join(',')}`
         });
       }
       // Summarize Report, Bookmarking, Link Building alerts by type
@@ -4673,6 +4937,7 @@ function App() {
         bm: {},
         linkbuilding: {},
       };
+      if (!packagesRef.current) return;
       Object.entries(packagesRef.current).forEach(([pkg, companies]) => {
         // Report
         const pendingReport = (companies || []).filter(c => c.status !== 'OnHold' && c.reportI !== 'Completed').length;
@@ -4695,6 +4960,8 @@ function App() {
           color: '#1976d2',
           icon: '📊',
           timestamp: Date.now(),
+          // Add dynamic content that changes when data changes
+          dynamicContent: `${total}-${Object.entries(summary.report).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
         });
       }
       if (Object.keys(summary.bm).length > 0) {
@@ -4707,11 +4974,13 @@ function App() {
           color: '#388e3c',
           icon: '🔖',
           timestamp: Date.now(),
+          // Add dynamic content that changes when data changes
+          dynamicContent: `${total}-${Object.entries(summary.bm).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
         });
       }
       // --- BM Creation Alert ---
       // Count all companies needing BM Creation (not Completed, not OnHold)
-      const bmCreationCount = Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmCreation !== 'Completed').length;
+      const bmCreationCount = packagesRef.current ? Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmCreation !== 'Completed').length : 0;
       if (bmCreationCount > 0) {
         allAlerts.push({
           id: 'bm-creation',
@@ -4721,11 +4990,13 @@ function App() {
           color: '#c00',
           icon: '📝',
           timestamp: Date.now(),
+          // Add dynamic content that changes when data changes
+          dynamicContent: `${bmCreationCount}`
         });
       }
       // --- BM Submission Alert ---
       // Count all companies needing BM Submission (not Completed, not OnHold)
-      const bmSubmissionCount = Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length;
+      const bmSubmissionCount = packagesRef.current ? Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length : 0;
       if (bmSubmissionCount > 0) {
         allAlerts.push({
           id: 'bm-submission',
@@ -4735,6 +5006,8 @@ function App() {
           color: '#b26a00',
           icon: '🔖',
           timestamp: Date.now(),
+          // Add dynamic content that changes when data changes
+          dynamicContent: `${bmSubmissionCount}`
         });
       }
       // --- Link Building Alert ---
@@ -4747,19 +5020,24 @@ function App() {
           link: '/link-buildings',
           color: '#b26a00',
           icon: '🔗',
+          timestamp: Date.now(),
+          // Add dynamic content that changes when data changes
+          dynamicContent: `${total}-${Object.entries(summary.linkbuilding).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
         });
       }
       // --- Site Audit Alerts ---
       const siteAuditB = [];
       const siteAuditC = [];
-      Object.values(packagesRef.current).flat().forEach(c => {
+      if (packagesRef.current) {
+        Object.values(packagesRef.current).flat().forEach(c => {
         if (!c.start) return;
         const startDate = new Date(c.start);
         if (isNaN(startDate)) return;
         const daysSinceStart = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
-        if (daysSinceStart >= 183 && c.siteAuditBStatus !== 'Completed') siteAuditB.push(c);
-        if (daysSinceStart >= 334 && c.siteAuditCStatus !== 'Completed') siteAuditC.push(c);
-      });
+          if (daysSinceStart >= 183 && c.siteAuditBStatus !== 'Completed') siteAuditB.push(c);
+          if (daysSinceStart >= 334 && c.siteAuditCStatus !== 'Completed') siteAuditC.push(c);
+        });
+      }
       if (siteAuditB.length > 0) {
         allAlerts.push({
           id: 'siteaudit-b',
@@ -4780,8 +5058,13 @@ function App() {
           icon: '🔔',
         });
       }
-      setAlertsRef.current(allAlerts);
-      handleAlertChanges(allAlerts);
+        setAlertsRef.current(allAlerts);
+        handleAlertChanges(allAlerts);
+      } catch (error) {
+        console.error('Error generating alerts:', error);
+        // Set empty alerts on error to prevent UI issues
+        setAlertsRef.current([]);
+      }
     });
   }, [packages, setAlerts]);
 
@@ -4874,8 +5157,8 @@ function App() {
   // Fetch alerts whenever packages change (for non-ticket alerts)
   useEffect(() => {
     fetchAlerts();
-    // Mark notifications as unread when packages change (new activities)
-    markNotificationsAsUnreadForNewActivity();
+    // Use smart detection to mark notifications as unread only when they have new content
+    markNotificationsAsUnreadForNewContent();
   }, [packages]);
 
   // Real-time listener for tickets (alerts)
@@ -4906,21 +5189,28 @@ function App() {
   // Close alerts dropdown when clicking outside
   useEffect(() => {
     if (!showAlerts) return;
+    
     function handleClick(e) {
-      if (
-        bellRef.current && bellRef.current.contains(e.target)
-      ) {
-        // Clicked the bell, let the bell handler toggle
-        return;
+      try {
+        if (
+          bellRef.current && bellRef.current.contains(e.target)
+        ) {
+          // Clicked the bell, let the bell handler toggle
+          return;
+        }
+        if (
+          dropdownRef.current && dropdownRef.current.contains(e.target)
+        ) {
+          // Clicked inside the dropdown
+          return;
+        }
+        setShowAlerts(false);
+      } catch (error) {
+        console.error('Error handling dropdown click:', error);
+        setShowAlerts(false);
       }
-      if (
-        dropdownRef.current && dropdownRef.current.contains(e.target)
-      ) {
-        // Clicked inside the dropdown
-        return;
-      }
-      setShowAlerts(false);
     }
+    
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showAlerts]);
@@ -5548,7 +5838,10 @@ function App() {
                         const auth = getAuth();
                         const user = auth.currentUser;
                         if (user) {
-                          await setDoc(firestoreDoc(db, 'users', user.uid), { status: 'offline' }, { merge: true });
+                          await setDoc(firestoreDoc(db, 'users', user.uid), { 
+                            status: 'offline',
+                            lastOnline: new Date().toISOString()
+                          }, { merge: true });
                         }
                         // Clear chat user cache
                         localStorage.removeItem('chat_user_cache_v1');
@@ -5639,6 +5932,16 @@ function App() {
           <ChatUsersFloatingButton />
         </ChatManager>
       ) : null}
+      
+      {/* Sonner Toaster */}
+      <Toaster 
+        position="top-center"
+        richColors
+        closeButton
+        duration={3000}
+        expand={true}
+        limit={3}
+      />
     </>
   );
 }

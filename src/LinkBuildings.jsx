@@ -21,7 +21,7 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
   // Remove confirmRemove state since we're removing X buttons
   const [search, setSearch] = useState({});
   const [statusFilter, setStatusFilter] = useState({});
-  const [showDeleteToast, setShowDeleteToast] = useState(false);
+
   // Add per-package page state
   const [page, setPage] = useState({});
   const PAGE_SIZE = 15;
@@ -548,9 +548,7 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
         );
       })}
       {/* Remove the confirmation modal since we're removing X buttons */}
-      {showDeleteToast && (
-        <div className="copy-toast-dialog" style={{zIndex:2002}}>Company moved to Trash.</div>
-      )}
+
     </section>
   );
 } 

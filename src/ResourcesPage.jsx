@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getTrash, saveTrash, getResourcesPaginated, saveResource, deleteResource, getResourceSections, saveResourceSections, saveHistoryLog, loadHistoryLog, clearHistoryLog } from './firestoreHelpers';
+import { toast } from 'sonner';
 
 const initialLinks = {
   'Site Audit': [
@@ -34,9 +35,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
   const [showAddTable, setShowAddTable] = useState(false);
   const [newTableName, setNewTableName] = useState('');
   const [deleteTableModal, setDeleteTableModal] = useState({ open: false, section: null });
-  // Add toast state
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+
 
   // --- History Log State ---
   const [history, setHistory] = useState([]);
@@ -218,10 +217,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
     setModalUrl('');
     setPendingLink(null);
     
-    // Add toast for add resource
-    setToastMessage('Resource added successfully');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    
 
     // Add to history for add
     addToHistory(createHistoryEntry(newResource.id, pendingLink, newResource.name, 'created', '', 'Resource created'));
@@ -261,6 +257,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
     setModalTitle('');
     setModalUrl('');
     setPendingLink(null);
+    toast.success('Resource added successfully');
     // Add to history for add
     addToHistory(createHistoryEntry(resource.id, section, resource.name, 'created', '', 'Resource created'));
     // Save to Firestore in background
@@ -292,10 +289,8 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
       [section]: l[section].filter((_, i) => i !== idx)
     }));
     setDeleteModal({ open: false, section: null, idx: null, link: null });
-    // Add toast for delete
-    setToastMessage('Resource deleted successfully');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    toast.success('Resource deleted successfully');
+    
     // Add to history for delete
     addToHistory(createHistoryEntry(link.id, section, link.name, 'deleted', '', 'Resource deleted'));
     // Firestore operations in background
@@ -338,10 +333,8 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
     setLinks(l => ({ ...l, [name]: [] }));
     setShowAddTable(false);
     setNewTableName('');
-    // Add toast for add table
-    setToastMessage('Table added successfully');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    toast.success('Table added successfully');
+    
     // Save to Firestore
     try {
       await saveResourceSections(updatedSections);
@@ -371,10 +364,8 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
       return newLinks;
     });
     setDeleteTableModal({ open: false, section: null });
-    // Add toast for delete table
-    setToastMessage('Table deleted successfully');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    toast.success('Table deleted successfully');
+    
     // Firestore operations in background
     (async () => {
       try {
@@ -1050,12 +1041,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
           </div>
         </div>
       )}
-      {/* Add toast notification */}
-      {showToast && (
-        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
-          ✅ {toastMessage}
-        </div>
-      )}
+
       {/* Clear History Confirmation Modal */}
       {clearHistoryModal && (
         <div style={{

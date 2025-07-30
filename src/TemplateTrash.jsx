@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { getTrash, saveTrash, saveTemplate, saveTicket, saveCompany, getPackages, savePackages, getCategories, saveCategories, deleteTemplate } from './firestoreHelpers';
+import { toast } from 'sonner';
 
 const TemplateTrash = ({ darkMode, setDarkMode }) => {
   const [trash, setTrash] = useState([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [search, setSearch] = useState('');
   const [showDeleteAll, setShowDeleteAll] = useState(false);
-  // Add toast state
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+
 
   useEffect(() => {
     // Fetch trash from Firestore
@@ -33,10 +32,7 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
       const updatedTrash = trash.filter(t => t.id !== item.id);
       setTrash(updatedTrash);
       await saveTrash(updatedTrash);
-      // Add toast for restore
-      setToastMessage('Template restored successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Template restored successfully');
     } catch (error) {
       console.error('Error restoring template:', error);
       alert('Error restoring template');
@@ -54,10 +50,8 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
       setTrash(updatedTrash);
       await saveTrash(updatedTrash);
       setConfirmDeleteId(null);
-      // Add toast for delete forever
-      setToastMessage('Template permanently deleted');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('Template permanently deleted');
+      
     } catch (error) {
       console.error('Error deleting template permanently:', error);
       alert('Error deleting template');
@@ -81,10 +75,8 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
       setTrash([]);
       await saveTrash([]);
       setShowDeleteAll(false);
-      // Add toast for delete all
-      setToastMessage('All templates permanently deleted');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      toast.success('All templates permanently deleted');
+      
     } catch (error) {
       console.error('Error deleting all templates:', error);
       alert('Error deleting all templates');
@@ -182,12 +174,7 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
           </div>
         </div>
       )}
-      {/* Add toast notification */}
-      {showToast && (
-        <div className="copy-toast-dialog" style={{zIndex: 2002}}>
-          ✅ {toastMessage}
-        </div>
-      )}
+
     </section>
   );
 };

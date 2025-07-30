@@ -3,6 +3,7 @@ import { auth, db, storage } from './firebase';
 import { updateProfile, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { toast } from 'sonner';
 
 const GIF_AVATARS = [
   'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExbGp4Zms1eDB0aGQ1ZXMybjNjdjVkNXIyN2xmN3Z3amZmYmlta2FxNCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/UYzNgRSTf9X1e/giphy.gif',
@@ -92,9 +93,7 @@ const ProfilePage = ({ onProfileUpdate }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
-  // Add toast state
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+
 
   useEffect(() => {
     if (user) {
@@ -133,12 +132,10 @@ const ProfilePage = ({ onProfileUpdate }) => {
       // Update Firestore (displayName, photoURL, and bio)
       await setDoc(doc(db, 'users', user.uid), { displayName, photoURL: avatarUrl, bio }, { merge: true });
       if (onProfileUpdate) onProfileUpdate({ displayName, photoURL: avatarUrl, bio });
-      setShowConfirm(true);
-      setTimeout(() => setShowConfirm(false), 2000);
-      // Add toast for save
-      setToastMessage('Profile updated successfully');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+              setShowConfirm(true);
+        setTimeout(() => setShowConfirm(false), 2000);
+        toast.success('Profile updated successfully');
+
     } catch (err) {
       setError('Failed to update profile.');
     }
@@ -336,28 +333,7 @@ const ProfilePage = ({ onProfileUpdate }) => {
           Profile updated successfully!
         </div>
       )}
-      {/* Add toast notification */}
-      {showToast && (
-        <div style={{
-          position: 'fixed',
-          top: 80,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'linear-gradient(90deg, #81c784 60%, #1976d2 100%)',
-          color: '#fff',
-          borderRadius: 12,
-          padding: '14px 38px',
-          fontWeight: 700,
-          fontSize: '1.15em',
-          boxShadow: '0 2px 16px #e0e7ef',
-          zIndex: 3000,
-          letterSpacing: '0.02em',
-          textAlign: 'center',
-          animation: 'fadeInOut 2s',
-        }}>
-          ✅ {toastMessage}
-        </div>
-      )}
+
     </div>
   );
 };
