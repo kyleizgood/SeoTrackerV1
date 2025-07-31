@@ -13,6 +13,9 @@ import {
 import * as XLSX from 'xlsx';
 import { getEOC } from './App.jsx';
 import { toast } from 'sonner';
+import { auth } from './firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from './firebase';
 
 const PACKAGE_COLORS = {
   'SEO - BASIC': '#4E342E',
@@ -431,7 +434,33 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
         console.error('Error fetching data:', error);
       }
     };
+    
+    // Initial data load
     fetchData();
+    
+    // Set up real-time listener for packages changes
+    if (auth.currentUser) {
+      const packagesDocRef = collection(db, 'users', auth.currentUser.uid, 'meta');
+      let lastUpdate = 0;
+      const THROTTLE_DELAY = 1000; // 1 second throttle
+      
+      const unsubscribe = onSnapshot(packagesDocRef, (snapshot) => {
+        const now = Date.now();
+        if (now - lastUpdate > THROTTLE_DELAY) {
+          const pkgDoc = snapshot.docs.find(d => d.id === 'packages');
+          if (pkgDoc) {
+            const data = pkgDoc.data();
+            if (data && data.packages) {
+              // Refresh data when packages change
+              fetchData();
+              lastUpdate = now;
+            }
+          }
+        }
+      });
+      
+      return () => unsubscribe();
+    }
   }, []);
 
   // Updated filtering logic
@@ -575,12 +604,17 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
             r.id === row.id ? {
               ...r,
               ...updatedCompany,
+              status: 'EOC', // Explicitly set status to EOC
               eocDate: updatedCompany.eocDate || finalEOCDate
             } : r
           );
           console.log('Updated rows:', newRows);
           return newRows;
         });
+        
+        // Update selectedRow if it matches
+        setSelectedRow(prev => prev && prev.id === row.id ? 
+          { ...prev, status: 'EOC', eocDate: updatedCompany.eocDate || finalEOCDate } : prev);
         
         // Add to history
         const historyEntry = createHistoryEntry(
@@ -593,11 +627,9 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
         );
         addToHistory(historyEntry);
         
-  
         await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
 
         if (value === 'EOC') {
-          setSelectedRow(null);
           toast.success('Company moved to EOC accounts');
         }
       } else {
@@ -1781,8 +1813,6 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                   // Always use the latest selectedRow for EOC date
                   await updateStatus({ ...confirmEOCModal, eocDate: selectedRow?.eocDate }, 'status', 'EOC');
                   setConfirmEOCModal(null);
-                  // Reload data to ensure all UI is up to date
-                  await reloadRows();
                 }}
               >
                 Mark as EOC

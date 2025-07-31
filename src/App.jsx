@@ -256,42 +256,51 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
   const [editId, setEditId] = useState(null);
   const [showAddToPackage, setShowAddToPackage] = useState(null); // company id
 
-  // Always fetch companies from Firestore on mount
-  useEffect(() => {
-    getCompanies().then(all => {
-      setCompanies(all.filter(c => c.name && c.name.trim() !== ''));
-    });
-  }, []);
-
-  // Load companies from Firestore on mount and whenever packages change
+  // Optimized: Single useEffect for loading companies with cleanup and filtering
   useEffect(() => {
     async function loadUnassignedCompanies() {
-      const all = await getCompanies();
-      // One-time cleanup: delete companies with blank names
-      const blanks = all.filter(c => !c.name || c.name.trim() === '');
-      for (const c of blanks) {
-        if (c.id) {
-          await deleteCompany(c.id);
+      try {
+        // Fetch both companies and packages in parallel
+        const [all, pkgs] = await Promise.all([
+          getCompanies(),
+          getPackages()
+        ]);
+        
+        // One-time cleanup: delete companies with blank names
+        const blanks = all.filter(c => !c.name || c.name.trim() === '');
+        for (const c of blanks) {
+          if (c.id) {
+            await deleteCompany(c.id);
+          }
         }
-      }
-      // One-time migration: add missing audit status fields
-      const needsMigration = all.filter(c => !('siteAuditBStatus' in c) || !('siteAuditCStatus' in c));
-      for (const c of needsMigration) {
-        if (c.id) {
-          await saveCompany({ ...c, siteAuditBStatus: c.siteAuditBStatus || 'Pending', siteAuditCStatus: c.siteAuditCStatus || 'Pending' });
+        
+        // One-time migration: add missing audit status fields
+        const needsMigration = all.filter(c => !('siteAuditBStatus' in c) || !('siteAuditCStatus' in c));
+        for (const c of needsMigration) {
+          if (c.id) {
+            await saveCompany({ 
+              ...c, 
+              siteAuditBStatus: c.siteAuditBStatus || 'Pending', 
+              siteAuditCStatus: c.siteAuditCStatus || 'Pending' 
+            });
+          }
         }
+        
+        // Filter companies in one pass
+        const validCompanies = all.filter(c => c.name && c.name.trim() !== '');
+        const packagedIds = new Set();
+        Object.values(pkgs).forEach(arr => arr.forEach(c => packagedIds.add(c.id)));
+        
+        // Only show companies not in any package
+        setCompanies(validCompanies.filter(c => !packagedIds.has(c.id)));
+      } catch (error) {
+        console.error('Error loading companies:', error);
+        setCompanies([]);
       }
-      // Now reload with all fields present
-      const updated = await getCompanies();
-      // Get all companies in all packages
-      const pkgs = await getPackages();
-      const packagedIds = new Set();
-      Object.values(pkgs).forEach(arr => arr.forEach(c => packagedIds.add(c.id)));
-      // Only show companies not in any package
-      setCompanies(updated.filter(c => c.name && c.name.trim() !== '' && !packagedIds.has(c.id)));
     }
+    
     loadUnassignedCompanies();
-  }, [packages]);
+  }, [packages]); // Only depend on packages changes
 
   // If editData is provided (from package page), load it into the form
   useEffect(() => {
@@ -313,19 +322,6 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
     }
     // eslint-disable-next-line
   }, [editData]);
-
-  useEffect(() => {
-    getCompanies().then(async (all) => {
-      // One-time cleanup: delete companies with blank names
-      const blanks = all.filter(c => !c.name || c.name.trim() === '');
-      for (const c of blanks) {
-        if (c.id) {
-          await deleteCompany(c.id);
-        }
-      }
-      setCompanies(all.filter(c => c.name && c.name.trim() !== ''));
-    });
-  }, []);
 
   const handleChange = e => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -5154,21 +5150,45 @@ function App() {
     return () => unsubscribe();
   }, [user]);
 
-  // Fetch alerts whenever packages change (for non-ticket alerts)
+  // Debounced alert generation to prevent excessive Firestore reads
+  const [alertDebounceTimer, setAlertDebounceTimer] = useState(null);
+
+  // Fetch alerts whenever packages change (for non-ticket alerts) - with debouncing
   useEffect(() => {
-    fetchAlerts();
-    // Use smart detection to mark notifications as unread only when they have new content
-    markNotificationsAsUnreadForNewContent();
+    if (alertDebounceTimer) clearTimeout(alertDebounceTimer);
+    
+    const timer = setTimeout(() => {
+      fetchAlerts();
+      // Use smart detection to mark notifications as unread only when they have new content
+      markNotificationsAsUnreadForNewContent();
+    }, 1000); // Debounce for 1 second
+    
+    setAlertDebounceTimer(timer);
+    
+    return () => {
+      if (alertDebounceTimer) clearTimeout(alertDebounceTimer);
+    };
   }, [packages]);
 
-  // Real-time listener for tickets (alerts)
+  // Real-time listener for tickets (alerts) - with debouncing
   useEffect(() => {
     if (!user) return;
+    
+    let ticketDebounceTimer = null;
     const ticketsColRef = collection(db, 'users', user.uid, 'tickets');
+    
     const unsubscribe = onSnapshot(ticketsColRef, () => {
-      fetchAlerts();
+      // Debounce ticket alert updates to prevent excessive calls
+      if (ticketDebounceTimer) clearTimeout(ticketDebounceTimer);
+      ticketDebounceTimer = setTimeout(() => {
+        fetchAlerts();
+      }, 2000); // 2 second debounce for ticket changes
     });
-    return () => unsubscribe();
+    
+    return () => {
+      unsubscribe();
+      if (ticketDebounceTimer) clearTimeout(ticketDebounceTimer);
+    };
   }, [user]);
 
   let sidebarClass = 'sidebar';
@@ -5838,10 +5858,7 @@ function App() {
                         const auth = getAuth();
                         const user = auth.currentUser;
                         if (user) {
-                          await setDoc(firestoreDoc(db, 'users', user.uid), { 
-                            status: 'offline',
-                            lastOnline: new Date().toISOString()
-                          }, { merge: true });
+                          await setDoc(firestoreDoc(db, 'users', user.uid), { status: 'offline' }, { merge: true });
                         }
                         // Clear chat user cache
                         localStorage.removeItem('chat_user_cache_v1');

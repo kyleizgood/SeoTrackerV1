@@ -139,14 +139,6 @@ const ChatUsersPage = () => {
           {hasUsers ? (
             filteredUsers.map(u => {
               const nickname = nicknames[u.id] || '';
-              
-              // Debug logging
-              console.log(`Rendering user ${u.displayName || u.email}:`, {
-                status: u.status,
-                lastOnlineText: u.lastOnlineText,
-                hasLastOnlineText: !!u.lastOnlineText
-              });
-              
               return (
                 <li key={u.id} style={{ marginBottom: 16, width: '100%', position: 'relative' }}>
                   <button
@@ -256,45 +248,9 @@ const ChatUsersPage = () => {
                       )}
                     </span>
                     {/* Online/Offline Indicator */}
-                    {u.status === 'online' && (
-                      <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <span style={{ color: '#43a047', fontSize: 18 }} title="Online">●</span>
-                        <span style={{ 
-                          color: '#43a047', 
-                          fontSize: 11, 
-                          marginTop: 2,
-                          fontStyle: 'italic'
-                        }} title="Online">
-                          Online
-                        </span>
-                      </div>
-                    )}
-                    {u.status === 'away' && (
-                      <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <span style={{ color: '#fbc02d', fontSize: 18 }} title="Away">●</span>
-                        <span style={{ 
-                          color: '#fbc02d', 
-                          fontSize: 11, 
-                          marginTop: 2,
-                          fontStyle: 'italic'
-                        }} title="Away">
-                          Away
-                        </span>
-                      </div>
-                    )}
-                    {(u.status === 'offline' || !u.status) && (
-                      <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <span style={{ color: '#888', fontSize: 18 }} title="Offline">●</span>
-                        <span style={{ 
-                          color: '#999', 
-                          fontSize: 11, 
-                          marginTop: 2,
-                          fontStyle: 'italic'
-                        }} title={`Last online: ${u.lastOnlineText || 'Unknown'}`}>
-                          {u.lastOnlineText ? `last online ${u.lastOnlineText}` : 'Unknown'}
-                        </span>
-                      </div>
-                    )}
+                    {u.status === 'online' && <span style={{ marginLeft: 'auto', color: '#43a047', fontSize: 18 }} title="Online">●</span>}
+                    {u.status === 'away' && <span style={{ marginLeft: 'auto', color: '#fbc02d', fontSize: 18 }} title="Away">●</span>}
+                    {(u.status === 'offline' || !u.status) && <span style={{ marginLeft: 'auto', color: '#888', fontSize: 18 }} title="Offline">●</span>}
                   </button>
                   {/* Mini profile preview on hover - use portal for floating above all */}
                   {((hoveredUser === u.id) || (cardHover && hoveredUser === u.id)) && createPortal(

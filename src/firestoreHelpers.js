@@ -2,6 +2,31 @@ import { db } from './firebase';
 import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, query, where, orderBy, onSnapshot, addDoc, updateDoc, arrayUnion, limit as fsLimit, startAfter as fsStartAfter, enableIndexedDbPersistence } from 'firebase/firestore';
 import { auth } from './firebase';
 
+// Simple in-memory cache for frequently accessed data
+const cache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Cache helper functions
+const getCachedData = (key) => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.data;
+  }
+  return null;
+};
+
+const setCachedData = (key, data) => {
+  cache.set(key, { data, timestamp: Date.now() });
+};
+
+const clearCache = (key) => {
+  if (key) {
+    cache.delete(key);
+  } else {
+    cache.clear();
+  }
+};
+
 // After initializing Firestore (db), enable offline persistence
 try {
   enableIndexedDbPersistence(db);
@@ -15,14 +40,25 @@ export async function saveCompany(company) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
   await setDoc(doc(db, 'users', user.uid, 'companies', company.id.toString()), company);
+  // Clear cache to ensure fresh data
+  clearCache(`companies_${user.uid}`);
 }
 
-// Get all companies for the current user
+// Get all companies for the current user (with caching)
 export async function getCompanies() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  const cacheKey = `companies_${user.uid}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
   const snapshot = await getDocs(collection(db, 'users', user.uid, 'companies'));
-  return snapshot.docs.map(doc => doc.data());
+  const data = snapshot.docs.map(doc => doc.data());
+  setCachedData(cacheKey, data);
+  return data;
 }
 
 // Delete a company
@@ -31,6 +67,8 @@ export async function deleteCompany(companyId) {
   if (!user) throw new Error('Not logged in');
   if (!companyId) throw new Error('No companyId provided to deleteCompany');
   await deleteDoc(doc(db, 'users', user.uid, 'companies', companyId.toString()));
+  // Clear cache to ensure fresh data
+  clearCache(`companies_${user.uid}`);
 }
 
 // --- PACKAGE HELPERS ---
@@ -38,13 +76,24 @@ export async function savePackages(packages) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
   await setDoc(doc(db, 'users', user.uid, 'meta', 'packages'), { packages });
+  // Clear cache to ensure fresh data
+  clearCache(`packages_${user.uid}`);
 }
 export async function getPackages() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  const cacheKey = `packages_${user.uid}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
   const docSnap = await getDocs(collection(db, 'users', user.uid, 'meta'));
   const meta = docSnap.docs.find(d => d.id === 'packages');
-  return meta ? meta.data().packages : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
+  const data = meta ? meta.data().packages : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
+  setCachedData(cacheKey, data);
+  return data;
 }
 // --- TEMPLATE HELPERS ---
 export async function saveTemplate(template) {

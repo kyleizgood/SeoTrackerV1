@@ -805,17 +805,6 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
         {user?.status === 'away' && (
           <span style={{ color: '#fbc02d', fontWeight: 600, fontSize: 14, marginLeft: 6 }}>Away</span>
         )}
-        {(user?.status === 'offline' || !user?.status) && user?.lastOnlineText && (
-          <span style={{ 
-            color: '#999', 
-            fontWeight: 500, 
-            fontSize: 12, 
-            marginLeft: 6,
-            fontStyle: 'italic'
-          }}>
-            Last online {user.lastOnlineText}
-          </span>
-        )}
       </div>
       {/* Messages Area */}
       <div

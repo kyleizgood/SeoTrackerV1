@@ -31,117 +31,37 @@ const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
     const unsubscribe = auth.onAuthStateChanged(async user => {
       setCurrentUser(user);
       if (user) {
-        // Set user status to online in Firestore with timestamp
-        const now = new Date();
-        await setDoc(doc(db, 'users', user.uid), { 
-          status: 'online',
-          lastOnline: now.toISOString(),
-          lastActivity: now.toISOString()
-        }, { merge: true });
-        
+        // Set user status to online in Firestore
+        await setDoc(doc(db, 'users', user.uid), { status: 'online' }, { merge: true });
         // Set offline on disconnect (tab close)
-        const handleBeforeUnload = () => {
-          setDoc(doc(db, 'users', user.uid), { 
-            status: 'offline',
-            lastOnline: new Date().toISOString()
-          }, { merge: true });
-        };
-        
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        
-        // Cleanup function
-        return () => {
-          window.removeEventListener('beforeunload', handleBeforeUnload);
-          // Set offline when component unmounts
-          setDoc(doc(db, 'users', user.uid), { 
-            status: 'offline',
-            lastOnline: new Date().toISOString()
-          }, { merge: true });
-        };
+        window.addEventListener('beforeunload', () => {
+          setDoc(doc(db, 'users', user.uid), { status: 'offline' }, { merge: true });
+        });
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Real-time user list (all users, not just online/away)
+  // Real-time user list (all users, not just online/away) - with throttling
   useEffect(() => {
     if (!currentUser) return;
+    
+    let lastUpdate = 0;
+    const THROTTLE_DELAY = 3000; // 3 seconds between updates
+    
     // Listen for real-time updates to all users
     const q = query(
       collection(db, 'users')
     );
     const unsubscribe = onSnapshot(q, (snap) => {
-      const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Process users to add last online display and auto-cleanup stale statuses
-      const processedUsers = users.map(user => {
-        const now = new Date();
-        const lastActivity = user.lastActivity ? new Date(user.lastActivity) : null;
-        const lastOnline = user.lastOnline ? new Date(user.lastOnline) : null;
-        
-        // Initialize user data if missing timestamps
-        if (!lastActivity && !lastOnline) {
-          // Set initial timestamps for users without them
-          setDoc(doc(db, 'users', user.id), { 
-            lastActivity: now.toISOString(),
-            lastOnline: now.toISOString()
-          }, { merge: true }).catch(() => {});
-        }
-        
-        // Auto-cleanup: if user hasn't been active for 10 minutes, mark as offline
-        if (user.status === 'online' && lastActivity && (now - lastActivity) > 10 * 60 * 1000) {
-          setDoc(doc(db, 'users', user.id), { 
-            status: 'offline',
-            lastOnline: lastActivity.toISOString()
-          }, { merge: true }).catch(() => {});
-          user.status = 'offline';
-        }
-        
-        // Calculate time since last online for display
-        let lastOnlineText = '';
-        
-        // Debug logging
-        console.log(`User ${user.displayName || user.email}:`, {
-          status: user.status,
-          lastActivity: lastActivity,
-          lastOnline: lastOnline,
-          hasLastActivity: !!lastActivity,
-          hasLastOnline: !!lastOnline
-        });
-        
-        // Only calculate lastOnlineText for offline users
-        if ((user.status === 'offline' || !user.status) && lastOnline) {
-          // For offline users, show last online
-          const diffMs = now - lastOnline;
-          const diffMins = Math.floor(diffMs / (1000 * 60));
-          const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-          const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-          
-          if (diffMins < 1) {
-            lastOnlineText = 'Just now';
-          } else if (diffMins < 60) {
-            lastOnlineText = `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-          } else if (diffHours < 24) {
-            lastOnlineText = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-          } else {
-            lastOnlineText = `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-          }
-        }
-        
-        console.log(`Processed user ${user.displayName || user.email}:`, {
-          lastOnlineText,
-          finalStatus: user.status
-        });
-        
-        return {
-          ...user,
-          lastOnlineText
-        };
-      });
-      
-      setUserList(processedUsers);
-      setHasMoreUsers(false); // No pagination for real-time
-      setLoadingUsers(false);
+      const now = Date.now();
+      if (now - lastUpdate > THROTTLE_DELAY) {
+        const users = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setUserList(users);
+        setHasMoreUsers(false); // No pagination for real-time
+        setLoadingUsers(false);
+        lastUpdate = now;
+      }
     });
     return () => unsubscribe();
   }, [currentUser]);
@@ -153,71 +73,79 @@ const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
     }
   }, [currentUser]);
 
-  // Listen for all conversations and auto-open chat heads for new unread messages
+  // Listen for all conversations and auto-open chat heads for new unread messages - with throttling
   useEffect(() => {
     if (!currentUser) return;
+    
+    let lastUpdate = 0;
+    const THROTTLE_DELAY = 2000; // 2 seconds between updates
+    
     // Listen for all conversations
     const unsub = onSnapshot(
       collection(db, 'conversations'),
       (snapshot) => {
-        const myConvs = snapshot.docs.filter(doc => {
-          const data = doc.data();
-          return data.participants && data.participants.includes(currentUser.uid);
-        });
-        myConvs.forEach(convDoc => {
-          const conv = { id: convDoc.id, ...convDoc.data() };
-          // Use aggregate unreadCount field
-          const unread = (conv.unreadCount && conv.unreadCount[currentUser.uid]) ? conv.unreadCount[currentUser.uid] : 0;
-          setActiveChats(prev => {
-            if (unread > 0 && !prev.some(c => c.id === conv.id)) {
-              // Find the chat partner's user object
-              const chatPartnerId = conv.participants.find(uid => uid !== currentUser.uid);
-              let chatPartner = userList.find(u => u.id === chatPartnerId);
-              // Fallback: use participantsInfo from conversation if available
-              if (!chatPartner && conv.participantsInfo && conv.participantsInfo[chatPartnerId]) {
-                chatPartner = {
-                  id: chatPartnerId,
-                  displayName: conv.participantsInfo[chatPartnerId].displayName || 'User',
-                  photoURL: conv.participantsInfo[chatPartnerId].photoURL || '',
-                  status: 'offline',
-                };
-              }
-              // Final fallback
-              if (!chatPartner) {
-                chatPartner = {
-                  id: chatPartnerId,
-                  displayName: 'User',
-                  photoURL: '',
-                  status: 'offline',
-                };
-              }
-              // Add chat head in minimized state with unread count
-              const chatHeadWidth = 60;
-              const chatHeadHeight = 60;
-              const gap = 20;
-              const x = window.innerWidth - chatHeadWidth - 40;
-              const minY = 44;
-              const y = Math.max(90 + (chatHeadHeight + gap) * prev.length, minY);
-              return [
-                ...prev,
-                {
-                  id: conv.id,
-                  user: chatPartner,
-                  unreadCount: unread,
-                  isExpanded: false,
-                  position: { x, y },
-                  unsub: null,
-                }
-              ];
-            } else if (unread === 0 && prev.some(c => c.id === conv.id && !c.isExpanded)) {
-              // Remove minimized chat head if all messages are read and not expanded
-              return prev.filter(c => !(c.id === conv.id && !c.isExpanded));
-            } else {
-              // Update unread count if needed
-              return prev.map(c => c.id === conv.id ? { ...c, unreadCount: unread } : c);
-            }
+        const now = Date.now();
+        if (now - lastUpdate > THROTTLE_DELAY) {
+          const myConvs = snapshot.docs.filter(doc => {
+            const data = doc.data();
+            return data.participants && data.participants.includes(currentUser.uid);
           });
-        });
+          myConvs.forEach(convDoc => {
+            const conv = { id: convDoc.id, ...convDoc.data() };
+            // Use aggregate unreadCount field
+            const unread = (conv.unreadCount && conv.unreadCount[currentUser.uid]) ? conv.unreadCount[currentUser.uid] : 0;
+            setActiveChats(prev => {
+              if (unread > 0 && !prev.some(c => c.id === conv.id)) {
+                // Find the chat partner's user object
+                const chatPartnerId = conv.participants.find(uid => uid !== currentUser.uid);
+                let chatPartner = userList.find(u => u.id === chatPartnerId);
+                // Fallback: use participantsInfo from conversation if available
+                if (!chatPartner && conv.participantsInfo && conv.participantsInfo[chatPartnerId]) {
+                  chatPartner = {
+                    id: chatPartnerId,
+                    displayName: conv.participantsInfo[chatPartnerId].displayName || 'User',
+                    photoURL: conv.participantsInfo[chatPartnerId].photoURL || '',
+                    status: 'offline',
+                  };
+                }
+                // Final fallback
+                if (!chatPartner) {
+                  chatPartner = {
+                    id: chatPartnerId,
+                    displayName: 'User',
+                    photoURL: '',
+                    status: 'offline',
+                  };
+                }
+                // Add chat head in minimized state with unread count
+                const chatHeadWidth = 60;
+                const chatHeadHeight = 60;
+                const gap = 20;
+                const x = window.innerWidth - chatHeadWidth - 40;
+                const minY = 44;
+                const y = Math.max(90 + (chatHeadHeight + gap) * prev.length, minY);
+                return [
+                  ...prev,
+                  {
+                    id: conv.id,
+                    user: chatPartner,
+                    unreadCount: unread,
+                    isExpanded: false,
+                    position: { x, y },
+                    unsub: null,
+                  }
+                ];
+              } else if (unread === 0 && prev.some(c => c.id === conv.id && !c.isExpanded)) {
+                // Remove minimized chat head if all messages are read and not expanded
+                return prev.filter(c => !(c.id === conv.id && !c.isExpanded));
+              } else {
+                // Update unread count if needed
+                return prev.map(c => c.id === conv.id ? { ...c, unreadCount: unread } : c);
+              }
+            });
+          });
+          lastUpdate = now;
+        }
       }
     );
     return () => unsub();
@@ -234,12 +162,7 @@ const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
 
     const updateStatus = async (status) => {
       if (lastStatus !== status) {
-        const now = new Date();
-        await setDoc(doc(db, 'users', currentUser.uid), { 
-          status,
-          lastActivity: now.toISOString(),
-          ...(status === 'offline' && { lastOnline: now.toISOString() })
-        }, { merge: true });
+        await setDoc(doc(db, 'users', currentUser.uid), { status }, { merge: true });
         lastStatus = status;
         lastStatusUpdate = Date.now();
       }
@@ -261,12 +184,6 @@ const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
     };
     const handleActivity = () => {
       setLastActivity(Date.now());
-      // Update lastActivity timestamp on any user activity
-      const now = new Date();
-      setDoc(doc(db, 'users', currentUser.uid), { 
-        lastActivity: now.toISOString()
-      }, { merge: true }).catch(() => {});
-      
       if (isAway) {
         setOnline();
       }
@@ -297,36 +214,6 @@ const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
       if (awayTimeout) clearTimeout(awayTimeout);
       if (heartbeatInterval) clearInterval(heartbeatInterval);
     };
-  }, [currentUser]);
-
-  // Periodic cleanup of stale online statuses
-  useEffect(() => {
-    if (!currentUser) return;
-    
-    const cleanupInterval = setInterval(async () => {
-      try {
-        // Get all users and check for stale online statuses
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        const now = new Date();
-        
-        usersSnapshot.docs.forEach(async (userDoc) => {
-          const userData = userDoc.data();
-          const lastActivity = userData.lastActivity ? new Date(userData.lastActivity) : null;
-          
-          // If user is online but hasn't been active for 10 minutes, mark as offline
-          if (userData.status === 'online' && lastActivity && (now - lastActivity) > 10 * 60 * 1000) {
-            await setDoc(doc(db, 'users', userDoc.id), { 
-              status: 'offline',
-              lastOnline: lastActivity.toISOString()
-            }, { merge: true });
-          }
-        });
-      } catch (error) {
-        console.error('Error during cleanup:', error);
-      }
-    }, 5 * 60 * 1000); // Run every 5 minutes
-    
-    return () => clearInterval(cleanupInterval);
   }, [currentUser]);
 
   const sidebarWidth = typeof mainContentMarginLeft === 'number' ? mainContentMarginLeft : (sidebarCollapsed ? 56 : 220);
