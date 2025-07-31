@@ -11,7 +11,7 @@ import {
   clearHistoryLog
 } from './firestoreHelpers';
 import * as XLSX from 'xlsx';
-import { getEOC } from './App.jsx';
+import { getEOC, getAdjustedEOC, getActiveDays } from './App.jsx';
 import { toast } from 'sonner';
 import { auth } from './firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -422,7 +422,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
             allRows.push({
               ...company,
               package: pkg,
-              eocDate: company.eocDate ? company.eocDate : (company.start ? getEOC(company.start) : 'N/A')
+              eocDate: company.eocDate ? company.eocDate : (company.start ? getAdjustedEOC(company) : 'N/A')
             });
           });
         });

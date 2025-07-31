@@ -672,6 +672,8 @@ export async function updateEOCDate(companyId, pkg, newEOCDate) {
   // Save back to Firestore with error logging
   try {
     await setDoc(doc(db, 'users', user.uid, 'meta', 'packages'), { packages });
+    // Clear cache to ensure fresh data
+    clearCache(`packages_${user.uid}`);
   } catch (err) {
     console.error('[updateEOCDate] Firestore error:', err);
     throw err;

@@ -246,6 +246,43 @@ export function getEOC(start) {
   return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
+// Enhanced EOC calculation that accounts for OnHold periods
+export function getAdjustedEOC(company) {
+  if (!company.start) return '';
+  
+  // Get base EOC date
+  const baseEOC = getEOC(company.start);
+  if (!baseEOC) return '';
+  
+  // Parse base EOC date
+  const match = baseEOC.match(/^(\w+) (\d{1,2}), (\d{4})$/);
+  if (!match) return baseEOC;
+  
+  const [_, month, day, year] = match;
+  const baseEOCDate = new Date(`${month} ${day}, ${year}`);
+  
+  // Add OnHold days to extend EOC
+  const onholdDays = company.totalOnholdDays || 0;
+  const adjustedEOCDate = new Date(baseEOCDate.getTime() + (onholdDays * 24 * 60 * 60 * 1000));
+  
+  return `${months[adjustedEOCDate.getMonth()]} ${adjustedEOCDate.getDate()}, ${adjustedEOCDate.getFullYear()}`;
+}
+
+// Calculate active days (excluding OnHold periods)
+export function getActiveDays(company) {
+  if (!company.start) return 0;
+  
+  const startDate = parseDisplayDateToInput(company.start);
+  if (!startDate) return 0;
+  
+  const today = new Date();
+  const totalDays = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+  
+  // Subtract OnHold days to get active days
+  const onholdDays = company.totalOnholdDays || 0;
+  return Math.max(0, totalDays - onholdDays);
+}
+
 function CompanyTracker({ editCompany, setEditData, editData, clearEdit, packages, setPackages }) {
   const [companies, setCompanies] = useState([]);
   const [form, setForm] = useState({
@@ -353,7 +390,16 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
         toast.success('Company updated successfully');
 
     } else {
-      const newCompany = { ...form, start, id: Date.now(), siteAuditBStatus: 'Pending', siteAuditCStatus: 'Pending' };
+              const newCompany = { 
+          ...form, 
+          start, 
+          id: Date.now(), 
+          siteAuditBStatus: 'Pending', 
+          siteAuditCStatus: 'Pending',
+          onholdStartDate: null,
+          onholdEndDate: null,
+          totalOnholdDays: 0
+        };
               await saveCompany(newCompany);
         setCompanies(await getCompanies());
         toast.success('Company added successfully');
@@ -1538,7 +1584,7 @@ function PackagePage({ pkg, packages, setPackages }) {
     setEditId(company.id);
     setEditName(company.name);
     setEditStart(parseDisplayDateToInput(company.start));
-    setEditEOC(parseDisplayDateToInput(company.eoc || getEOC(company.start)));
+    setEditEOC(parseDisplayDateToInput(company.eocDate || company.eoc || getEOC(company.start)));
   };
 
   const handleEditSave = async (company) => {
@@ -1548,7 +1594,7 @@ function PackagePage({ pkg, packages, setPackages }) {
         ...c,
         name: editName,
         start: formatDateToDisplay(editStart),
-        eoc: formatDateToDisplay(editEOC),
+        eocDate: formatDateToDisplay(editEOC),
       } : c
     );
     updatedPackages[pkg] = updatedCompanies;
@@ -1581,13 +1627,13 @@ function PackagePage({ pkg, packages, setPackages }) {
       addToHistory(historyEntry);
     }
     
-    if (formatDateToDisplay(editEOC) !== company.eoc) {
+    if (formatDateToDisplay(editEOC) !== (company.eocDate || company.eoc)) {
       const historyEntry = createHistoryEntry(
         company.id,
         company.name,
         pkg,
         'EOC Date',
-        company.eoc,
+        company.eocDate || company.eoc,
         formatDateToDisplay(editEOC)
       );
       addToHistory(historyEntry);
@@ -1649,11 +1695,33 @@ function PackagePage({ pkg, packages, setPackages }) {
   const handleStatusChange = async (companyId, newStatus) => {
     const company = companies.find(c => c.id === companyId);
     const oldStatus = company?.status || 'Active';
+    const today = new Date();
     
     const updatedPackages = { ...packages };
-    updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
-      c.id === companyId ? { ...c, status: newStatus } : c
-    );
+    updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c => {
+      if (c.id === companyId) {
+        const updatedCompany = { ...c, status: newStatus };
+        
+        // Track OnHold periods
+        if (newStatus === 'OnHold' && c.status !== 'OnHold') {
+          // Starting OnHold period
+          updatedCompany.onholdStartDate = today.toISOString();
+          updatedCompany.onholdEndDate = null;
+        } else if (c.status === 'OnHold' && newStatus !== 'OnHold') {
+          // Ending OnHold period
+          if (c.onholdStartDate) {
+            const startDate = new Date(c.onholdStartDate);
+            const onholdDays = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+            updatedCompany.totalOnholdDays = (c.totalOnholdDays || 0) + onholdDays;
+            updatedCompany.onholdEndDate = today.toISOString();
+          }
+        }
+        
+        return updatedCompany;
+      }
+      return c;
+    });
+    
     setPackages(updatedPackages);
     await savePackages(updatedPackages);
     setCompanies(updatedPackages[pkg]);
@@ -2522,7 +2590,7 @@ function PackagePage({ pkg, packages, setPackages }) {
                       )}
                     />
                   ) : (
-                    c.eoc || getEOC(c.start)
+                    c.eocDate || c.eoc || getEOC(c.start)
                   )}
                 </td>
                 <td>
@@ -5026,12 +5094,25 @@ function App() {
       const siteAuditC = [];
       if (packagesRef.current) {
         Object.values(packagesRef.current).flat().forEach(c => {
-        if (!c.start) return;
-        const startDate = new Date(c.start);
-        if (isNaN(startDate)) return;
-        const daysSinceStart = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
-          if (daysSinceStart >= 183 && c.siteAuditBStatus !== 'Completed') siteAuditB.push(c);
-          if (daysSinceStart >= 334 && c.siteAuditCStatus !== 'Completed') siteAuditC.push(c);
+          if (!c.start) return;
+          
+          // Site Audit B: 183 active days (excluding OnHold periods)
+          const activeDays = getActiveDays(c);
+          if (activeDays >= 183 && c.siteAuditBStatus !== 'Completed') {
+            siteAuditB.push(c);
+          }
+          
+          // Site Audit C: 30 days before adjusted EOC date
+          const adjustedEOC = getAdjustedEOC(c);
+          if (adjustedEOC) {
+            const eocDate = parseDisplayDateToInput(adjustedEOC);
+            if (eocDate) {
+              const daysUntilEOC = Math.floor((eocDate - today) / (1000 * 60 * 60 * 24));
+              if (daysUntilEOC <= 30 && daysUntilEOC > 0 && c.siteAuditCStatus !== 'Completed') {
+                siteAuditC.push(c);
+              }
+            }
+          }
         });
       }
       if (siteAuditB.length > 0) {

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { updateCompanyAuditStatus, getPackages, savePackages } from './firestoreHelpers';
+import { getAdjustedEOC, getActiveDays } from './App.jsx';
 
 const AUDIT_STATUS_KEY = 'siteAuditStatus';
 const PRE_EOC_STATUS_KEY = 'sitePreEOCStatus';
@@ -89,22 +90,34 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
   const today = new Date();
   const companies = Object.values(packages).flat();
 
-  // Table 1: Half-year since start (183 days or more, Pending only)
+  // Table 1: Half-year audit (183 active days, excluding OnHold periods)
   const table1 = companies.filter(c => {
     if (!c.start) return false;
-    const startDate = parseDisplayDateToInput(c.start);
-    if (!startDate) return false;
-    const daysSinceStart = daysBetween(startDate, today);
-    return daysSinceStart >= 183 && (auditStatus[c.id] !== 'Completed');
+    
+    // Calculate active days (excluding OnHold periods)
+    const activeDays = getActiveDays(c);
+    
+    // Site Audit B: 183 active days (6 months of active time)
+    return activeDays >= 183 && (auditStatus[c.id] !== 'Completed');
   });
 
-  // Table 2: Pre-EOC (334 days or more since start, Pending only)
+  // Table 2: Pre-EOC audit (1 month before adjusted EOC date)
   const table2 = companies.filter(c => {
     if (!c.start) return false;
-    const startDate = parseDisplayDateToInput(c.start);
-    if (!startDate) return false;
-    const daysSinceStart = daysBetween(startDate, today);
-    return daysSinceStart >= 334 && (preEOCStatus[c.id] !== 'Completed');
+    
+    // Get adjusted EOC date (including OnHold extensions)
+    const adjustedEOC = getAdjustedEOC(c);
+    if (!adjustedEOC) return false;
+    
+    // Parse adjusted EOC date
+    const eocDate = parseDisplayDateToInput(adjustedEOC);
+    if (!eocDate) return false;
+    
+    // Calculate days until EOC
+    const daysUntilEOC = daysBetween(today, eocDate);
+    
+    // Site Audit C: 30 days before adjusted EOC date
+    return daysUntilEOC <= 30 && daysUntilEOC > 0 && (preEOCStatus[c.id] !== 'Completed');
   });
 
   // Alert logic
