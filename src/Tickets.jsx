@@ -26,6 +26,7 @@ function Tickets({ darkMode, setDarkMode }) {
   const [searchFocused, setSearchFocused] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showAlert, setShowAlert] = useState(true);
+  const [alertMessage, setAlertMessage] = useState('');
   const [activeTab, setActiveTab] = useState('open'); // 'open' or 'closed'
 
 
@@ -190,14 +191,22 @@ function Tickets({ darkMode, setDarkMode }) {
     if (!auth.currentUser) return;
     
     const ticketsColRef = collection(db, 'users', auth.currentUser.uid, 'tickets');
+    let lastUpdate = 0;
+    const THROTTLE_DELAY = 8000; // 8 seconds throttle to reduce Firestore operations
+    
     const unsubscribe = onSnapshot(ticketsColRef, (snapshot) => {
-      console.log('Tickets collection changed, refreshing...');
-      // Clear cache when tickets change
-      localStorage.removeItem(TICKETS_CACHE_KEY);
-      // Refresh tickets with a small delay to prevent rapid refreshes
-      setTimeout(() => {
-        fetchTickets(false);
-      }, 500);
+      const now = Date.now();
+      if (now - lastUpdate > THROTTLE_DELAY) {
+        console.log('Tickets collection changed, refreshing...');
+        // Clear cache when tickets change
+        localStorage.removeItem(TICKETS_CACHE_KEY);
+        // Refresh tickets with a small delay to prevent rapid refreshes
+        setTimeout(() => {
+          fetchTickets(false);
+        }, 500);
+        lastUpdate = now;
+        console.log('Tickets updated from Firestore (throttled)');
+      }
     }, (error) => {
       console.error('Error listening to tickets:', error);
     });

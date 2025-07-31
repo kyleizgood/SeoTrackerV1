@@ -19,12 +19,31 @@ const setCachedData = (key, data) => {
   cache.set(key, { data, timestamp: Date.now() });
 };
 
-const clearCache = (key) => {
-  if (key) {
-    cache.delete(key);
+// Clear cache when data changes
+const clearCache = (pattern) => {
+  if (pattern) {
+    for (const key of cache.keys()) {
+      if (key.includes(pattern)) {
+        cache.delete(key);
+      }
+    }
   } else {
     cache.clear();
   }
+};
+
+// Throttling for write operations
+const writeThrottles = new Map();
+const MIN_WRITE_INTERVAL = 2000; // 2 seconds minimum between writes to same collection
+
+const throttleWrite = (key) => {
+  const now = Date.now();
+  const lastWrite = writeThrottles.get(key) || 0;
+  if (now - lastWrite < MIN_WRITE_INTERVAL) {
+    return false; // Throttled
+  }
+  writeThrottles.set(key, now);
+  return true; // Allowed
 };
 
 // After initializing Firestore (db), enable offline persistence
@@ -75,25 +94,39 @@ export async function deleteCompany(companyId) {
 export async function savePackages(packages) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `savePackages_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Save packages throttled, skipping write');
+    return;
+  }
+  
   await setDoc(doc(db, 'users', user.uid, 'meta', 'packages'), { packages });
-  // Clear cache to ensure fresh data
-  clearCache(`packages_${user.uid}`);
+  
+  // Clear cache when packages are updated
+  clearCache('packages');
+  console.log('Packages saved to Firestore (throttled)');
 }
 export async function getPackages() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
   
+  // Check cache first
   const cacheKey = `packages_${user.uid}`;
   const cached = getCachedData(cacheKey);
   if (cached) {
+    console.log('Using cached packages data');
     return cached;
   }
   
   const docSnap = await getDocs(collection(db, 'users', user.uid, 'meta'));
   const meta = docSnap.docs.find(d => d.id === 'packages');
-  const data = meta ? meta.data().packages : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-  setCachedData(cacheKey, data);
-  return data;
+  const packages = meta ? meta.data().packages : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
+  
+  // Cache the result
+  setCachedData(cacheKey, packages);
+  return packages;
 }
 // --- TEMPLATE HELPERS ---
 export async function saveTemplate(template) {
@@ -116,13 +149,38 @@ export async function deleteTemplate(templateId) {
 export async function saveTicket(ticket) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `saveTicket_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Save ticket throttled, skipping write');
+    return;
+  }
+  
   await setDoc(doc(db, 'users', user.uid, 'tickets', ticket.id.toString()), ticket);
+  
+  // Clear cache when tickets are updated
+  clearCache('tickets');
+  console.log('Ticket saved to Firestore (throttled)');
 }
 export async function getTickets() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Check cache first
+  const cacheKey = `tickets_${user.uid}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    console.log('Using cached tickets data');
+    return cached;
+  }
+  
   const snapshot = await getDocs(collection(db, 'users', user.uid, 'tickets'));
-  return snapshot.docs.map(doc => doc.data());
+  const tickets = snapshot.docs.map(doc => doc.data());
+  
+  // Cache the result
+  setCachedData(cacheKey, tickets);
+  return tickets;
 }
 export async function deleteTicket(ticketId) {
   const user = auth.currentUser;
@@ -149,41 +207,6 @@ export async function updateCompanyAuditStatus(companyId, field, value) {
   if (!user) throw new Error('Not logged in');
   const companyRef = doc(db, 'users', user.uid, 'companies', companyId.toString());
   await setDoc(companyRef, { [field]: value }, { merge: true });
-}
-
-// --- RESOURCE HELPERS ---
-export async function getResources() {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not logged in');
-  const snapshot = await getDocs(collection(db, 'users', user.uid, 'resources'));
-  return snapshot.docs.map(doc => doc.data());
-}
-
-export async function saveResource(resource) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not logged in');
-  await setDoc(doc(db, 'users', user.uid, 'resources', resource.id), resource);
-}
-
-export async function deleteResource(resourceId) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not logged in');
-  await deleteDoc(doc(db, 'users', user.uid, 'resources', resourceId));
-}
-
-// --- RESOURCE SECTION HELPERS ---
-export async function getResourceSections() {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not logged in');
-  const snapshot = await getDocs(collection(db, 'users', user.uid, 'meta'));
-  const meta = snapshot.docs.find(d => d.id === 'resourceSections');
-  return meta ? meta.data().sections : ['Site Audit', 'Keyword Research', 'Other Sheets'];
-}
-
-export async function saveResourceSections(sections) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not logged in');
-  await setDoc(doc(db, 'users', user.uid, 'meta', 'resourceSections'), { sections });
 }
 
 // Update a specific status field for a company inside a package in meta/packages
@@ -714,4 +737,99 @@ export async function clearHistoryLog(pageKey) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
   await setDoc(doc(db, 'users', user.uid, 'history', pageKey), { log: [] });
+} 
+
+export async function updateCompanyStatus(companyId, field, value) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `updateCompanyStatus_${user.uid}_${companyId}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Update company status throttled, skipping write');
+    return;
+  }
+  
+  const companyRef = doc(db, 'users', user.uid, 'companies', companyId.toString());
+  await setDoc(companyRef, { [field]: value }, { merge: true });
+  
+  // Clear cache when companies are updated
+  clearCache('companies');
+  console.log('Company status updated in Firestore (throttled)');
+}
+
+// --- RESOURCE HELPERS ---
+
+export async function saveResource(resource) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `saveResource_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Save resource throttled, skipping write');
+    return;
+  }
+  
+  await setDoc(doc(db, 'users', user.uid, 'resources', resource.id.toString()), resource);
+  
+  // Clear cache when resources are updated
+  clearCache('resources');
+  console.log('Resource saved to Firestore (throttled)');
+}
+
+export async function deleteResource(resourceId) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `deleteResource_${user.uid}_${resourceId}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Delete resource throttled, skipping write');
+    return;
+  }
+  
+  await deleteDoc(doc(db, 'users', user.uid, 'resources', resourceId.toString()));
+  
+  // Clear cache when resources are updated
+  clearCache('resources');
+  console.log('Resource deleted from Firestore (throttled)');
+}
+
+export async function getResourceSections() {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  // Check cache first
+  const cacheKey = `resourceSections_${user.uid}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    console.log('Using cached resource sections data');
+    return cached;
+  }
+  
+  const docSnap = await getDoc(doc(db, 'users', user.uid, 'meta', 'resourceSections'));
+  const sections = docSnap.exists() ? docSnap.data().sections : ['Site Audit', 'Keyword Research', 'Other Sheets'];
+  
+  // Cache the result
+  setCachedData(cacheKey, sections);
+  return sections;
+}
+
+export async function saveResourceSections(sections) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `saveResourceSections_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Save resource sections throttled, skipping write');
+    return;
+  }
+  
+  await setDoc(doc(db, 'users', user.uid, 'meta', 'resourceSections'), { sections });
+  
+  // Clear cache when resource sections are updated
+  clearCache('resourceSections');
+  console.log('Resource sections saved to Firestore (throttled)');
 } 

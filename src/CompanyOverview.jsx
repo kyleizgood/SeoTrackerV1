@@ -442,7 +442,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
     if (auth.currentUser) {
       const packagesDocRef = collection(db, 'users', auth.currentUser.uid, 'meta');
       let lastUpdate = 0;
-      const THROTTLE_DELAY = 1000; // 1 second throttle
+      const THROTTLE_DELAY = 10000; // 10 seconds throttle to reduce Firestore operations
       
       const unsubscribe = onSnapshot(packagesDocRef, (snapshot) => {
         const now = Date.now();
@@ -454,6 +454,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
               // Refresh data when packages change
               fetchData();
               lastUpdate = now;
+              console.log('Packages updated from Firestore (throttled)');
             }
           }
         }

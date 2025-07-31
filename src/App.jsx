@@ -15,12 +15,12 @@ import AuthPage from './AuthPage';
 import Login from './Login';
 import Register from './Register';
 import { getCompanies, saveCompany, deleteCompany } from './firestoreHelpers';
-import { getPackages, savePackages, getTrash, saveTrash, getTemplates, saveTemplate, deleteTemplate, getTickets, saveTicket, deleteTicket, loadHistoryLog, saveHistoryLog, clearHistoryLog } from './firestoreHelpers';
+import { getPackages, savePackages, getTrash, saveTrash, getTickets, saveTicket, loadHistoryLog, saveHistoryLog, clearHistoryLog, saveTemplate } from './firestoreHelpers';
 import { onSnapshot, collection, doc as firestoreDoc, deleteDoc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import GitsPage from './GitsPage';
 import SiteAuditsPage from './SiteAuditsPage';
-import { setSessionStartTime, getSessionStartTime, isSessionExpired, clearSessionStartTime, getRemainingSessionTime, formatRemainingTime } from './sessionUtils';
+import { setSessionStartTime, isSessionExpired, clearSessionStartTime, getRemainingSessionTime, formatRemainingTime } from './sessionUtils';
 import ResourcesPage from './ResourcesPage';
 import CompanyOverview from './CompanyOverview';
 import NotesPage from './NotesPage';
@@ -231,8 +231,6 @@ const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
-const days = Array.from({ length: 31 }, (_, i) => i + 1);
-const years = Array.from({ length: 20 }, (_, i) => new Date().getFullYear() - 10 + i);
 
 export function getEOC(start) {
   // start: e.g. 'February 4, 2017'
@@ -283,7 +281,7 @@ export function getActiveDays(company) {
   return Math.max(0, totalDays - onholdDays);
 }
 
-function CompanyTracker({ editCompany, setEditData, editData, clearEdit, packages, setPackages }) {
+function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
   const [companies, setCompanies] = useState([]);
   const [form, setForm] = useState({
     name: '',
@@ -368,15 +366,7 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
     setForm({ ...form, startDate: date });
   };
 
-  const updatePackages = (updatedCompany) => {
-    getPackages().then(packages => {
-      const saved = packages ? JSON.stringify(packages) : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-      Object.keys(packages).forEach(pkg => {
-        packages[pkg] = packages[pkg].map(c => c.id === updatedCompany.id ? updatedCompany : c);
-      });
-      savePackages(packages);
-    });
-  };
+  // Removed unused updatePackages function
 
   const handleAddOrEdit = async e => {
     e.preventDefault();
@@ -873,12 +863,22 @@ function CompanyTracker({ editCompany, setEditData, editData, clearEdit, package
                     onChange={e => {
                       const newStatus = e.target.value;
                       getPackages().then(packages => {
-                        const updatedCompanies = (packages[pkg] || []).map(row =>
-                          row.id === c.id ? { ...row, status: newStatus } : row
-                        );
-                        packages[pkg] = updatedCompanies;
-                        savePackages(packages);
-                        setCompanies(updatedCompanies);
+                        // Find which package this company belongs to
+                        let targetPackage = null;
+                        for (const [pkgName, pkgCompanies] of Object.entries(packages)) {
+                          if (pkgCompanies.some(company => company.id === c.id)) {
+                            targetPackage = pkgName;
+                            break;
+                          }
+                        }
+                        if (targetPackage) {
+                          const updatedCompanies = (packages[targetPackage] || []).map(row =>
+                            row.id === c.id ? { ...row, status: newStatus } : row
+                          );
+                          packages[targetPackage] = updatedCompanies;
+                          savePackages(packages);
+                          setCompanies(updatedCompanies);
+                        }
                       });
                     }}
                   >
@@ -1105,17 +1105,15 @@ function PackagePage({ pkg, packages, setPackages }) {
   const [filterBusinessProfileClaiming, setFilterBusinessProfileClaiming] = useState('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
-  const navigate = useNavigate();
-
   // --- History Log State ---
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [recentChanges, setRecentChanges] = useState(new Set());
   const [revertModal, setRevertModal] = useState(null);
   const [clearHistoryModal, setClearHistoryModal] = useState(false);
   const [pendingHistorySave, setPendingHistorySave] = useState(false);
   const [saveTimeout, setSaveTimeout] = useState(null);
   const [ticketModal, setTicketModal] = useState(null);
+  const [recentChanges, setRecentChanges] = useState(new Set());
 
   // History entry structure
   const createHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
@@ -4632,7 +4630,7 @@ function TrashPage() {
         // Remove from trash subcollection if exists (legacy)
         try {
           await deleteDoc(firestoreDoc(db, 'users', user.uid, 'trash', item.id));
-        } catch (e) {}
+        } catch {}
       }
     } else {
       // Restore to original package in Firestore
@@ -4655,7 +4653,7 @@ function TrashPage() {
         if (user) {
           await deleteDoc(firestoreDoc(db, 'users', user.uid, 'trash', item.id));
         }
-      } catch (e) {}
+      } catch {}
     }
   };
   // Delete all logic
@@ -4782,15 +4780,25 @@ export async function fetchAlerts() {
       await fetchAlertsRef.current();
     }
   } catch (e) {
-    // Optionally log or handle the error
+    // Clear cache on error to prevent stale data
+    ticketsCache.data = null;
+    ticketsCache.timestamp = 0;
+    console.error('Error in fetchAlerts:', e);
   }
 }
+
+// Add caching for tickets to prevent excessive reads
+const ticketsCache = {
+  data: null,
+  timestamp: 0,
+  cacheDuration: 60000 // 60 seconds cache to reduce Firestore reads
+};
 
 function App() {
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
   const location = useLocation();
   const [editData, setEditData] = useState(null);
   // Shared packages state
@@ -4799,7 +4807,7 @@ function App() {
   const [alerts, setAlerts] = useState([]);
   const [showAlerts, setShowAlerts] = useState(false);
   const [readAlerts, setReadAlerts] = useState(new Set());
-  const [ticketsChanged, setTicketsChanged] = useState(0);
+
   const [sessionTimeDisplay, setSessionTimeDisplay] = useState('');
   const bellRef = useRef();
   const dropdownRef = useRef();
@@ -4822,15 +4830,25 @@ function App() {
     }
   }, [user]);
 
-  // Save read alerts to Firestore
+  // Save read alerts to Firestore - with throttling to prevent excessive writes
+  const [lastReadAlertsSave, setLastReadAlertsSave] = useState(0);
   const saveReadAlerts = async (readAlertsSet) => {
     if (user?.uid) {
-      try {
-        await updateDoc(firestoreDoc(db, 'users', user.uid), {
-          readAlerts: Array.from(readAlertsSet)
-        });
-      } catch (error) {
-        console.error('Error saving read alerts:', error);
+      const now = Date.now();
+      const MIN_READ_ALERTS_SAVE_INTERVAL = 10000; // 10 seconds minimum between saves
+      
+      if (now - lastReadAlertsSave > MIN_READ_ALERTS_SAVE_INTERVAL) {
+        try {
+          await updateDoc(firestoreDoc(db, 'users', user.uid), {
+            readAlerts: Array.from(readAlertsSet)
+          });
+          setLastReadAlertsSave(now);
+          console.log('Read alerts saved to Firestore (throttled)');
+        } catch (error) {
+          console.error('Error saving read alerts:', error);
+        }
+      } else {
+        console.log('Read alerts save skipped (throttled)');
       }
     }
   };
@@ -4862,7 +4880,6 @@ function App() {
 
   const handleAlertChanges = (newAlerts) => {
     // Compare with previous alerts to detect changes
-    const currentAlertIds = new Set(newAlerts.map(alert => alert.id));
     const previousAlertIds = new Set(previousAlerts.map(alert => alert.id));
     
     // Find alerts that are new or have changed content
@@ -4896,7 +4913,19 @@ function App() {
   };
 
   // Smart function to mark notifications as unread when they have genuinely new content
+  // Throttle markNotificationsAsUnreadForNewContent to prevent excessive calls
+  const [lastNotificationCheck, setLastNotificationCheck] = useState(0);
   const markNotificationsAsUnreadForNewContent = () => {
+    const now = Date.now();
+    const MIN_NOTIFICATION_CHECK_INTERVAL = 15000; // 15 seconds minimum between checks
+    
+    if (now - lastNotificationCheck < MIN_NOTIFICATION_CHECK_INTERVAL) {
+      console.log('Notification check skipped (throttled)');
+      return;
+    }
+    
+    setLastNotificationCheck(now);
+    
     const relevantAlerts = alerts.filter(alert => alert.type !== 'tickets');
     
     // Check each alert for new content
@@ -4933,208 +4962,221 @@ function App() {
     setFetchAlertsImpl(async () => {
       try {
         let allAlerts = [];
-        // Tickets alerts
-        const tickets = await getTickets().catch(() => []);
-      const today = new Date();
-      const isToday = d => {
-        if (!d) return false;
-        const date = new Date(d);
-        return date.toDateString() === today.toDateString();
-      };
-      const isYesterday = d => {
-        if (!d) return false;
-        const date = new Date(d);
-        const yest = new Date(today);
-        yest.setDate(today.getDate() - 1);
-        return date.toDateString() === yest.toDateString();
-      };
-      const isOverdue = d => {
-        if (!d) return false;
-        const date = new Date(d);
-        return date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      };
-      const todayFollowUps = tickets.filter(t => isToday(t.followUpDate) && (t.status || 'open') !== 'closed');
-      const yesterdayFollowUps = tickets.filter(t => isYesterday(t.followUpDate) && (t.status || 'open') !== 'closed');
-      const overdueFollowUps = tickets.filter(t => isOverdue(t.followUpDate) && (t.status || 'open') !== 'closed');
-      if (yesterdayFollowUps.length > 0) {
-        allAlerts.push({
-          id: 'tickets-yesterday',
-          type: 'tickets',
-          message: `Missed follow up: ${yesterdayFollowUps.length} ticket${yesterdayFollowUps.length > 1 ? 's' : ''} (yesterday)` ,
-          link: '/tickets',
-          color: '#ff9800',
-          icon: '⏰',
-          timestamp: Date.now(),
-          // Add dynamic content that changes when data changes
-          dynamicContent: `${yesterdayFollowUps.length}-${yesterdayFollowUps.map(t => t.id).join(',')}`
+        
+        // Use cached tickets data if available and fresh
+        let tickets = [];
+        const now = Date.now();
+        if (ticketsCache.data && (now - ticketsCache.timestamp) < ticketsCache.cacheDuration) {
+          tickets = ticketsCache.data;
+          console.log('Using cached tickets data (age:', Math.round((now - ticketsCache.timestamp) / 1000), 's)');
+        } else {
+          // Fetch fresh tickets data and cache it
+          console.log('Fetching fresh tickets data from Firestore');
+          tickets = await getTickets().catch(() => []);
+          ticketsCache.data = tickets;
+          ticketsCache.timestamp = now;
+        }
+        
+        const today = new Date();
+        const isToday = d => {
+          if (!d) return false;
+          const date = new Date(d);
+          return date.toDateString() === today.toDateString();
+        };
+        const isYesterday = d => {
+          if (!d) return false;
+          const date = new Date(d);
+          const yest = new Date(today);
+          yest.setDate(today.getDate() - 1);
+          return date.toDateString() === yest.toDateString();
+        };
+        const isOverdue = d => {
+          if (!d) return false;
+          const date = new Date(d);
+          return date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        };
+        const todayFollowUps = tickets.filter(t => isToday(t.followUpDate) && (t.status || 'open') !== 'closed');
+        const yesterdayFollowUps = tickets.filter(t => isYesterday(t.followUpDate) && (t.status || 'open') !== 'closed');
+        const overdueFollowUps = tickets.filter(t => isOverdue(t.followUpDate) && (t.status || 'open') !== 'closed');
+        if (yesterdayFollowUps.length > 0) {
+          allAlerts.push({
+            id: 'tickets-yesterday',
+            type: 'tickets',
+            message: `Missed follow up: ${yesterdayFollowUps.length} ticket${yesterdayFollowUps.length > 1 ? 's' : ''} (yesterday)` ,
+            link: '/tickets',
+            color: '#ff9800',
+            icon: '⏰',
+            timestamp: Date.now(),
+            // Add dynamic content that changes when data changes
+            dynamicContent: `${yesterdayFollowUps.length}-${yesterdayFollowUps.map(t => t.id).join(',')}`
+          });
+        }
+        if (todayFollowUps.length > 0) {
+          allAlerts.push({
+            id: 'tickets-today',
+            type: 'tickets',
+            message: `Follow up today: ${todayFollowUps.length} ticket${todayFollowUps.length > 1 ? 's' : ''}` ,
+            link: '/tickets',
+            color: '#d32f2f',
+            icon: '⏰',
+            timestamp: Date.now(),
+            // Add dynamic content that changes when data changes
+            dynamicContent: `${todayFollowUps.length}-${todayFollowUps.map(t => t.id).join(',')}`
+          });
+        }
+        if (overdueFollowUps.length > 0) {
+          allAlerts.push({
+            id: 'tickets-overdue',
+            type: 'tickets',
+            message: `Overdue: ${overdueFollowUps.length} ticket${overdueFollowUps.length > 1 ? 's' : ''}` ,
+            link: '/tickets',
+            color: '#b26a00',
+            icon: '⚠️',
+            timestamp: Date.now(),
+            // Add dynamic content that changes when data changes
+            dynamicContent: `${overdueFollowUps.length}-${overdueFollowUps.map(t => t.id).join(',')}`
+          });
+        }
+        // Summarize Report, Bookmarking, Link Building alerts by type
+        const summary = {
+          report: {},
+          bm: {},
+          linkbuilding: {},
+        };
+        if (!packagesRef.current) return;
+        Object.entries(packagesRef.current).forEach(([pkg, companies]) => {
+          // Report
+          const pendingReport = (companies || []).filter(c => c.status !== 'OnHold' && c.reportI !== 'Completed').length;
+          if (pendingReport > 0) summary.report[pkg] = pendingReport;
+          // Bookmarking
+          const pendingBM = (companies || []).filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length;
+          if (pendingBM > 0) summary.bm[pkg] = pendingBM;
+          // Link Building
+          const pendingLB = (companies || []).filter(c => c.status !== 'OnHold' && c.linkBuildingStatus !== 'Completed').length;
+          if (pendingLB > 0) summary.linkbuilding[pkg] = pendingLB;
         });
-      }
-      if (todayFollowUps.length > 0) {
-        allAlerts.push({
-          id: 'tickets-today',
-          type: 'tickets',
-          message: `Follow up today: ${todayFollowUps.length} ticket${todayFollowUps.length > 1 ? 's' : ''}` ,
-          link: '/tickets',
-          color: '#d32f2f',
-          icon: '⏰',
-          timestamp: Date.now(),
-          // Add dynamic content that changes when data changes
-          dynamicContent: `${todayFollowUps.length}-${todayFollowUps.map(t => t.id).join(',')}`
-        });
-      }
-      if (overdueFollowUps.length > 0) {
-        allAlerts.push({
-          id: 'tickets-overdue',
-          type: 'tickets',
-          message: `Overdue: ${overdueFollowUps.length} ticket${overdueFollowUps.length > 1 ? 's' : ''}` ,
-          link: '/tickets',
-          color: '#b26a00',
-          icon: '⚠️',
-          timestamp: Date.now(),
-          // Add dynamic content that changes when data changes
-          dynamicContent: `${overdueFollowUps.length}-${overdueFollowUps.map(t => t.id).join(',')}`
-        });
-      }
-      // Summarize Report, Bookmarking, Link Building alerts by type
-      const summary = {
-        report: {},
-        bm: {},
-        linkbuilding: {},
-      };
-      if (!packagesRef.current) return;
-      Object.entries(packagesRef.current).forEach(([pkg, companies]) => {
-        // Report
-        const pendingReport = (companies || []).filter(c => c.status !== 'OnHold' && c.reportI !== 'Completed').length;
-        if (pendingReport > 0) summary.report[pkg] = pendingReport;
-        // Bookmarking
-        const pendingBM = (companies || []).filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length;
-        if (pendingBM > 0) summary.bm[pkg] = pendingBM;
-        // Link Building
-        const pendingLB = (companies || []).filter(c => c.status !== 'OnHold' && c.linkBuildingStatus !== 'Completed').length;
-        if (pendingLB > 0) summary.linkbuilding[pkg] = pendingLB;
-      });
-      // Add summarized alerts
-      if (Object.keys(summary.report).length > 0) {
-        const total = Object.values(summary.report).reduce((a, b) => a + b, 0);
-        allAlerts.push({
-          id: 'report-summary',
-          type: 'report',
-          message: `Report I: ${total} pending (${Object.entries(summary.report).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
-          link: '/report',
-          color: '#1976d2',
-          icon: '📊',
-          timestamp: Date.now(),
-          // Add dynamic content that changes when data changes
-          dynamicContent: `${total}-${Object.entries(summary.report).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
-        });
-      }
-      if (Object.keys(summary.bm).length > 0) {
-        const total = Object.values(summary.bm).reduce((a, b) => a + b, 0);
-        allAlerts.push({
-          id: 'bm-summary',
-          type: 'bm',
-          message: `BM Submission: ${total} pending (${Object.entries(summary.bm).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
-          link: '/social-bookmarking',
-          color: '#388e3c',
-          icon: '🔖',
-          timestamp: Date.now(),
-          // Add dynamic content that changes when data changes
-          dynamicContent: `${total}-${Object.entries(summary.bm).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
-        });
-      }
-      // --- BM Creation Alert ---
-      // Count all companies needing BM Creation (not Completed, not OnHold)
-      const bmCreationCount = packagesRef.current ? Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmCreation !== 'Completed').length : 0;
-      if (bmCreationCount > 0) {
-        allAlerts.push({
-          id: 'bm-creation',
-          type: 'bmcreation',
-          message: `BM Creation: <b>${bmCreationCount}</b> compan${bmCreationCount === 1 ? 'y' : 'ies'} need creation`,
-          link: '/social-bookmarking',
-          color: '#c00',
-          icon: '📝',
-          timestamp: Date.now(),
-          // Add dynamic content that changes when data changes
-          dynamicContent: `${bmCreationCount}`
-        });
-      }
-      // --- BM Submission Alert ---
-      // Count all companies needing BM Submission (not Completed, not OnHold)
-      const bmSubmissionCount = packagesRef.current ? Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length : 0;
-      if (bmSubmissionCount > 0) {
-        allAlerts.push({
-          id: 'bm-submission',
-          type: 'bmsubmission',
-          message: `BM Submission: <b>${bmSubmissionCount}</b> compan${bmSubmissionCount === 1 ? 'y' : 'ies'} need submission`,
-          link: '/social-bookmarking',
-          color: '#b26a00',
-          icon: '🔖',
-          timestamp: Date.now(),
-          // Add dynamic content that changes when data changes
-          dynamicContent: `${bmSubmissionCount}`
-        });
-      }
-      // --- Link Building Alert ---
-      if (Object.keys(summary.linkbuilding).length > 0) {
-        const total = Object.values(summary.linkbuilding).reduce((a, b) => a + b, 0);
-        allAlerts.push({
-          id: 'linkbuilding-summary',
-          type: 'linkbuilding',
-          message: `Link Building: ${total} pending (${Object.entries(summary.linkbuilding).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
-          link: '/link-buildings',
-          color: '#b26a00',
-          icon: '🔗',
-          timestamp: Date.now(),
-          // Add dynamic content that changes when data changes
-          dynamicContent: `${total}-${Object.entries(summary.linkbuilding).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
-        });
-      }
-      // --- Site Audit Alerts ---
-      const siteAuditB = [];
-      const siteAuditC = [];
-      if (packagesRef.current) {
-        Object.values(packagesRef.current).flat().forEach(c => {
-          if (!c.start) return;
-          
-          // Site Audit B: 183 active days (excluding OnHold periods)
-          const activeDays = getActiveDays(c);
-          if (activeDays >= 183 && c.siteAuditBStatus !== 'Completed') {
-            siteAuditB.push(c);
-          }
-          
-          // Site Audit C: 30 days before adjusted EOC date
-          const adjustedEOC = getAdjustedEOC(c);
-          if (adjustedEOC) {
-            const eocDate = parseDisplayDateToInput(adjustedEOC);
-            if (eocDate) {
-              const daysUntilEOC = Math.floor((eocDate - today) / (1000 * 60 * 60 * 24));
-              if (daysUntilEOC <= 30 && daysUntilEOC > 0 && c.siteAuditCStatus !== 'Completed') {
-                siteAuditC.push(c);
+        // Add summarized alerts
+        if (Object.keys(summary.report).length > 0) {
+          const total = Object.values(summary.report).reduce((a, b) => a + b, 0);
+          allAlerts.push({
+            id: 'report-summary',
+            type: 'report',
+            message: `Report I: ${total} pending (${Object.entries(summary.report).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
+            link: '/report',
+            color: '#1976d2',
+            icon: '📊',
+            timestamp: Date.now(),
+            // Add dynamic content that changes when data changes
+            dynamicContent: `${total}-${Object.entries(summary.report).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
+          });
+        }
+        if (Object.keys(summary.bm).length > 0) {
+          const total = Object.values(summary.bm).reduce((a, b) => a + b, 0);
+          allAlerts.push({
+            id: 'bm-summary',
+            type: 'bm',
+            message: `BM Submission: ${total} pending (${Object.entries(summary.bm).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
+            link: '/social-bookmarking',
+            color: '#388e3c',
+            icon: '🔖',
+            timestamp: Date.now(),
+            // Add dynamic content that changes when data changes
+            dynamicContent: `${total}-${Object.entries(summary.bm).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
+          });
+        }
+        // --- BM Creation Alert ---
+        // Count all companies needing BM Creation (not Completed, not OnHold)
+        const bmCreationCount = packagesRef.current ? Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmCreation !== 'Completed').length : 0;
+        if (bmCreationCount > 0) {
+          allAlerts.push({
+            id: 'bm-creation',
+            type: 'bmcreation',
+            message: `BM Creation: <b>${bmCreationCount}</b> compan${bmCreationCount === 1 ? 'y' : 'ies'} need creation`,
+            link: '/social-bookmarking',
+            color: '#c00',
+            icon: '📝',
+            timestamp: Date.now(),
+            // Add dynamic content that changes when data changes
+            dynamicContent: `${bmCreationCount}`
+          });
+        }
+        // --- BM Submission Alert ---
+        // Count all companies needing BM Submission (not Completed, not OnHold)
+        const bmSubmissionCount = packagesRef.current ? Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length : 0;
+        if (bmSubmissionCount > 0) {
+          allAlerts.push({
+            id: 'bm-submission',
+            type: 'bmsubmission',
+            message: `BM Submission: <b>${bmSubmissionCount}</b> compan${bmSubmissionCount === 1 ? 'y' : 'ies'} need submission`,
+            link: '/social-bookmarking',
+            color: '#b26a00',
+            icon: '🔖',
+            timestamp: Date.now(),
+            // Add dynamic content that changes when data changes
+            dynamicContent: `${bmSubmissionCount}`
+          });
+        }
+        // --- Link Building Alert ---
+        if (Object.keys(summary.linkbuilding).length > 0) {
+          const total = Object.values(summary.linkbuilding).reduce((a, b) => a + b, 0);
+          allAlerts.push({
+            id: 'linkbuilding-summary',
+            type: 'linkbuilding',
+            message: `Link Building: ${total} pending (${Object.entries(summary.linkbuilding).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
+            link: '/link-buildings',
+            color: '#b26a00',
+            icon: '🔗',
+            timestamp: Date.now(),
+            // Add dynamic content that changes when data changes
+            dynamicContent: `${total}-${Object.entries(summary.linkbuilding).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
+          });
+        }
+        // --- Site Audit Alerts ---
+        const siteAuditB = [];
+        const siteAuditC = [];
+        if (packagesRef.current) {
+          Object.values(packagesRef.current).flat().forEach(c => {
+            if (!c.start) return;
+            
+            // Site Audit B: 183 active days (excluding OnHold periods)
+            const activeDays = getActiveDays(c);
+            if (activeDays >= 183 && c.siteAuditBStatus !== 'Completed') {
+              siteAuditB.push(c);
+            }
+            
+            // Site Audit C: 30 days before adjusted EOC date
+            const adjustedEOC = getAdjustedEOC(c);
+            if (adjustedEOC) {
+              const eocDate = parseDisplayDateToInput(adjustedEOC);
+              if (eocDate) {
+                const daysUntilEOC = Math.floor((eocDate - today) / (1000 * 60 * 60 * 24));
+                if (daysUntilEOC <= 30 && daysUntilEOC > 0 && c.siteAuditCStatus !== 'Completed') {
+                  siteAuditC.push(c);
+                }
               }
             }
-          }
-        });
-      }
-      if (siteAuditB.length > 0) {
-        allAlerts.push({
-          id: 'siteaudit-b',
-          type: 'siteaudit',
-          message: `Site Audit B: ${siteAuditB.length} compan${siteAuditB.length === 1 ? 'y' : 'ies'} need audit`,
-          link: '/site-audits',
-          color: '#b26a00',
-          icon: '⚠️',
-        });
-      }
-      if (siteAuditC.length > 0) {
-        allAlerts.push({
-          id: 'siteaudit-c',
-          type: 'siteaudit',
-          message: `Site Audit C: ${siteAuditC.length} compan${siteAuditC.length === 1 ? 'y' : 'ies'} need audit`,
-          link: '/site-audits',
-          color: '#1976d2',
-          icon: '🔔',
-        });
-      }
+          });
+        }
+        if (siteAuditB.length > 0) {
+          allAlerts.push({
+            id: 'siteaudit-b',
+            type: 'siteaudit',
+            message: `Site Audit B: ${siteAuditB.length} compan${siteAuditB.length === 1 ? 'y' : 'ies'} need audit`,
+            link: '/site-audits',
+            color: '#b26a00',
+            icon: '⚠️',
+          });
+        }
+        if (siteAuditC.length > 0) {
+          allAlerts.push({
+            id: 'siteaudit-c',
+            type: 'siteaudit',
+            message: `Site Audit C: ${siteAuditC.length} compan${siteAuditC.length === 1 ? 'y' : 'ies'} need audit`,
+            link: '/site-audits',
+            color: '#1976d2',
+            icon: '🔔',
+          });
+        }
         setAlertsRef.current(allAlerts);
         handleAlertChanges(allAlerts);
       } catch (error) {
@@ -5149,6 +5191,10 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setSessionStartTime(); // Reset session timer for the current user
+      } else {
+        // Clear cache when user logs out
+        ticketsCache.data = null;
+        ticketsCache.timestamp = 0;
       }
       setUser(firebaseUser);
     });
@@ -5214,17 +5260,26 @@ function App() {
     fetchPackages();
   }, []);
 
-  // Real-time listener for packages
+  // Real-time listener for packages - with throttling
   useEffect(() => {
     if (!user) return;
+    
+    let lastPackageUpdate = 0;
+    const MIN_PACKAGE_UPDATE_INTERVAL = 5000; // 5 seconds minimum between package updates
+    
     const packagesDocRef = collection(db, 'users', user.uid, 'meta');
     // Listen for changes in the 'packages' document
     const unsubscribe = onSnapshot(packagesDocRef, (snapshot) => {
-      const pkgDoc = snapshot.docs.find(d => d.id === 'packages');
-      if (pkgDoc) {
-        const data = pkgDoc.data();
-        if (data && data.packages) {
-          setPackages(data.packages);
+      const now = Date.now();
+      if (now - lastPackageUpdate > MIN_PACKAGE_UPDATE_INTERVAL) {
+        const pkgDoc = snapshot.docs.find(d => d.id === 'packages');
+        if (pkgDoc) {
+          const data = pkgDoc.data();
+          if (data && data.packages) {
+            setPackages(data.packages);
+            lastPackageUpdate = now;
+            console.log('Packages updated from Firestore (throttled)');
+          }
         }
       }
     });
@@ -5242,7 +5297,7 @@ function App() {
       fetchAlerts();
       // Use smart detection to mark notifications as unread only when they have new content
       markNotificationsAsUnreadForNewContent();
-    }, 1000); // Debounce for 1 second
+    }, 3000); // Debounce for 3 seconds to prevent excessive calls
     
     setAlertDebounceTimer(timer);
     
@@ -5251,19 +5306,31 @@ function App() {
     };
   }, [packages]);
 
-  // Real-time listener for tickets (alerts) - with debouncing
+  // Real-time listener for tickets (alerts) - with debouncing and throttling
   useEffect(() => {
     if (!user) return;
     
     let ticketDebounceTimer = null;
+    let lastTicketUpdate = 0;
+    const MIN_TICKET_UPDATE_INTERVAL = 8000; // 8 seconds minimum between ticket updates
     const ticketsColRef = collection(db, 'users', user.uid, 'tickets');
     
     const unsubscribe = onSnapshot(ticketsColRef, () => {
-      // Debounce ticket alert updates to prevent excessive calls
-      if (ticketDebounceTimer) clearTimeout(ticketDebounceTimer);
-      ticketDebounceTimer = setTimeout(() => {
-        fetchAlerts();
-      }, 2000); // 2 second debounce for ticket changes
+      const now = Date.now();
+      if (now - lastTicketUpdate > MIN_TICKET_UPDATE_INTERVAL) {
+        // Clear tickets cache when tickets change
+        ticketsCache.data = null;
+        ticketsCache.timestamp = 0;
+        
+        // Debounce ticket alert updates to prevent excessive calls
+        if (ticketDebounceTimer) clearTimeout(ticketDebounceTimer);
+        ticketDebounceTimer = setTimeout(() => {
+          fetchAlerts();
+        }, 5000); // 5 second debounce for ticket changes to prevent excessive calls
+        
+        lastTicketUpdate = now;
+        console.log('Tickets updated from Firestore (throttled)');
+      }
     });
     
     return () => {

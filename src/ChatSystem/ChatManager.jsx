@@ -2,8 +2,8 @@ import React, { useState, useCallback, useContext, createContext, useEffect, use
 import ChatHead from './ChatHead';
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { auth, db } from '../firebase';
-import { getAllUsers, createConversation, getConversations, sendMessage, listenForMessages, markMessagesAsRead } from '../firestoreHelpers';
-import { onSnapshot, doc, setDoc, collection, query, where, limit as fsLimit, startAfter as fsStartAfter, getDocs } from 'firebase/firestore';
+import { createConversation, getConversations, sendMessage, markMessagesAsRead } from '../firestoreHelpers';
+import { onSnapshot, doc, setDoc, collection, query } from 'firebase/firestore';
 
 const ChatContext = createContext();
 
@@ -17,37 +17,44 @@ const USER_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
   const [activeChats, setActiveChats] = useState([]); // [{ id, user, unreadCount, isExpanded, position }]
   const [userList, setUserList] = useState([]); // All users
-  const [lastUserDoc, setLastUserDoc] = useState(null); // For pagination
-  const [hasMoreUsers, setHasMoreUsers] = useState(true);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [conversations, setConversations] = useState([]); // All conversations for current user
   const [currentUser, setCurrentUser] = useState(null);
   const chatHeadRefs = useRef({});
-  const [lastActivity, setLastActivity] = useState(Date.now());
-  const [awayTimeout, setAwayTimeout] = useState(null);
 
   // Load current user
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async user => {
       setCurrentUser(user);
       if (user) {
-        // Set user status to online in Firestore
-        await setDoc(doc(db, 'users', user.uid), { status: 'online' }, { merge: true });
-        // Set offline on disconnect (tab close)
+        // Set user status to online in Firestore - with throttling
+        let lastStatusUpdate = 0;
+        const MIN_STATUS_UPDATE_INTERVAL = 30000; // 30 seconds minimum between status updates
+        
+        const updateStatusWithThrottling = async (status) => {
+          const now = Date.now();
+          if (now - lastStatusUpdate > MIN_STATUS_UPDATE_INTERVAL) {
+            await setDoc(doc(db, 'users', user.uid), { status }, { merge: true });
+            lastStatusUpdate = now;
+            console.log(`Status updated to: ${status}`);
+          }
+        };
+        
+        await updateStatusWithThrottling('online');
+        
+        // Set offline on disconnect (tab close) - only if not already offline
         window.addEventListener('beforeunload', () => {
-          setDoc(doc(db, 'users', user.uid), { status: 'offline' }, { merge: true });
+          updateStatusWithThrottling('offline');
         });
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Real-time user list (all users, not just online/away) - with throttling
+  // Real-time user list (all users, not just online/away) - with improved throttling
   useEffect(() => {
     if (!currentUser) return;
     
     let lastUpdate = 0;
-    const THROTTLE_DELAY = 3000; // 3 seconds between updates
+    const THROTTLE_DELAY = 10000; // 10 seconds between updates to reduce writes
     
     // Listen for real-time updates to all users
     const q = query(
@@ -61,6 +68,7 @@ const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
         setHasMoreUsers(false); // No pagination for real-time
         setLoadingUsers(false);
         lastUpdate = now;
+        console.log('User list updated from Firestore (throttled)');
       }
     });
     return () => unsubscribe();
@@ -73,12 +81,12 @@ const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
     }
   }, [currentUser]);
 
-  // Listen for all conversations and auto-open chat heads for new unread messages - with throttling
+  // Listen for all conversations and auto-open chat heads for new unread messages - with improved throttling
   useEffect(() => {
     if (!currentUser) return;
     
     let lastUpdate = 0;
-    const THROTTLE_DELAY = 2000; // 2 seconds between updates
+    const THROTTLE_DELAY = 5000; // 5 seconds between updates to reduce writes
     
     // Listen for all conversations
     const unsub = onSnapshot(
@@ -151,20 +159,25 @@ const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
     return () => unsub();
   }, [currentUser, userList]);
 
-  // Track user activity for 'away' status (debounced/heartbeat)
+  // Activity tracking and status management - with improved throttling
   useEffect(() => {
     if (!currentUser) return;
-    let lastStatusUpdate = Date.now();
+    
     let isAway = false;
-    let heartbeatInterval = null;
+    let lastActivity = Date.now();
+    let lastStatusUpdate = Date.now();
     let awayTimeout = null;
+    let heartbeatInterval = null;
     let lastStatus = null; // Track last status sent to Firestore
+    const MIN_STATUS_UPDATE_INTERVAL = 30000; // 30 seconds minimum between status updates
 
     const updateStatus = async (status) => {
-      if (lastStatus !== status) {
+      const now = Date.now();
+      if (lastStatus !== status && (now - lastStatusUpdate) > MIN_STATUS_UPDATE_INTERVAL) {
         await setDoc(doc(db, 'users', currentUser.uid), { status }, { merge: true });
         lastStatus = status;
-        lastStatusUpdate = Date.now();
+        lastStatusUpdate = now;
+        console.log(`Status updated to: ${status} (throttled)`);
       }
     };
 
@@ -196,7 +209,7 @@ const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
     window.addEventListener('mousemove', handleActivity);
     window.addEventListener('keydown', handleActivity);
     window.addEventListener('touchstart', handleActivity);
-    // Heartbeat: update status every 60 seconds if online
+    // Heartbeat: update status every 60 seconds if online - with throttling
     heartbeatInterval = setInterval(() => {
       if (!isAway) setOnline();
     }, 60000);
@@ -275,9 +288,7 @@ const ChatManager = ({ children, sidebarCollapsed, mainContentMarginLeft }) => {
   return (
     <ChatContext.Provider value={{ openChat, closeChat, sendChatMessage, activeChats, userList }}>
       {children}
-      {hasMoreUsers && !loadingUsers && (
-        <button onClick={() => fetchUsers(true)} style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 4000, background: '#fff', border: '1.5px solid #1976d2', borderRadius: 8, padding: '8px 18px', fontSize: 15, color: '#1976d2', cursor: 'pointer', boxShadow: '0 2px 8px #e0e7ef' }}>Load more users</button>
-      )}
+      {/* Removed fetchUsers button as it's not defined and real-time updates handle user loading */}
       {loadingUsers && (
         <div style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 4000, background: '#fff', border: '1.5px solid #e0e0e0', borderRadius: 8, padding: '8px 18px', fontSize: 15, color: '#888', boxShadow: '0 2px 8px #e0e7ef' }}>Loading users...</div>
       )}

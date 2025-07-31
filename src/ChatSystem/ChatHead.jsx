@@ -2,10 +2,8 @@ import React, { useState, useRef, useEffect, forwardRef } from 'react';
 import { useChat } from './ChatManager';
 import { listenForMessages, markMessagesAsRead, addReactionToMessage, removeReactionFromMessage, editMessage, deleteMessage, fetchOlderMessages, fetchArchivedMessages } from '../firestoreHelpers';
 import { auth } from '../firebase';
-import { doc, updateDoc, onSnapshot, collection, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
-import { storage } from '../firebase';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
 import { toast } from 'sonner';
@@ -86,15 +84,7 @@ const ChatHead = forwardRef(({
     }
   }, [isDragging, dragOffset]);
 
-  const getUserInitials = (user) => {
-    if (user?.displayName) {
-      return user.displayName.split(' ').map(n => n[0]).join('').toUpperCase();
-    }
-    if (user?.email) {
-      return user.email.slice(0, 2).toUpperCase();
-    }
-    return 'U';
-  };
+  // Removed unused getUserInitials function
 
   const chatHeadStyle = {
     position: 'fixed',
@@ -391,6 +381,8 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
 
   const typingTimeout = useRef(null);
   const lastTypingUpdate = useRef(0);
+  const MIN_TYPING_UPDATE_INTERVAL = 3000; // 3 seconds minimum between typing updates
+  
   // Set typing flag in Firestore when user types (throttled)
   useEffect(() => {
     if (!conversationId || !currentUserId) return;
@@ -399,11 +391,11 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
     let timeout;
     const setTyping = async () => {
       const now = Date.now();
-      if (now - lastTypingUpdate.current < 2000) return;
+      if (now - lastTypingUpdate.current < MIN_TYPING_UPDATE_INTERVAL) return;
       lastTypingUpdate.current = now;
       try {
         await updateDoc(convDoc, { [`typing.${currentUserId}`]: true });
-      } catch (e) {}
+      } catch {}
     };
     typingTimeout.current = setTimeout(() => {
       setTyping();
@@ -412,7 +404,7 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
     timeout = setTimeout(async () => {
       try {
         await updateDoc(convDoc, { [`typing.${currentUserId}`]: false });
-      } catch (e) {}
+      } catch {}
     }, 2000);
     return () => {
       clearTimeout(timeout);

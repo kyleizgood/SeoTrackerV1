@@ -54,7 +54,7 @@ export default function AuthPage() {
     try {
       await sendPasswordResetEmail(auth, resetEmail);
       setResetMessage('Password reset email sent! Check your inbox.');
-    } catch (err) {
+    } catch {
       setResetMessage('Failed to send reset email. Please check the email address.');
     }
   };

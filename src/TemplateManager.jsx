@@ -86,11 +86,13 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
     const cache = localStorage.getItem(TEMPLATES_CACHE_KEY);
     if (cache) {
       const { templates: cachedTemplates, lastDocId, ts } = JSON.parse(cache);
-      if (Array.isArray(cachedTemplates) && Date.now() - ts < 1000 * 60 * 10) { // 10 min cache
+      if (Array.isArray(cachedTemplates) && Date.now() - ts < 1000 * 60 * 30) { // 30 min cache to reduce Firestore reads
         setTemplates(cachedTemplates);
         setLoading(false);
-        // Still fetch latest in background
-        fetchTemplates(false);
+        // Still fetch latest in background with longer delay
+        setTimeout(() => {
+          fetchTemplates(false);
+        }, 5000); // 5 second delay for background fetch
         return;
       }
     }
