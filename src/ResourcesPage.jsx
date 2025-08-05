@@ -185,7 +185,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
   useEffect(() => {
     if (history && history.length > 0) {
       saveHistoryLog('resources', history).catch(err => {
-        console.error('Error saving history:', err);
+        // console.error('Error saving history:', err);
       });
     }
   }, [history]);
@@ -233,7 +233,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
           [pendingLink]: l[pendingLink].filter(r => r.id !== newResource.id)
         }));
         alert('Failed to save resource to database. Please try again.');
-        console.error('Failed to save resource:', e);
+        // console.error('Failed to save resource:', e);
       }
     })();
   };
@@ -268,7 +268,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
         [section]: l[section].filter(r => r.id !== resource.id)
       }));
       alert('Failed to save resource to database. Please try again.');
-      console.error('Failed to save resource:', e);
+      // console.error('Failed to save resource:', e);
     });
   };
 
@@ -298,7 +298,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
       try {
         await deleteResource(link.id);
       } catch (e) {
-        console.error('Failed to delete resource from Firestore:', e);
+        // console.error('Failed to delete resource from Firestore:', e);
         alert('Failed to delete resource from database.');
       }
       // Add to global trash in Firestore
@@ -314,7 +314,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
         await saveTrash([...(currentTrash || []), trashedItem]);
       } catch (e) {
         // Optionally show error
-        console.error('Failed to update trash:', e);
+        // console.error('Failed to update trash:', e);
         alert('Failed to update trash.');
       }
     })();
@@ -340,7 +340,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
       await saveResourceSections(updatedSections);
     } catch (e) {
       alert('Failed to save new table.');
-      console.error('Failed to save new table:', e);
+      // console.error('Failed to save new table:', e);
     }
   };
 
@@ -372,7 +372,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
         await saveResourceSections(updatedSections);
       } catch (e) {
         alert('Failed to update table list.');
-        console.error('Failed to update table list:', e);
+        // console.error('Failed to update table list:', e);
       }
       // Remove all resources in this section from Firestore and move to Trash
       const resourcesToDelete = links[section] || [];
@@ -380,7 +380,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
         try {
           await deleteResource(link.id);
         } catch (e) {
-          console.error('Failed to delete resource from Firestore:', e);
+          // console.error('Failed to delete resource from Firestore:', e);
         }
       }
       // Add all to Trash
@@ -396,7 +396,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
           }));
           await saveTrash([...(currentTrash || []), ...trashedItems]);
         } catch (e) {
-          console.error('Failed to update trash:', e);
+          // console.error('Failed to update trash:', e);
         }
       }
     })();

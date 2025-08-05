@@ -14,9 +14,9 @@ import { onAuthStateChanged, signOut, getAuth } from 'firebase/auth';
 import AuthPage from './AuthPage';
 import Login from './Login';
 import Register from './Register';
-import { getCompanies, saveCompany, deleteCompany } from './firestoreHelpers';
+import { getCompanies, saveCompany, deleteCompany, getConversations } from './firestoreHelpers';
 import { getPackages, savePackages, getTrash, saveTrash, getTickets, saveTicket, loadHistoryLog, saveHistoryLog, clearHistoryLog, saveTemplate } from './firestoreHelpers';
-import { onSnapshot, collection, doc as firestoreDoc, deleteDoc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { onSnapshot, collection, doc as firestoreDoc, doc, deleteDoc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import GitsPage from './GitsPage';
 import SiteAuditsPage from './SiteAuditsPage';
@@ -92,17 +92,6 @@ function HomeHero({ userEmail }) {
     "🧑‍🚀 Explore the unknown.",
     "🧑‍💻 Debug your worries.",
     "🧑‍🏫 Share your wisdom.",
-    "🧑‍🎤 Sing your own song.",
-    "🧑‍🔧 Tinker until it works.",
-    "🧑‍🚒 Put out fires with calm.",
-    "🧑‍✈️ Fly above negativity.",
-    "🧑‍🌾 Harvest your efforts.",
-    "🧑‍🍳 Taste the fruits of labor.",
-    "🧑‍🔬 Discover your strengths.",
-    "🧑‍🎨 Draw outside the lines.",
-    "🧑‍🚀 Launch your ideas.",
-    "🧑‍💻 Hack your habits.",
-    "🧑‍🏫 Inspire others by example.",
     "🧑‍🎤 Perform with passion.",
     "🧑‍🔧 Build your legacy.",
     "🧑‍🚒 Protect your peace.",
@@ -329,7 +318,6 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
         // Only show companies not in any package
         setCompanies(validCompanies.filter(c => !packagedIds.has(c.id)));
       } catch (error) {
-        console.error('Error loading companies:', error);
         setCompanies([]);
       }
     }
@@ -474,7 +462,6 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
     }
     setShowAddToPackage(null);
   };
-
   return (
     <section className="company-tracker-page">
       <h1 className="fancy-title">Company Tracker</h1>
@@ -1088,8 +1075,7 @@ function TicketModalForm({ ticket, onSave, onCancel }) {
     </form>
   );
 }
-
-function PackagePage({ pkg, packages, setPackages }) {
+function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
   const [companies, setCompanies] = useState([]);
   const [editId, setEditId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -1114,6 +1100,45 @@ function PackagePage({ pkg, packages, setPackages }) {
   const [saveTimeout, setSaveTimeout] = useState(null);
   const [ticketModal, setTicketModal] = useState(null);
   const [recentChanges, setRecentChanges] = useState(new Set());
+
+  // Sync companies state with packages prop for real-time updates and ensure tasks are initialized
+  useEffect(() => {
+    if (packages && packages[pkg]) {
+      let pkgCompanies = (packages[pkg] || []).map(c => {
+        const companyWithTasks = {
+          ...c,
+          tasks: {
+            forVSO: c.tasks?.forVSO || 'Pending',
+            forRevision: c.tasks?.forRevision || 'Pending',
+            ra: c.tasks?.ra || 'Pending',
+            distribution: c.tasks?.distribution || 'Pending',
+            businessProfileClaiming: c.tasks?.businessProfileClaiming || 'Pending',
+          },
+        };
+        return companyWithTasks;
+      });
+      
+      // Always update companies state to reflect the latest packages data
+      setCompanies(pkgCompanies);
+      
+      // Only save back if tasks were completely missing (not if they were just updated)
+      const hasMissingTasks = pkgCompanies.some((c, i) => {
+        const originalCompany = packages[pkg][i] || {};
+        return !originalCompany.tasks || 
+               !originalCompany.tasks.forVSO || 
+               !originalCompany.tasks.forRevision || 
+               !originalCompany.tasks.ra || 
+               !originalCompany.tasks.distribution || 
+               !originalCompany.tasks.businessProfileClaiming;
+      });
+      
+      if (hasMissingTasks) {
+        const updatedPackages = { ...packages };
+        updatedPackages[pkg] = pkgCompanies;
+        savePackages(updatedPackages);
+      }
+    }
+  }, [packages, pkg]);
 
   // History entry structure
   const createHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
@@ -1262,22 +1287,44 @@ function PackagePage({ pkg, packages, setPackages }) {
 
   const handleTicketModalSave = async (updatedTicket) => {
     try {
-      console.log('Saving ticket:', updatedTicket);
+      console.log('🎫 Starting ticket save process...');
+      console.log('🎫 Original ticket data:', updatedTicket);
+      
+      // Validate required fields
+      if (!updatedTicket.id) {
+        throw new Error('Ticket ID is missing');
+      }
+      if (!updatedTicket.company) {
+        throw new Error('Company name is missing');
+      }
+      if (!updatedTicket.taskType) {
+        throw new Error('Task type is missing');
+      }
+      
       // Ensure createdAt is set for proper ordering
       const ticketToSave = {
         ...updatedTicket,
-        createdAt: updatedTicket.createdAt || new Date().toISOString()
+        createdAt: updatedTicket.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
-      console.log('Final ticket to save:', ticketToSave);
+      
+      console.log('🎫 Final ticket to save:', ticketToSave);
+      console.log('🎫 Calling saveTicket function...');
+      
       await saveTicket(ticketToSave);
-              console.log('Ticket saved successfully to Firestore');
-        setTicketModal(null);
-        toast.success(`✅ Ticket created successfully for ${updatedTicket.company}`);
+      
+      console.log('🎫 Ticket saved successfully to Firestore');
+      setTicketModal(null);
+      toast.success(`✅ Ticket created successfully for ${updatedTicket.company}`);
 
-          } catch (error) {
-        console.error('Error creating ticket:', error);
-        toast.error('Error creating ticket. Please try again.');
-
+    } catch (error) {
+      console.error('❌ Error creating ticket:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      toast.error(`Failed to save ticket: ${error.message}`);
     }
   };
 
@@ -1372,27 +1419,7 @@ function PackagePage({ pkg, packages, setPackages }) {
   // Save history to Firestore on every change (now handled by debounced addToHistory)
   // Removed to prevent double saves and reduce database usage
 
-  // Load companies from Firestore and ensure tasks are initialized
-  useEffect(() => {
-    getPackages().then(packages => {
-      let pkgCompanies = (packages[pkg] || []).map(c => ({
-        ...c,
-        tasks: {
-          forVSO: c.tasks?.forVSO || 'Pending',
-          forRevision: c.tasks?.forRevision || 'Pending',
-          ra: c.tasks?.ra || 'Pending',
-          distribution: c.tasks?.distribution || 'Pending',
-          businessProfileClaiming: c.tasks?.businessProfileClaiming || 'Pending',
-        },
-      }));
-      setCompanies(pkgCompanies);
-      // Save back if any tasks were missing or changed
-      if (pkgCompanies.some((c, i) => JSON.stringify(c.tasks) !== JSON.stringify((packages[pkg][i]||{}).tasks))) {
-        packages[pkg] = pkgCompanies;
-        savePackages(packages);
-      }
-    });
-  }, [pkg]);
+
 
   // Handle dropdown change
   const handleTaskChange = async (companyId, taskKey, value) => {
@@ -1415,7 +1442,7 @@ function PackagePage({ pkg, packages, setPackages }) {
       }
       
       if (existingTicket) {
-        // Ticket already exists, just update the status and show existing ticket
+        // Ticket already exists, update the status and reopen the ticket if it's closed
         const updatedPackages = { ...packages };
         let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
           if (c.id === companyId) {
@@ -1432,6 +1459,21 @@ function PackagePage({ pkg, packages, setPackages }) {
         await savePackages(updatedPackages);
         setCompanies(pkgCompanies);
         
+        // Reopen the ticket if it's currently closed (optimized - no additional read)
+        if (existingTicket.status === 'closed') {
+          try {
+            const { saveTicket } = await import('./firestoreHelpers');
+            const updatedTicket = { ...existingTicket, status: 'open' };
+            await saveTicket(updatedTicket);
+            toast.success(`✅ Ticket for ${company.name} reopened`);
+          } catch (error) {
+            console.error('Error reopening ticket:', error);
+            toast.error('Failed to reopen ticket');
+          }
+        } else {
+          toast.success(`✅ Existing ticket reactivated for ${company.name}`);
+        }
+        
         // Add to history
         const historyEntry = createHistoryEntry(
           companyId,
@@ -1442,10 +1484,6 @@ function PackagePage({ pkg, packages, setPackages }) {
           value
         );
         addToHistory(historyEntry);
-        
-                  // Show success message for reactivating existing ticket
-          toast.success(`✅ Existing ticket reactivated for ${company.name}`);
-
         
         return;
       } else if (company.ticketId) {
@@ -1484,22 +1522,48 @@ function PackagePage({ pkg, packages, setPackages }) {
         taskType: 'businessProfileClaiming'
       };
       
-      // Update company with ticket reference (but don't save ticket to database yet)
-      const updatedPackages = { ...packages };
-      let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
-        if (c.id === companyId) {
-          return {
-            ...c,
-            tasks: { ...c.tasks, [taskKey]: value },
-            ticketId: ticketData.id // Store ticket reference
-          };
+              // Update company with ticket reference and save ticket to database
+        const updatedPackages = { ...packages };
+        let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
+          if (c.id === companyId) {
+            return {
+              ...c,
+              tasks: { ...c.tasks, [taskKey]: value },
+              ticketId: ticketData.id // Store ticket reference
+            };
+          }
+          return c;
+        });
+        updatedPackages[pkg] = pkgCompanies;
+        setPackages(updatedPackages);
+        setCompanies(pkgCompanies);
+        
+        // Save both ticket and packages to Firestore
+        try {
+          setIsUpdatingPackages(true); // Prevent listener from interfering
+          
+          console.log('🎫 Saving ticket to Firestore:', ticketData.id);
+          await saveTicket(ticketData);
+          console.log('🎫 Ticket saved successfully');
+          
+          console.log('🎫 Saving packages to Firestore with updated company data');
+          console.log('🎫 Updated packages data:', updatedPackages);
+          await savePackages(updatedPackages);
+          console.log('🎫 Packages updated successfully');
+          
+          // Verify the save by reading back the packages
+          const { getPackages } = await import('./firestoreHelpers');
+          const savedPackages = await getPackages();
+          console.log('🎫 Verification - saved packages data:', savedPackages);
+          
+          toast.success(`✅ Ticket created and saved successfully for ${company.name}`);
+        } catch (error) {
+          console.error('❌ Error saving ticket or packages:', error);
+          toast.error('Failed to save ticket. Please try again.');
+        } finally {
+          // Allow listener to update after a delay
+          setTimeout(() => setIsUpdatingPackages(false), 2000);
         }
-        return c;
-      });
-      updatedPackages[pkg] = pkgCompanies;
-      setPackages(updatedPackages);
-      await savePackages(updatedPackages);
-      setCompanies(pkgCompanies);
       
       // Add to history
       const historyEntry = createHistoryEntry(
@@ -1528,15 +1592,39 @@ function PackagePage({ pkg, packages, setPackages }) {
       const companyWithTicket = companies.find(c => c.id === companyId);
       if (companyWithTicket?.ticketId) {
         try {
-          // Get the ticket and update its status to closed
+          // Optimistic UI update - update ticket status immediately
+          const { getTickets, saveTicket } = await import('./firestoreHelpers');
           const tickets = await getTickets();
           const relatedTicket = tickets.find(t => t.id === companyWithTicket.ticketId);
-          if (relatedTicket) {
-            await saveTicket({ ...relatedTicket, status: 'closed' });
+          if (relatedTicket && relatedTicket.status !== 'closed') {
+            const updatedTicket = { ...relatedTicket, status: 'closed' };
+            await saveTicket(updatedTicket);
             toast.success(`✅ Ticket for ${company.name} marked as closed`);
           }
         } catch (error) {
           console.error('Error updating ticket status:', error);
+          toast.error('Failed to update ticket status');
+        }
+      }
+    }
+    
+    // Handle Ticket status - ensure ticket exists and is open
+    if (taskKey === 'businessProfileClaiming' && value === 'Ticket') {
+      const companyWithTicket = companies.find(c => c.id === companyId);
+      if (companyWithTicket?.ticketId) {
+        try {
+          // Optimistic UI update - update ticket status immediately
+          const { getTickets, saveTicket } = await import('./firestoreHelpers');
+          const tickets = await getTickets();
+          const relatedTicket = tickets.find(t => t.id === companyWithTicket.ticketId);
+          if (relatedTicket && relatedTicket.status === 'closed') {
+            const updatedTicket = { ...relatedTicket, status: 'open' };
+            await saveTicket(updatedTicket);
+            toast.success(`✅ Ticket for ${company.name} reopened`);
+          }
+        } catch (error) {
+          console.error('Error updating ticket status:', error);
+          toast.error('Failed to update ticket status');
         }
       }
     }
@@ -1586,62 +1674,80 @@ function PackagePage({ pkg, packages, setPackages }) {
   };
 
   const handleEditSave = async (company) => {
+    const updatedCompany = {
+      ...company,
+      name: editName,
+      start: formatDateToDisplay(editStart),
+      eocDate: formatDateToDisplay(editEOC),
+    };
+
+    // Optimistic UI update - apply changes immediately
     const updatedPackages = { ...packages };
     const updatedCompanies = (updatedPackages[pkg] || []).map(c =>
-      c.id === company.id ? {
-        ...c,
-        name: editName,
-        start: formatDateToDisplay(editStart),
-        eocDate: formatDateToDisplay(editEOC),
-      } : c
+      c.id === company.id ? updatedCompany : c
     );
     updatedPackages[pkg] = updatedCompanies;
     setPackages(updatedPackages);
-    await savePackages(updatedPackages);
     setCompanies(updatedCompanies);
     
-    // Add to history for each changed field
-    if (editName !== company.name) {
-      const historyEntry = createHistoryEntry(
-        company.id,
-        company.name,
-        pkg,
-        'Company Name',
-        company.name,
-        editName
-      );
-      addToHistory(historyEntry);
-    }
+    // Show success message immediately
+    toast.success('Company updated successfully');
     
-    if (formatDateToDisplay(editStart) !== company.start) {
-      const historyEntry = createHistoryEntry(
-        company.id,
-        company.name,
-        pkg,
-        'Start Date',
-        company.start,
-        formatDateToDisplay(editStart)
-      );
-      addToHistory(historyEntry);
-    }
-    
-    if (formatDateToDisplay(editEOC) !== (company.eocDate || company.eoc)) {
-      const historyEntry = createHistoryEntry(
-        company.id,
-        company.name,
-        pkg,
-        'EOC Date',
-        company.eocDate || company.eoc,
-        formatDateToDisplay(editEOC)
-      );
-      addToHistory(historyEntry);
-    }
-    
+    // Reset edit state immediately
     setEditId(null);
     setEditName('');
     setEditStart(null);
     setEditEOC(null);
-    toast.success('Company updated successfully');
+    
+    // Background operation - save to Firestore
+    addBackgroundOperation(async () => {
+      try {
+        await savePackages(updatedPackages);
+        console.log('Company update saved to Firestore');
+      } catch (error) {
+        console.error('Failed to save company update:', error);
+        toast.error('Failed to save changes - will retry');
+      }
+    });
+    
+    // Add to history for each changed field (background operation)
+    addBackgroundOperation(async () => {
+      if (editName !== company.name) {
+        const historyEntry = createHistoryEntry(
+          company.id,
+          company.name,
+          pkg,
+          'Company Name',
+          company.name,
+          editName
+        );
+        addToHistory(historyEntry);
+      }
+      
+      if (formatDateToDisplay(editStart) !== company.start) {
+        const historyEntry = createHistoryEntry(
+          company.id,
+          company.name,
+          pkg,
+          'Start Date',
+          company.start,
+          formatDateToDisplay(editStart)
+        );
+        addToHistory(historyEntry);
+      }
+      
+      if (formatDateToDisplay(editEOC) !== (company.eocDate || company.eoc)) {
+        const historyEntry = createHistoryEntry(
+          company.id,
+          company.name,
+          pkg,
+          'EOC Date',
+          company.eocDate || company.eoc,
+          formatDateToDisplay(editEOC)
+        );
+        addToHistory(historyEntry);
+      }
+    });
   };
 
   const handleEditCancel = () => {
@@ -1656,34 +1762,52 @@ function PackagePage({ pkg, packages, setPackages }) {
   };
   const handleRemoveConfirm = async () => {
     // Use confirmRemoveId to find the company to remove
+    const companyToRemove = (companies || []).find(c => c.id === confirmRemoveId);
+    
+    // Optimistic UI update - remove immediately
     const updatedPackages = { ...packages };
-    const companyToRemove = (updatedPackages[pkg] || []).find(c => c.id === confirmRemoveId);
     const updatedCompanies = (updatedPackages[pkg] || []).filter(c => c.id !== confirmRemoveId);
     updatedPackages[pkg] = updatedCompanies;
     setPackages(updatedPackages);
-    await savePackages(updatedPackages);
     setCompanies(updatedCompanies);
     
-    // Add to history
-    if (companyToRemove) {
-      const historyEntry = createHistoryEntry(
-        companyToRemove.id,
-        companyToRemove.name,
-        pkg,
-        'Company',
-        'In Package',
-        'Removed',
-        'removed'
-      );
-      addToHistory(historyEntry);
-      
-      // Add to trash
-      const trash = await getTrash();
-      trash.push({ ...companyToRemove, originalPackage: pkg, type: 'company' });
-      await saveTrash(trash);
-    }
-    setConfirmRemoveId(null);
+    // Show success message immediately
     toast.success('Company removed successfully');
+    
+    // Reset confirm state immediately
+    setConfirmRemoveId(null);
+    
+    // Background operation - save to Firestore
+    addBackgroundOperation(async () => {
+      try {
+        await savePackages(updatedPackages);
+        console.log('Company removal saved to Firestore');
+      } catch (error) {
+        console.error('Failed to save company removal:', error);
+        toast.error('Failed to save removal - will retry');
+      }
+    });
+    
+    // Add to history (background operation)
+    if (companyToRemove) {
+      addBackgroundOperation(async () => {
+        const historyEntry = createHistoryEntry(
+          companyToRemove.id,
+          companyToRemove.name,
+          pkg,
+          'Company',
+          'In Package',
+          'Removed',
+          'removed'
+        );
+        addToHistory(historyEntry);
+        
+        // Add to trash
+        const trash = await getTrash();
+        trash.push({ ...companyToRemove, originalPackage: pkg, type: 'company' });
+        await saveTrash(trash);
+      });
+    }
   };
   const handleRemoveCancel = () => {
     setConfirmRemoveId(null);
@@ -1695,6 +1819,7 @@ function PackagePage({ pkg, packages, setPackages }) {
     const oldStatus = company?.status || 'Active';
     const today = new Date();
     
+    // Optimistic UI update - apply status change immediately
     const updatedPackages = { ...packages };
     updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c => {
       if (c.id === companyId) {
@@ -1721,23 +1846,37 @@ function PackagePage({ pkg, packages, setPackages }) {
     });
     
     setPackages(updatedPackages);
-    await savePackages(updatedPackages);
     setCompanies(updatedPackages[pkg]);
     
-    // Add to history
-    const historyEntry = createHistoryEntry(
-      companyId,
-      company?.name || 'Unknown Company',
-      pkg,
-      'Status',
-      oldStatus,
-      newStatus
-    );
-    addToHistory(historyEntry);
+    // Show success message immediately
+    toast.success(`Status changed to ${newStatus}`);
+    
+    // Background operation - save to Firestore
+    addBackgroundOperation(async () => {
+      try {
+        await savePackages(updatedPackages);
+        console.log('Status change saved to Firestore');
+      } catch (error) {
+        console.error('Failed to save status change:', error);
+        toast.error('Failed to save status change - will retry');
+      }
+    });
+    
+    // Add to history (background operation)
+    addBackgroundOperation(async () => {
+      const historyEntry = createHistoryEntry(
+        companyId,
+        company?.name || 'Unknown Company',
+        pkg,
+        'Status',
+        oldStatus,
+        newStatus
+      );
+      addToHistory(historyEntry);
+    });
   };
-
   // Filtered companies for this package
-  const filteredCompanies = (packages[pkg] || [])
+  const filteredCompanies = (companies || [])
     .filter(c => c.name && c.name.toLowerCase().includes(search.toLowerCase()))
     .filter(c => !filterStatus || c.status === filterStatus)
     .filter(c => !filterVSO || (c.tasks?.forVSO || 'Pending') === filterVSO)
@@ -2776,7 +2915,6 @@ function PackagePage({ pkg, packages, setPackages }) {
     </section>
   );
 }
-
 function Report({ packages, setPackages }) {
   // Store filters for each package in an object
   const [filterI, setFilterI] = useState({});
@@ -2806,7 +2944,6 @@ function Report({ packages, setPackages }) {
   useEffect(() => {
     (async () => {
       const loaded = await loadHistoryLog('report');
-      console.log('Loaded history from Firestore:', loaded);
       // Ensure we're getting the array from the log field
       const historyArray = loaded?.log || loaded || [];
       setHistory(Array.isArray(historyArray) ? historyArray : []);
@@ -2816,9 +2953,7 @@ function Report({ packages, setPackages }) {
   // Save history to Firestore on every change
   useEffect(() => {
     if (history && history.length > 0) {
-      console.log('Saving history to Firestore:', history);
       saveHistoryLog('report', history).catch(err => {
-        console.error('Error saving history:', err);
       });
     }
   }, [history]);
@@ -2869,7 +3004,6 @@ function Report({ packages, setPackages }) {
   };
 
   const addToHistory = (entry) => {
-    console.log('Adding new history entry:', entry);
     setHistory(prev => [entry, ...prev.slice(0, 49)]); // Keep last 50 entries
     // Mark as recently changed
     setRecentChanges(prev => new Set([...prev, entry.companyId]));
@@ -2916,7 +3050,6 @@ function Report({ packages, setPackages }) {
       setRevertModal(null);
       
     } catch (err) {
-      console.error('Error reverting change:', err);
       alert('Failed to revert change. Please try again.');
     }
   };
@@ -3546,7 +3679,6 @@ function Report({ packages, setPackages }) {
           </div>
         );
       })}
-      
       {/* Confirmation Modal */}
       {confirmModal && (
         <div style={{
@@ -3744,7 +3876,6 @@ function Bookmarking({ packages, setPackages }) {
   };
 
   const addToHistory = (entry) => {
-    console.log('Adding new history entry:', entry);
     setHistory(prev => [entry, ...prev.slice(0, 49)]); // Keep last 50 entries
     // Mark as recently changed
     setRecentChanges(prev => new Set([...prev, entry.companyId]));
@@ -3791,7 +3922,6 @@ function Bookmarking({ packages, setPackages }) {
       setRevertModal(null);
       
     } catch (err) {
-      console.error('Error reverting change:', err);
       alert('Failed to revert change. Please try again.');
     }
   };
@@ -3880,7 +4010,6 @@ function Bookmarking({ packages, setPackages }) {
   useEffect(() => {
     (async () => {
       const loaded = await loadHistoryLog('bookmarking');
-      console.log('Loaded history from Firestore:', loaded);
       // Ensure we're getting the array from the log field
       const historyArray = loaded?.log || loaded || [];
       setHistory(Array.isArray(historyArray) ? historyArray : []);
@@ -3890,9 +4019,7 @@ function Bookmarking({ packages, setPackages }) {
   // Save history to Firestore on every change
   useEffect(() => {
     if (history && history.length > 0) {
-      console.log('Saving history to Firestore:', history);
       saveHistoryLog('bookmarking', history).catch(err => {
-        console.error('Error saving history:', err);
       });
     }
   }, [history]);
@@ -3902,7 +4029,6 @@ function Bookmarking({ packages, setPackages }) {
     await clearHistoryLog('bookmarking');
     setClearHistoryModal(false);
   };
-
   return (
     <section className="company-tracker-page" style={{paddingTop: 12}}>
       {/* Header with History Button */}
@@ -4596,7 +4722,6 @@ function SocialBookmarking() {
     </section>
   );
 }
-
 function TrashPage() {
   const [trash, setTrash] = useState([]);
   const [search, setSearch] = useState('');
@@ -4773,6 +4898,13 @@ export function setFetchAlertsImpl(fn) {
   fetchAlertsRef.current = fn;
 }
 
+// Add caching for tickets to prevent excessive reads
+const ticketsCache = {
+  data: null,
+  timestamp: 0,
+  cacheDuration: 60000 // 60 seconds cache to reduce Firestore reads
+};
+
 export async function fetchAlerts() {
   if (!fetchAlertsRef.current) return;
   try {
@@ -4783,21 +4915,166 @@ export async function fetchAlerts() {
     // Clear cache on error to prevent stale data
     ticketsCache.data = null;
     ticketsCache.timestamp = 0;
-    console.error('Error in fetchAlerts:', e);
   }
 }
 
-// Add caching for tickets to prevent excessive reads
-const ticketsCache = {
-  data: null,
-  timestamp: 0,
-  cacheDuration: 60000 // 60 seconds cache to reduce Firestore reads
+// Global throttling and caching system
+const GLOBAL_THROTTLE = {
+  lastAlertUpdate: 0,
+  lastPackageUpdate: 0,
+  lastTicketUpdate: 0,
+  lastUserUpdate: 0,
+  lastStatusUpdate: 0,
+  lastReadAlertsSave: 0,
+  lastNotificationCheck: 0
 };
+
+// Emergency quota protection - if we detect quota issues, increase throttling
+let EMERGENCY_MODE = false;
+let QUOTA_ERROR_COUNT = 0;
+const MAX_QUOTA_ERRORS = 3; // After 3 quota errors, enter emergency mode
+
+// Daily usage tracking to prevent quota overruns
+const DAILY_USAGE_KEY = 'firestore_daily_usage';
+const DAILY_READ_LIMIT = 45000; // Conservative limit (90% of 50k)
+const DAILY_WRITE_LIMIT = 18000; // Conservative limit (90% of 20k)
+
+// Function to get daily usage
+const getDailyUsage = () => {
+  const today = new Date().toDateString();
+  const stored = localStorage.getItem(DAILY_USAGE_KEY);
+  if (stored) {
+    const data = JSON.parse(stored);
+    if (data.date === today) {
+      return data;
+    }
+  }
+  return { date: today, reads: 0, writes: 0 };
+};
+
+// Function to update daily usage
+const updateDailyUsage = (type, count = 1) => {
+  const usage = getDailyUsage();
+  usage[type] += count;
+  localStorage.setItem(DAILY_USAGE_KEY, JSON.stringify(usage));
+  
+  // Check if we're approaching limits
+  if (usage.reads > DAILY_READ_LIMIT * 0.8 || usage.writes > DAILY_WRITE_LIMIT * 0.8) {
+    if (!EMERGENCY_MODE) {
+      EMERGENCY_MODE = true;
+    }
+  }
+  
+  return usage;
+};
+
+// Function to handle quota exceeded errors
+const handleQuotaError = () => {
+  QUOTA_ERROR_COUNT++;
+  if (QUOTA_ERROR_COUNT >= MAX_QUOTA_ERRORS && !EMERGENCY_MODE) {
+    EMERGENCY_MODE = true;
+    // Clear all caches to force fresh data
+    clearCache();
+    // Reset all throttle timers to prevent immediate retries
+    Object.keys(GLOBAL_THROTTLE).forEach(key => {
+      GLOBAL_THROTTLE[key] = Date.now();
+    });
+  }
+};
+
+const GLOBAL_CACHE = {
+  packages: null,
+  tickets: null,
+  users: null,
+  alerts: null,
+  cacheTimestamps: {}
+};
+
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes - doubled
+
+const THROTTLE_INTERVALS = {
+  ALERT_UPDATE: 30000, // 30 seconds - doubled
+  PACKAGE_UPDATE: 20000, // 20 seconds - doubled
+  TICKET_UPDATE: 25000, // 25 seconds - doubled
+  USER_UPDATE: 40000, // 40 seconds - doubled
+  STATUS_UPDATE: 60000, // 60 seconds - increased
+  READ_ALERTS_SAVE: 30000, // 30 seconds - doubled
+  NOTIFICATION_CHECK: 40000 // 40 seconds - doubled
+};
+
+// Global cache management
+const getCachedData = (key) => {
+  const cached = GLOBAL_CACHE[key];
+  const timestamp = GLOBAL_CACHE.cacheTimestamps[key];
+  if (cached && timestamp && (Date.now() - timestamp) < CACHE_DURATION) {
+    return cached;
+  }
+  return null;
+};
+
+const setCachedData = (key, data) => {
+  GLOBAL_CACHE[key] = data;
+  GLOBAL_CACHE.cacheTimestamps[key] = Date.now();
+};
+
+const clearCache = (pattern) => {
+  if (pattern) {
+    Object.keys(GLOBAL_CACHE.cacheTimestamps).forEach(key => {
+      if (key.includes(pattern)) {
+        GLOBAL_CACHE[key] = null;
+        delete GLOBAL_CACHE.cacheTimestamps[key];
+      }
+    });
+  } else {
+    Object.keys(GLOBAL_CACHE).forEach(key => {
+      if (key !== 'cacheTimestamps') {
+        GLOBAL_CACHE[key] = null;
+      }
+    });
+    GLOBAL_CACHE.cacheTimestamps = {};
+  }
+};
+  // Global throttling function with emergency mode
+  const isThrottled = (operation) => {
+    const now = Date.now();
+    const lastUpdate = GLOBAL_THROTTLE[operation] || 0;
+    let interval = THROTTLE_INTERVALS[operation];
+    
+    // Check daily usage and enable emergency mode if needed
+    const usage = getDailyUsage();
+    const readPercentage = (usage.reads / DAILY_READ_LIMIT) * 100;
+    const writePercentage = (usage.writes / DAILY_WRITE_LIMIT) * 100;
+    
+    // Enable emergency mode if usage is high
+    if (readPercentage > 70 || writePercentage > 70) {
+      EMERGENCY_MODE = true;
+    } else if (readPercentage < 50 && writePercentage < 50) {
+      EMERGENCY_MODE = false;
+    }
+    
+    // In emergency mode, multiply all intervals by 5
+    if (EMERGENCY_MODE) {
+      interval = interval * 5;
+    }
+    
+    // Block all operations if over limit
+    if (usage.reads > DAILY_READ_LIMIT || usage.writes > DAILY_WRITE_LIMIT) {
+      return true; // Always throttled when over limit
+    }
+    
+    if (now - lastUpdate < interval) {
+      return true; // Throttled
+    }
+    
+    GLOBAL_THROTTLE[operation] = now;
+    return false; // Not throttled
+  };
 
 function App() {
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
   const location = useLocation();
   const [editData, setEditData] = useState(null);
@@ -4809,6 +5086,7 @@ function App() {
   const [readAlerts, setReadAlerts] = useState(new Set());
 
   const [sessionTimeDisplay, setSessionTimeDisplay] = useState('');
+  const [isUpdatingPackages, setIsUpdatingPackages] = useState(false);
   const bellRef = useRef();
   const dropdownRef = useRef();
   // Keep a ref to always have the latest packages and setAlerts
@@ -4817,7 +5095,40 @@ function App() {
   useEffect(() => { packagesRef.current = packages; }, [packages]);
   useEffect(() => { setAlertsRef.current = setAlerts; }, [setAlerts]);
 
-
+  // Daily usage monitoring
+  const [dailyUsage, setDailyUsage] = useState(getDailyUsage());
+  
+  // Cost monitoring - log usage every 5 minutes
+  useEffect(() => {
+    const usageInterval = setInterval(() => {
+      const usage = getDailyUsage();
+      const readPercentage = (usage.reads / DAILY_READ_LIMIT) * 100;
+      const writePercentage = (usage.writes / DAILY_WRITE_LIMIT) * 100;
+      
+      if (readPercentage > 80 || writePercentage > 80) {
+      }
+      
+      setDailyUsage(usage);
+    }, 300000); // Every 5 minutes
+    
+    return () => clearInterval(usageInterval);
+  }, []);
+  
+  // Handle window resize and daily usage monitoring
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    
+    // Update daily usage display every minute
+    const usageInterval = setInterval(() => {
+      setDailyUsage(getDailyUsage());
+    }, 60000);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearInterval(usageInterval);
+    };
+  }, []);
 
   // Load read alerts from Firestore
   useEffect(() => {
@@ -4830,26 +5141,19 @@ function App() {
     }
   }, [user]);
 
-  // Save read alerts to Firestore - with throttling to prevent excessive writes
-  const [lastReadAlertsSave, setLastReadAlertsSave] = useState(0);
+  // Save read alerts to Firestore - with improved throttling
   const saveReadAlerts = async (readAlertsSet) => {
-    if (user?.uid) {
-      const now = Date.now();
-      const MIN_READ_ALERTS_SAVE_INTERVAL = 10000; // 10 seconds minimum between saves
+    if (user?.uid && !isThrottled('READ_ALERTS_SAVE')) {
+      // Track this write operation
+      updateDailyUsage('writes', 1);
       
-      if (now - lastReadAlertsSave > MIN_READ_ALERTS_SAVE_INTERVAL) {
-        try {
-          await updateDoc(firestoreDoc(db, 'users', user.uid), {
-            readAlerts: Array.from(readAlertsSet)
-          });
-          setLastReadAlertsSave(now);
-          console.log('Read alerts saved to Firestore (throttled)');
-        } catch (error) {
-          console.error('Error saving read alerts:', error);
-        }
-      } else {
-        console.log('Read alerts save skipped (throttled)');
+      try {
+        await updateDoc(firestoreDoc(db, 'users', user.uid), {
+          readAlerts: Array.from(readAlertsSet)
+        });
+      } catch (error) {
       }
+    } else if (isThrottled('READ_ALERTS_SAVE')) {
     }
   };
 
@@ -4871,8 +5175,6 @@ function App() {
   // Get unread alerts count
   const unreadAlerts = alerts.filter(alert => alert && alert.id && !readAlerts.has(alert.id));
 
-
-
   // Track notification changes and handle read status intelligently
   const [previousAlerts, setPreviousAlerts] = useState([]);
   const [lastToastTime, setLastToastTime] = useState(0);
@@ -4890,7 +5192,7 @@ function App() {
     
     // Only show toast if there are genuinely new alerts (not just regeneration)
     if (newOrChangedAlerts.length > 0) {
-      console.log(`New/changed notifications: ${newOrChangedAlerts.map(a => a.id).join(', ')}`);
+      // console.log(`New/changed notifications: ${newOrChangedAlerts.map(a => a.id).join(', ')}`);
       
       // Only show toast if we have previous alerts (meaning this isn't the first load)
       // AND if the alerts are actually new (not just being regenerated)
@@ -4913,18 +5215,11 @@ function App() {
   };
 
   // Smart function to mark notifications as unread when they have genuinely new content
-  // Throttle markNotificationsAsUnreadForNewContent to prevent excessive calls
-  const [lastNotificationCheck, setLastNotificationCheck] = useState(0);
+  // Improved throttling for markNotificationsAsUnreadForNewContent
   const markNotificationsAsUnreadForNewContent = () => {
-    const now = Date.now();
-    const MIN_NOTIFICATION_CHECK_INTERVAL = 15000; // 15 seconds minimum between checks
-    
-    if (now - lastNotificationCheck < MIN_NOTIFICATION_CHECK_INTERVAL) {
-      console.log('Notification check skipped (throttled)');
+    if (isThrottled('NOTIFICATION_CHECK')) {
       return;
     }
-    
-    setLastNotificationCheck(now);
     
     const relevantAlerts = alerts.filter(alert => alert.type !== 'tickets');
     
@@ -4945,7 +5240,7 @@ function App() {
     });
     
     if (alertsWithNewContent.length > 0) {
-      console.log(`Detected ${alertsWithNewContent.length} alerts with new content:`, alertsWithNewContent.map(a => a.id));
+      // console.log(`Detected ${alertsWithNewContent.length} alerts with new content:`, alertsWithNewContent.map(a => a.id));
       
       // Mark these alerts as unread by removing them from readAlerts
       const newReadAlerts = new Set(readAlerts);
@@ -4961,20 +5256,22 @@ function App() {
   useEffect(() => {
     setFetchAlertsImpl(async () => {
       try {
+        // Check cache first
+        const cachedAlerts = getCachedData('alerts');
+        if (cachedAlerts && !isThrottled('ALERT_UPDATE')) {
+          setAlertsRef.current(cachedAlerts);
+          handleAlertChanges(cachedAlerts);
+          return;
+        }
+        
         let allAlerts = [];
         
         // Use cached tickets data if available and fresh
-        let tickets = [];
-        const now = Date.now();
-        if (ticketsCache.data && (now - ticketsCache.timestamp) < ticketsCache.cacheDuration) {
-          tickets = ticketsCache.data;
-          console.log('Using cached tickets data (age:', Math.round((now - ticketsCache.timestamp) / 1000), 's)');
-        } else {
-          // Fetch fresh tickets data and cache it
-          console.log('Fetching fresh tickets data from Firestore');
+        let tickets = getCachedData('tickets');
+        if (!tickets) {
           tickets = await getTickets().catch(() => []);
-          ticketsCache.data = tickets;
-          ticketsCache.timestamp = now;
+          setCachedData('tickets', tickets);
+        } else {
         }
         
         const today = new Date();
@@ -5177,29 +5474,142 @@ function App() {
             icon: '🔔',
           });
         }
+        
+        // Cache the alerts
+        setCachedData('alerts', allAlerts);
         setAlertsRef.current(allAlerts);
         handleAlertChanges(allAlerts);
       } catch (error) {
-        console.error('Error generating alerts:', error);
         // Set empty alerts on error to prevent UI issues
         setAlertsRef.current([]);
       }
     });
   }, [packages, setAlerts]);
 
+  // Check for unread messages when user logs in
+  const checkUnreadMessagesOnLogin = async (userId) => {
+    try {
+      // Get conversations for the user
+      const conversations = await getConversations(userId);
+      let totalUnread = 0;
+      
+      conversations.forEach(conv => {
+        const unreadCount = conv.unreadCount && conv.unreadCount[userId] ? conv.unreadCount[userId] : 0;
+        totalUnread += unreadCount;
+      });
+      
+      if (totalUnread > 0) {
+        const messageText = totalUnread === 1 
+          ? "You have 1 unread message!" 
+          : `You have ${totalUnread} unread messages!`;
+        
+        toast.success(`Welcome back! ${messageText}`, {
+          duration: 5000,
+          action: {
+            label: 'View Messages',
+            onClick: () => navigate('/chat-users')
+          }
+        });
+        
+      }
+    } catch (error) {
+    }
+  };
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setSessionStartTime(); // Reset session timer for the current user
+        // Clear cache when user changes
+        clearCache();
+        
+        // Fetch user data from Firestore including bio
+        try {
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            
+            // Merge Firestore data with Firebase Auth data
+            const mergedUser = {
+              ...firebaseUser,
+              bio: userData.bio || '',
+              displayName: userData.displayName || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              photoURL: userData.photoURL || firebaseUser.photoURL || ''
+            };
+            
+            setUser(mergedUser);
+          } else {
+            setUser(firebaseUser);
+          }
+        } catch (error) {
+          setUser(firebaseUser);
+        }
+        
+        // Set user status to online in Firestore
+        try {
+          const userData = {
+            status: 'online',
+            lastSeen: new Date().toISOString(),
+            displayName: firebaseUser.displayName || firebaseUser.email,
+            email: firebaseUser.email,
+            photoURL: firebaseUser.photoURL
+          };
+          await setDoc(doc(db, 'users', firebaseUser.uid), userData, { merge: true });
+          
+          // Check for unread messages after a short delay to ensure data is loaded
+          setTimeout(() => {
+            checkUnreadMessagesOnLogin(firebaseUser.uid);
+          }, 2000);
+          
+        } catch (error) {
+        }
       } else {
-        // Clear cache when user logs out
-        ticketsCache.data = null;
-        ticketsCache.timestamp = 0;
+        // Comprehensive cleanup when user logs out
+        
+        // Clear all cached data
+        clearCache('*');
+        
+        // Reset all state to prevent stale data issues
+        setUser(null);
+        setPackages({ 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] });
+        setAlerts([]);
+        setReadAlerts(new Set());
+        setShowAlerts(false);
+        setEditData(null);
+        setIsUpdatingPackages(false);
+        
+        // Clear session data
+        clearSessionStartTime();
+        
+        // Clear any local storage items
+        localStorage.removeItem('chat_user_cache_v1');
+        
       }
-      setUser(firebaseUser);
     });
     return () => unsubscribe();
   }, []);
+
+  // Fallback: If user is already authenticated but bio wasn't loaded, fetch it
+  useEffect(() => {
+    if (user && !user.bio) {
+      const fetchUserBio = async () => {
+        try {
+          const userDoc = await getDoc(firestoreDoc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            if (userData.bio) {
+              setUser(prev => ({
+                ...prev,
+                bio: userData.bio
+              }));
+            }
+          }
+        } catch (error) {
+        }
+      };
+      fetchUserBio();
+    }
+  }, [user]);
 
   // Periodic session check - runs every minute
   useEffect(() => {
@@ -5207,7 +5617,6 @@ function App() {
     
     const sessionCheckInterval = setInterval(() => {
       if (isSessionExpired()) {
-        console.log('Session expired during periodic check - logging out user');
         clearSessionStartTime();
         signOut(auth);
         setUser(null);
@@ -5250,8 +5659,19 @@ function App() {
     const fetchPackages = async () => {
       try {
         if (auth.currentUser) {
+          // Check cache first
+          const cachedPackages = getCachedData('packages');
+          if (cachedPackages) {
+            setPackages(cachedPackages);
+            return;
+          }
+          
+          // Track this read operation
+          updateDailyUsage('reads', 1);
+          
           const pkgs = await getPackages();
           setPackages(pkgs);
+          setCachedData(`packages_${user.uid}`, pkgs);
         }
       } catch (e) {
         setPackages({ 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] });
@@ -5260,27 +5680,44 @@ function App() {
     fetchPackages();
   }, []);
 
-  // Real-time listener for packages - with throttling
+  // Real-time listener for packages - with improved throttling and coordination
   useEffect(() => {
     if (!user) return;
-    
-    let lastPackageUpdate = 0;
-    const MIN_PACKAGE_UPDATE_INTERVAL = 5000; // 5 seconds minimum between package updates
     
     const packagesDocRef = collection(db, 'users', user.uid, 'meta');
     // Listen for changes in the 'packages' document
     const unsubscribe = onSnapshot(packagesDocRef, (snapshot) => {
-      const now = Date.now();
-      if (now - lastPackageUpdate > MIN_PACKAGE_UPDATE_INTERVAL) {
+      if (isThrottled('PACKAGE_UPDATE') || isUpdatingPackages) {
+        return;
+      }
+      
+      // Add a small delay to prevent overwriting optimistic updates
+      setTimeout(() => {
         const pkgDoc = snapshot.docs.find(d => d.id === 'packages');
         if (pkgDoc) {
           const data = pkgDoc.data();
           if (data && data.packages) {
-            setPackages(data.packages);
-            lastPackageUpdate = now;
-            console.log('Packages updated from Firestore (throttled)');
+            // Only update if the data is actually different to prevent unnecessary re-renders
+            const currentPackages = packagesRef.current;
+            const newPackages = data.packages;
+            
+            // Deep comparison to check if packages actually changed
+            const packagesChanged = JSON.stringify(currentPackages) !== JSON.stringify(newPackages);
+            
+            if (packagesChanged) {
+              setPackages(newPackages);
+              setCachedData(`packages_${user.uid}`, newPackages);
+            }
           }
         }
+      }, 1000); // 1 second delay to allow optimistic updates to complete
+    }, (error) => {
+      // Don't break the app on permission errors during logout
+      if (error.code === 'permission-denied' && !user) {
+        return;
+      }
+      if (error.code === 'resource-exhausted') {
+        handleQuotaError();
       }
     });
     return () => unsubscribe();
@@ -5288,8 +5725,59 @@ function App() {
 
   // Debounced alert generation to prevent excessive Firestore reads
   const [alertDebounceTimer, setAlertDebounceTimer] = useState(null);
-
-  // Fetch alerts whenever packages change (for non-ticket alerts) - with debouncing
+  
+  // Helper function to sync ticket status with package task status (efficient)
+  const syncTicketWithPackage = async (ticket, newStatus) => {
+    if (!ticket || ticket.taskType !== 'businessProfileClaiming' || !ticket.companyId) {
+      return;
+    }
+    
+    try {
+      const { getPackages, savePackages } = await import('./firestoreHelpers');
+      const packages = await getPackages();
+      let updated = false;
+      let updatedPackages = null;
+      
+      // Find the company in packages and update task status
+      for (const [pkgName, pkgCompanies] of Object.entries(packages)) {
+        const companyIndex = pkgCompanies.findIndex(c => c.ticketId === ticket.id);
+        
+        if (companyIndex !== -1) {
+          const currentTaskStatus = pkgCompanies[companyIndex].tasks?.businessProfileClaiming;
+          
+          if (newStatus === 'closed' && currentTaskStatus !== 'Completed') {
+            packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Completed';
+            updated = true;
+            updatedPackages = packages;
+          } else if (newStatus === 'open' && currentTaskStatus === 'Completed') {
+            packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Ticket';
+            updated = true;
+            updatedPackages = packages;
+          }
+          break;
+        }
+      }
+      
+      if (updated && updatedPackages) {
+        // Set flag to prevent packages listener from interfering
+        setIsUpdatingPackages(true);
+        
+        // Update local state immediately for real-time UI updates
+        setPackages(updatedPackages);
+        setCachedData(`packages_${user.uid}`, updatedPackages);
+        
+        // Save to Firestore in background
+        await savePackages(updatedPackages);
+        
+        // Allow listener to update after a delay
+        setTimeout(() => setIsUpdatingPackages(false), 2000);
+        return true;
+      }
+    } catch (error) {
+    }
+    return false;
+  };
+  // Fetch alerts whenever packages change (for non-ticket alerts) - with improved debouncing
   useEffect(() => {
     if (alertDebounceTimer) clearTimeout(alertDebounceTimer);
     
@@ -5297,7 +5785,7 @@ function App() {
       fetchAlerts();
       // Use smart detection to mark notifications as unread only when they have new content
       markNotificationsAsUnreadForNewContent();
-    }, 3000); // Debounce for 3 seconds to prevent excessive calls
+    }, 5000); // Increased debounce to 5 seconds to prevent excessive calls
     
     setAlertDebounceTimer(timer);
     
@@ -5306,30 +5794,56 @@ function App() {
     };
   }, [packages]);
 
-  // Real-time listener for tickets (alerts) - with debouncing and throttling
+  // Real-time listener for tickets (alerts) - with improved debouncing and throttling
   useEffect(() => {
     if (!user) return;
     
     let ticketDebounceTimer = null;
-    let lastTicketUpdate = 0;
-    const MIN_TICKET_UPDATE_INTERVAL = 8000; // 8 seconds minimum between ticket updates
     const ticketsColRef = collection(db, 'users', user.uid, 'tickets');
     
-    const unsubscribe = onSnapshot(ticketsColRef, () => {
-      const now = Date.now();
-      if (now - lastTicketUpdate > MIN_TICKET_UPDATE_INTERVAL) {
-        // Clear tickets cache when tickets change
-        ticketsCache.data = null;
-        ticketsCache.timestamp = 0;
-        
-        // Debounce ticket alert updates to prevent excessive calls
-        if (ticketDebounceTimer) clearTimeout(ticketDebounceTimer);
-        ticketDebounceTimer = setTimeout(() => {
-          fetchAlerts();
-        }, 5000); // 5 second debounce for ticket changes to prevent excessive calls
-        
-        lastTicketUpdate = now;
-        console.log('Tickets updated from Firestore (throttled)');
+    const unsubscribe = onSnapshot(ticketsColRef, (snapshot) => {
+      // Check if any of the changes are Business Profile Claiming tickets
+      const hasBusinessProfileClaimingChanges = snapshot.docChanges().some(change => {
+        if (change.type === 'modified') {
+          const ticket = change.doc.data();
+          return ticket.taskType === 'businessProfileClaiming' && ticket.companyId;
+        }
+        return false;
+      });
+      
+      // Bypass throttling for Business Profile Claiming tickets
+      if (isThrottled('TICKET_UPDATE') && !hasBusinessProfileClaimingChanges) {
+        return;
+      }
+      
+      // Clear tickets cache when tickets change
+      clearCache('tickets');
+      
+      // Check for Business Profile Claiming ticket status changes and sync with packages
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'modified') {
+          const ticket = change.doc.data();
+          
+          if (ticket.taskType === 'businessProfileClaiming' && ticket.companyId) {
+            // For Business Profile Claiming tickets, sync immediately without debouncing
+            syncTicketWithPackage(ticket, ticket.status);
+          }
+        }
+      });
+      
+      // Debounce ticket alert updates to prevent excessive calls
+      if (ticketDebounceTimer) clearTimeout(ticketDebounceTimer);
+      ticketDebounceTimer = setTimeout(() => {
+        fetchAlerts();
+      }, 8000); // Increased debounce to 8 seconds for ticket changes
+      
+    }, (error) => {
+      // Don't break the app on permission errors during logout
+      if (error.code === 'permission-denied' && !user) {
+        return;
+      }
+      if (error.code === 'resource-exhausted') {
+        handleQuotaError();
       }
     });
     
@@ -5337,6 +5851,44 @@ function App() {
       unsubscribe();
       if (ticketDebounceTimer) clearTimeout(ticketDebounceTimer);
     };
+  }, [user]);
+
+  // --- User join notification state ---
+  const [userJoinNotification, setUserJoinNotification] = useState(null);
+  const loadedUserIds = useRef(new Set());
+
+  useEffect(() => {
+    // Listen for new users in real-time - with improved throttling
+    const usersRef = collection(db, 'users');
+    const unsubscribe = onSnapshot(usersRef, (snapshot) => {
+      if (isThrottled('USER_UPDATE')) {
+        return;
+      }
+      
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'added') {
+          const newUser = { id: change.doc.id, ...change.doc.data() };
+          // Only notify if this user wasn't already loaded
+          if (!loadedUserIds.current.has(newUser.id)) {
+            loadedUserIds.current.add(newUser.id);
+            // Don't notify for yourself
+            if (user && newUser.id !== user.uid) {
+              setUserJoinNotification(`${newUser.displayName || newUser.email || 'A new user'} has joined!`);
+              setTimeout(() => setUserJoinNotification(null), 3500);
+            }
+          }
+        }
+      });
+    }, (error) => {
+      // Don't break the app on permission errors during logout
+      if (error.code === 'permission-denied' && !user) {
+        return;
+      }
+      if (error.code === 'resource-exhausted') {
+        handleQuotaError();
+      }
+    });
+    return () => unsubscribe();
   }, [user]);
 
   let sidebarClass = 'sidebar';
@@ -5374,7 +5926,6 @@ function App() {
         }
         setShowAlerts(false);
       } catch (error) {
-        console.error('Error handling dropdown click:', error);
         setShowAlerts(false);
       }
     }
@@ -5427,51 +5978,6 @@ function App() {
     return `${greet}${name ? ', ' + name : ''}!`;
   }
 
-  // --- User join notification state ---
-  const [userJoinNotification, setUserJoinNotification] = useState(null);
-  const loadedUserIds = useRef(new Set());
-
-  useEffect(() => {
-    // Listen for new users in real-time
-    const usersRef = collection(db, 'users');
-    const unsubscribe = onSnapshot(usersRef, (snapshot) => {
-      snapshot.docChanges().forEach(change => {
-        if (change.type === 'added') {
-          const newUser = { id: change.doc.id, ...change.doc.data() };
-          // Only notify if this user wasn't already loaded
-          if (!loadedUserIds.current.has(newUser.id)) {
-            loadedUserIds.current.add(newUser.id);
-            // Don't notify for yourself
-            if (user && newUser.id !== user.uid) {
-              setUserJoinNotification(`${newUser.displayName || newUser.email || 'A new user'} has joined!`);
-              setTimeout(() => setUserJoinNotification(null), 3500);
-            }
-          }
-        }
-      });
-    });
-    return () => unsubscribe();
-  }, [user]);
-
-  const [userBio, setUserBio] = useState('');
-  useEffect(() => {
-    if (user && user.uid) {
-      // Try to get bio from user object first
-      if (user.bio) {
-        setUserBio(user.bio);
-      } else {
-        // Fetch from Firestore
-        getDoc(firestoreDoc(db, 'users', user.uid)).then(docSnap => {
-          if (docSnap.exists()) {
-            setUserBio(docSnap.data().bio || '');
-          } else {
-            setUserBio('');
-          }
-        });
-      }
-    }
-  }, [user]);
-
   if (!user && location.pathname === '/login') {
     return <Login />;
   }
@@ -5504,7 +6010,7 @@ function App() {
         </div>
       )}
       {user ? (
-        <ChatManager sidebarCollapsed={sidebarCollapsed} mainContentMarginLeft={mainContentMarginLeft}>
+        <ChatManager sidebarCollapsed={sidebarCollapsed} mainContentMarginLeft={mainContentMarginLeft} currentUser={user}>
           {/* Top-right controls: Session Time, Notification Bell, Logout, Dark Mode Toggle */}
           <div style={{
             position: 'fixed',
@@ -5988,7 +6494,16 @@ function App() {
                     <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>{getGreeting(user?.displayName || user?.email?.split('@')[0])}</div>
                     <div style={{ fontSize: 13, color: '#888', marginBottom: 2 }}>{user?.email}</div>
                     <div style={{ color: '#888', fontSize: 14, fontWeight: 500, maxWidth: 260, whiteSpace: 'pre-line', overflow: 'hidden', textOverflow: 'ellipsis', margin: '6px 0 0 0', textAlign: 'center' }}>
-                      {userBio ? userBio.slice(0, 200) : 'This user has no bio yet.'}
+                      {(() => {
+                        // Ensure we're working with the same user object for all calculations
+                        const currentUser = user;
+                        const currentBio = currentUser?.bio;
+                        const bioCondition = !!currentBio;
+                        const bioText = bioCondition ? currentBio.slice(0, 200) : 'This user has no bio yet.';
+                        const bioTruthy = Boolean(currentBio);
+                        
+                        return bioText;
+                      })()}
                     </div>
                   </div>
                   <div className="divider-line" />
@@ -6001,21 +6516,27 @@ function App() {
                     onClick={async () => {
                       setShowProfileDropdown(false);
                       clearSessionStartTime();
-                      try {
-                        // Set user status to offline in Firestore
-                        const auth = getAuth();
-                        const user = auth.currentUser;
-                        if (user) {
-                          await setDoc(firestoreDoc(db, 'users', user.uid), { status: 'offline' }, { merge: true });
-                        }
-                        // Clear chat user cache
-                        localStorage.removeItem('chat_user_cache_v1');
-                        await signOut(auth);
-                        navigate('/login', { replace: true });
-                      } catch (err) {
-                        console.error('Logout failed:', err);
-                        alert('Logout failed. Please try again.');
+                      
+                      // Set user status to offline in Firestore
+                      const auth = getAuth();
+                      const user = auth.currentUser;
+                      if (user) {
+                        await setDoc(firestoreDoc(db, 'users', user.uid), { 
+                          status: 'offline',
+                          lastSeen: new Date().toISOString()
+                        }, { merge: true });
                       }
+                      // Clear chat user cache
+                      localStorage.removeItem('chat_user_cache_v1');
+                      
+                      // Clear all cached data to prevent stale data issues
+                      clearCache('*');
+                      
+                      // Sign out - this will trigger auth state change and clean up listeners
+                      await signOut(auth);
+                      
+                      // Navigate to login page
+                      navigate('/login', { replace: true });
                     }}
                     style={{ width: '100%', background: '#fff', color: '#d32f2f', border: '1.5px solid #e0e7ef', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: '1em', cursor: 'pointer' }}
                   >Logout</button>
@@ -6054,6 +6575,7 @@ function App() {
                       <Link to="/eoc-accounts">EOC Accounts</Link>
                     </nav>
                   </div>
+                  
                 </header>
                 <div className="minimalist-divider" />
                 <main className="main-seo-content">
@@ -6062,10 +6584,10 @@ function App() {
                     <Route path="/" element={user ? <HomeHero userEmail={user && user.email ? user.email.split('@')[0] : undefined} /> : <Navigate to="/login" replace />} />
                     <Route path="/da-pa-checker" element={user ? <DApaChecker darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
                     <Route path="/company-tracker" element={user ? <CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
-                    <Route path="/seo-basic" element={user ? <PackagePage pkg="SEO - BASIC" packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
-                    <Route path="/seo-premium" element={user ? <PackagePage pkg="SEO - PREMIUM" packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
-                    <Route path="/seo-pro" element={user ? <PackagePage pkg="SEO - PRO" packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
-                    <Route path="/seo-ultimate" element={user ? <PackagePage pkg="SEO - ULTIMATE" packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/seo-basic" element={user ? <PackagePage pkg="SEO - BASIC" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/seo-premium" element={user ? <PackagePage pkg="SEO - PREMIUM" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/seo-pro" element={user ? <PackagePage pkg="SEO - PRO" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/seo-ultimate" element={user ? <PackagePage pkg="SEO - ULTIMATE" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} /> : <Navigate to="/login" replace />} />
                     <Route path="/report" element={user ? <Report packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
                     <Route path="/link-buildings" element={user ? <LinkBuildings darkMode={darkMode} setDarkMode={setDarkMode} packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
                     <Route path="/templates" element={user ? <TemplateManager darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
@@ -6111,53 +6633,139 @@ function App() {
   );
 }
 
-// Floating chat button with online user count
+// Floating chat button with online user count and unread message badge
 function ChatUsersFloatingButton() {
   const navigate = useNavigate();
-  const { userList } = useChat();
   const currentUser = getAuth().currentUser;
+  const { userList, activeChats } = useChat(currentUser);
+  
+  // One-time cleanup of stale online statuses
+  const [hasCleanedUp, setHasCleanedUp] = useState(() => {
+    return localStorage.getItem('onlineStatusCleanupDone') === 'true';
+  });
+  
+  useEffect(() => {
+    if (!hasCleanedUp && currentUser && userList.length > 0) {
+      const cleanupStaleOnlineStatuses = async () => {
+        try {
+          // Get all users who are currently marked as online
+          const onlineUsers = userList.filter(u => u.status === 'online');
+          
+          // Reset all online users to offline (except current user)
+          const resetPromises = onlineUsers
+            .filter(u => u.id !== currentUser.uid)
+            .map(async (user) => {
+              const userRef = doc(db, 'users', user.id);
+              await setDoc(userRef, {
+                ...user,
+                status: 'offline',
+                lastSeen: new Date().toISOString()
+              }, { merge: true });
+            });
+          
+          await Promise.all(resetPromises);
+          localStorage.setItem('onlineStatusCleanupDone', 'true');
+          setHasCleanedUp(true);
+        } catch (error) {
+        }
+      };
+      
+      cleanupStaleOnlineStatuses();
+    }
+  }, [hasCleanedUp, currentUser, userList]);
+  
+  // Calculate online users
   const onlineUsers = Array.isArray(userList)
-    ? userList.filter(u => u.status === 'online' && (!currentUser || u.id !== currentUser.uid))
+    ? userList.filter(u => {
+        // More robust comparison - check both id and uid fields
+        const isCurrentUser = currentUser && (
+          u.id === currentUser.uid || 
+          u.uid === currentUser.uid ||
+          u.email === currentUser.email
+        );
+        return u.status === 'online' && !isCurrentUser;
+      })
     : [];
   const onlineCount = onlineUsers.length;
+  
   let onlineText = '';
   if (onlineCount === 0) onlineText = 'No Users Online';
   else if (onlineCount === 1) onlineText = '1 User Online';
   else onlineText = `${onlineCount} Users Online`;
+  
+  // Calculate total unread messages
+  const totalUnread = Array.isArray(activeChats) 
+    ? activeChats.reduce((total, chat) => total + (chat.unreadCount || 0), 0)
+    : 0;
+  
   return (
     <div style={{ position: 'fixed', right: 32, bottom: 32, zIndex: 1000, display: 'flex', alignItems: 'center', gap: 10 }}>
-      <button
-        onClick={() => navigate('/chat-users')}
-        aria-label="Chat Users"
-        style={{
-          background: 'none',
-          color: '#1976d2',
-          border: 'none',
-          borderRadius: 0,
-          width: 60,
-          height: 60,
-          boxShadow: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 48,
-          fontWeight: 700,
-          cursor: 'pointer',
-          transition: 'color 0.18s',
-          padding: 0,
-        }}
-      >
-        {/* Feather MessageCircle icon, larger size */}
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1976d2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 11.5a8.38 8.38 0 0 1-1.9 5.4 8.5 8.5 0 0 1-6.6 3.1c-1.6 0-3.1-.4-4.4-1.2L3 21l1.2-4.1A8.5 8.5 0 1 1 21 11.5z"/>
-        </svg>
-      </button>
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => navigate('/chat-users')}
+          aria-label="Chat Users"
+          style={{
+            background: 'none',
+            color: '#1976d2',
+            border: 'none',
+            borderRadius: 0,
+            width: 60,
+            height: 60,
+            boxShadow: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 48,
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'color 0.18s',
+            padding: 0,
+          }}
+        >
+          {/* Feather MessageCircle icon, larger size */}
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#1976d2" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 11.5a8.38 8.38 0 0 1-1.9 5.4 8.5 8.5 0 0 1-6.6 3.1c-1.6 0-3.1-.4-4.4-1.2L3 21l1.2-4.1A8.5 8.5 0 1 1 21 11.5z"/>
+          </svg>
+        </button>
+        {/* Unread message badge */}
+        {totalUnread > 0 && (
+          <div style={{
+            position: 'absolute',
+            top: -5,
+            right: -5,
+            background: '#ff4757',
+            color: 'white',
+            borderRadius: '50%',
+            width: 24,
+            height: 24,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 12,
+            fontWeight: 700,
+            border: '2px solid #fff',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            animation: totalUnread > 0 ? 'pulse 2s infinite' : 'none',
+          }}>
+            {totalUnread > 99 ? '99+' : totalUnread}
+          </div>
+        )}
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 16, color: '#43a047', background: '#fff', borderRadius: 16, padding: '4px 12px', boxShadow: '0 2px 8px #e0e7ef', border: '1.5px solid #e0e7ef' }}>
         <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#43a047', display: 'inline-block', marginRight: 6, border: '2px solid #fff', boxShadow: '0 1px 4px #e0e7ef' }} />
         {onlineText}
       </div>
+      <style>
+        {`
+          @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+          }
+        `}
+      </style>
     </div>
   );
 }
 
-export default App
+export default App;

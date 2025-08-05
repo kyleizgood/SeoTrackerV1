@@ -1,9 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db, storage } from './firebase';
 import { updateProfile, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { toast } from 'sonner';
+
+// Profile-specific throttling
+const PROFILE_THROTTLE_KEY = 'profile_listener_throttle';
+const PROFILE_THROTTLE_INTERVAL = 2000; // Reduced to 2 seconds for more responsiveness
+
+const isProfileThrottled = () => {
+  const lastUpdate = localStorage.getItem(PROFILE_THROTTLE_KEY);
+  const now = Date.now();
+  if (lastUpdate && (now - parseInt(lastUpdate)) < PROFILE_THROTTLE_INTERVAL) {
+    return true; // Throttled
+  }
+  
+  localStorage.setItem(PROFILE_THROTTLE_KEY, now.toString());
+  return false; // Not throttled
+};
+
+// Function to clear profile throttle (called after save operations)
+const clearProfileThrottle = () => {
+  localStorage.removeItem(PROFILE_THROTTLE_KEY);
+};
 
 const GIF_AVATARS = [
   'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExbGp4Zms1eDB0aGQ1ZXMybjNjdjVkNXIyN2xmN3Z3amZmYmlta2FxNCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/UYzNgRSTf9X1e/giphy.gif',
@@ -93,6 +113,7 @@ const ProfilePage = ({ onProfileUpdate }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
+  const [quotaWarning, setQuotaWarning] = useState(false);
 
 
   useEffect(() => {
@@ -100,18 +121,62 @@ const ProfilePage = ({ onProfileUpdate }) => {
       setDisplayName(user.displayName || '');
       setSelectedGif(user.photoURL || '');
       setCustomUrl(user.photoURL || '');
-      // Fetch bio from Firestore
-      import('./firebase').then(({ db }) => {
-        import('firebase/firestore').then(({ doc, getDoc }) => {
-          getDoc(doc(db, 'users', user.uid)).then(docSnap => {
-            if (docSnap.exists()) {
-              setBio(docSnap.data().bio || '');
+      
+      // Set up real-time listener for user's profile data
+      const userDocRef = doc(db, 'users', user.uid);
+      const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+        // Temporarily disable throttling to test immediate updates
+        // if (isProfileThrottled()) {
+        //   console.log('Profile update throttled - skipping');
+        //   return; // Skip this update if throttled
+        // }
+        
+        console.log('Profile update received from Firestore:', docSnap.data());
+        
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          setBio(userData.bio || '');
+          // Update display name and photo URL if they changed in Firestore
+          if (userData.displayName && userData.displayName !== displayName) {
+            console.log('Updating display name to:', userData.displayName);
+            setDisplayName(userData.displayName);
+          }
+          if (userData.photoURL && userData.photoURL !== avatarUrl) {
+            console.log('Updating photo URL to:', userData.photoURL);
+            if (GIF_AVATARS.includes(userData.photoURL)) {
+              setSelectedGif(userData.photoURL);
+              setCustomUrl('');
+            } else {
+              setCustomUrl(userData.photoURL);
+              setSelectedGif('');
             }
-          });
+          }
+        }
+      }, (error) => {
+        console.error('Error listening to user profile:', error);
+        
+        // Handle quota errors specifically
+        if (error.code === 'resource-exhausted') {
+          console.warn('🚨 Profile listener quota exceeded - falling back to manual refresh');
+          // Clear the throttle to allow manual refresh
+          localStorage.removeItem(PROFILE_THROTTLE_KEY);
+        }
+        
+        // Fallback to one-time fetch if real-time listener fails
+        getDoc(userDocRef).then(docSnap => {
+          if (docSnap.exists()) {
+            setBio(docSnap.data().bio || '');
+          }
+        }).catch(fallbackError => {
+          console.error('Fallback profile fetch also failed:', fallbackError);
         });
       });
+
+      return () => unsubscribe();
     }
   }, [user]);
+
+
 
   const avatarUrl = customUrl || selectedGif || user?.photoURL || '';
 
@@ -123,23 +188,149 @@ const ProfilePage = ({ onProfileUpdate }) => {
     setCustomUrl(e.target.value);
     setSelectedGif('');
   };
+  const handleQuickSave = async () => {
+    setSaving(true);
+    setError('');
+    console.log('Starting quick save (Firebase Auth + Firestore)...');
+    
+    try {
+      // Update Firebase Auth profile
+      await updateProfile(user, { displayName, photoURL: avatarUrl });
+      console.log('Firebase Auth profile updated successfully');
+      
+      // Update Firestore for real-time sync across users
+      await setDoc(doc(db, 'users', user.uid), { 
+        displayName, 
+        photoURL: avatarUrl, 
+        bio,
+        email: user.email,
+        lastSeen: new Date().toISOString()
+      }, { merge: true });
+      console.log('Firestore profile updated successfully');
+      
+      // Update parent component immediately
+      if (onProfileUpdate) {
+        onProfileUpdate({ displayName, photoURL: avatarUrl, bio });
+      }
+      
+      // Show success message
+      setShowConfirm(true);
+      setTimeout(() => setShowConfirm(false), 2000);
+      toast.success('Profile updated successfully');
+      console.log('Quick save completed successfully');
+      
+    } catch (err) {
+      console.error('Quick save failed:', err);
+      setError('Failed to update profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError('');
+    console.log('Starting profile save...');
+    
+    // Add timeout to prevent hanging
+    const saveTimeout = setTimeout(() => {
+      console.warn('Save operation timed out - forcing completion');
+      setSaving(false);
+      setError('Save operation timed out. Please try again.');
+    }, 8000); // Reduced to 8 seconds for faster response
+    
     try {
-      // Update Firebase Auth profile (displayName and photoURL)
+      // Update Firebase Auth profile (displayName and photoURL) - This is more reliable
+      console.log('Updating Firebase Auth profile...');
       await updateProfile(user, { displayName, photoURL: avatarUrl });
-      // Update Firestore (displayName, photoURL, and bio)
-      await setDoc(doc(db, 'users', user.uid), { displayName, photoURL: avatarUrl, bio }, { merge: true });
-      if (onProfileUpdate) onProfileUpdate({ displayName, photoURL: avatarUrl, bio });
-              setShowConfirm(true);
-        setTimeout(() => setShowConfirm(false), 2000);
-        toast.success('Profile updated successfully');
+      console.log('Firebase Auth profile updated successfully');
+      
+      // Update parent component immediately after Firebase Auth success
+      if (onProfileUpdate) {
+        console.log('Calling onProfileUpdate callback...');
+        onProfileUpdate({ displayName, photoURL: avatarUrl, bio });
+      }
+      
+      // Update Firestore for real-time sync across users
+      console.log('Updating Firestore for real-time sync...');
+      try {
+        await setDoc(doc(db, 'users', user.uid), { 
+          displayName, 
+          photoURL: avatarUrl, 
+          bio,
+          email: user.email,
+          lastSeen: new Date().toISOString()
+        }, { merge: true });
+        console.log('Firestore profile updated successfully');
+        setQuotaWarning(false); // Clear quota warning on successful Firestore update
+      } catch (firestoreError) {
+        console.warn('Firestore update failed:', firestoreError);
+        if (firestoreError.code === 'resource-exhausted') {
+          setQuotaWarning(true);
+          toast.warning('Profile saved locally - Firestore sync delayed due to quota');
+        } else {
+          toast.error('Failed to sync profile to other users');
+        }
+      }
+      
+      // Show success message immediately
+      setShowConfirm(true);
+      setTimeout(() => setShowConfirm(false), 2000);
+      toast.success('Profile updated successfully');
+      console.log('Profile save completed successfully');
 
     } catch (err) {
-      setError('Failed to update profile.');
+      console.error('Profile save failed:', err);
+      
+      // Handle specific quota errors
+      if (err.code === 'resource-exhausted') {
+        setError('Firestore quota exceeded. Profile saved locally.');
+        toast.error('Quota exceeded - changes saved locally');
+        setQuotaWarning(true);
+        
+        // Even if Firestore fails, update the parent component with local changes
+        if (onProfileUpdate) {
+          onProfileUpdate({ displayName, photoURL: avatarUrl, bio });
+        }
+      } else {
+        setError('Failed to update profile. Please try again.');
+        setQuotaWarning(false);
+      }
+    } finally {
+      // Clear timeout and reset saving state
+      clearTimeout(saveTimeout);
+      setSaving(false);
+      console.log('Save operation completed (success or error)');
     }
-    setSaving(false);
+  };
+
+  const handleRefresh = async () => {
+    if (!user) return;
+    
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(userDocRef);
+      if (docSnap.exists()) {
+        const userData = docSnap.data();
+        setBio(userData.bio || '');
+        if (userData.displayName) {
+          setDisplayName(userData.displayName);
+        }
+        if (userData.photoURL) {
+          if (GIF_AVATARS.includes(userData.photoURL)) {
+            setSelectedGif(userData.photoURL);
+            setCustomUrl('');
+          } else {
+            setCustomUrl(userData.photoURL);
+            setSelectedGif('');
+          }
+        }
+        toast.success('Profile data refreshed');
+      }
+    } catch (err) {
+      console.error('Failed to refresh profile:', err);
+      toast.error('Failed to refresh profile data');
+    }
   };
 
   const profileCompletion = getProfileCompletion(user, displayName, avatarUrl);
@@ -269,6 +460,28 @@ const ProfilePage = ({ onProfileUpdate }) => {
             <div style={{ width: `${profileCompletion}%`, height: '100%', background: profileCompletion === 100 ? 'linear-gradient(90deg, #81c784 60%, #1976d2 100%)' : 'linear-gradient(90deg, #ffd600 60%, #ff9800 100%)', borderRadius: 8, transition: 'width 0.3s' }} />
           </div>
           <div style={{ fontSize: 13, color: profileCompletion === 100 ? '#388e3c' : '#b26a00', fontWeight: 600, marginBottom: 10 }}>{profileCompletion}% Complete</div>
+          
+
+          
+          {/* Quota Warning Indicator */}
+          {quotaWarning && (
+            <div style={{
+              background: 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)',
+              borderRadius: '12px',
+              padding: '12px',
+              border: '1px solid #ffc107',
+              marginBottom: '18px',
+              boxShadow: '0 2px 8px rgba(255,193,7,0.2)'
+            }}>
+              <div style={{ fontSize: '13px', color: '#856404', textAlign: 'center', fontWeight: '600' }}>
+                ⚠️ Quota Exceeded - Real-time sync may be delayed
+              </div>
+              <div style={{ fontSize: '11px', color: '#856404', textAlign: 'center', marginTop: '4px' }}>
+                Changes are saved locally but may take time to sync across devices
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%' }}>
             <label style={{ fontWeight: 600, marginBottom: 2 }}>Display Name
               <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} className="profile-input" style={{ marginTop: 4, border: 'none', borderBottom: '2px solid #e0e7ef', borderRadius: 0, background: '#f7fafd', transition: 'border-color 0.2s', outline: 'none' }} onFocus={e => e.target.style.borderBottom = '2.5px solid #1976d2'} onBlur={e => e.target.style.borderBottom = '2px solid #e0e7ef'} />
@@ -289,7 +502,7 @@ const ProfilePage = ({ onProfileUpdate }) => {
             </label>
             <button
               type="button"
-              onClick={handleSave}
+              onClick={handleQuickSave}
               disabled={saving}
               style={{
                 background: 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
@@ -306,7 +519,31 @@ const ProfilePage = ({ onProfileUpdate }) => {
                 letterSpacing: '0.01em',
                 opacity: saving ? 0.7 : 1,
               }}
-            >{saving ? 'Saving...' : 'Save Changes'}</button>
+            >{saving ? 'Saving...' : 'Quick Save'}</button>
+            
+            <div style={{ fontSize: '11px', color: '#666', textAlign: 'center', marginTop: '4px' }}>
+              Quick Save: Updates immediately (Firebase Auth only)
+            </div>
+            
+            <button
+              type="button"
+              onClick={handleRefresh}
+              style={{
+                background: 'linear-gradient(90deg, #ff9800 60%, #ff5722 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 10,
+                padding: '10px 0',
+                fontWeight: 600,
+                fontSize: '0.95em',
+                marginTop: 8,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px #e0e7ef',
+                transition: 'background 0.18s, color 0.18s, box-shadow 0.18s',
+                letterSpacing: '0.01em',
+              }}
+            >🔄 Refresh Profile Data</button>
+            
             {error && <div style={{ color: '#c00', marginTop: 8 }}>{error}</div>}
           </form>
         </div>

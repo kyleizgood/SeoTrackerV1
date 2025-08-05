@@ -195,7 +195,6 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
       setRevertModal(null);
       
     } catch (err) {
-      console.error('Error reverting change:', err);
       alert('Failed to revert change. Please try again.');
     }
   };
@@ -294,7 +293,6 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
       addToHistory(historyEntry);
       
     } catch (err) {
-      console.error('Error updating audit status:', err);
       // Revert optimistic update on error
       if (field === 'siteAuditBStatus') {
         setAuditStatus(prev => ({ ...prev, [id]: 'Pending' }));

@@ -297,9 +297,10 @@ const ChatHead = forwardRef(({
   );
 });
 
-// Chat Window Component
-const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
-  const { sendChatMessage, userList } = useChat();
+  // Chat Window Component
+  const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
+    const currentUser = auth.currentUser;
+    const { sendChatMessage, userList } = useChat(currentUser);
   const [messages, setMessages] = useState([]);
   const [hasMore, setHasMore] = useState(true); // For pagination
   const [loadingMore, setLoadingMore] = useState(false);
@@ -375,6 +376,13 @@ const ChatWindow = ({ user, onClose, onMinimize, conversationId }) => {
       const typingObj = data.typing;
       const othersTyping = Object.entries(typingObj).some(([uid, val]) => uid !== currentUserId && val);
       setOtherTyping(othersTyping);
+    }, (error) => {
+      console.error('Chat typing listener error:', error);
+      // Don't break the app on permission errors during logout
+      if (error.code === 'permission-denied') {
+        console.log('Chat typing listener permission error - ignoring');
+        return;
+      }
     });
     return () => unsub();
   }, [conversationId, currentUserId]);

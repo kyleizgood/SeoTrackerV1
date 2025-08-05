@@ -458,6 +458,13 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
             }
           }
         }
+      }, (error) => {
+        console.error('CompanyOverview packages listener error:', error);
+        // Don't break the app on permission errors during logout
+        if (error.code === 'permission-denied' && !auth.currentUser) {
+          console.log('CompanyOverview packages listener permission error during logout - ignoring');
+          return;
+        }
       });
       
       return () => unsubscribe();

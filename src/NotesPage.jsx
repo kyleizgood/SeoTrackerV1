@@ -141,7 +141,7 @@ export default function NotesPage({ darkMode, setDarkMode }) {
   useEffect(() => {
     if (history && history.length > 0) {
       saveHistoryLog('notes', history).catch(err => {
-        console.error('Error saving history:', err);
+        // console.error('Error saving history:', err);
       });
     }
   }, [history]);

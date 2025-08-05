@@ -17,6 +17,14 @@ export default function Login() {
   const [showReset, setShowReset] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetMessage, setResetMessage] = useState('');
+  // Email autocomplete state
+  const [showLoginSuggestions, setShowLoginSuggestions] = useState(false);
+  const [showRegSuggestions, setShowRegSuggestions] = useState(false);
+  const [showResetSuggestions, setShowResetSuggestions] = useState(false);
+  // Keyboard navigation state
+  const [selectedLoginIndex, setSelectedLoginIndex] = useState(-1);
+  const [selectedRegIndex, setSelectedRegIndex] = useState(-1);
+  const [selectedResetIndex, setSelectedResetIndex] = useState(-1);
   // Trivia/Quotes for daily rotation (100+)
   const triviaQuotes = [
     "💡 Did you know? The first website ever created is still online: info.cern.ch",
@@ -141,6 +149,7 @@ export default function Login() {
     setLoginError('');
     try {
       await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+      saveEmail(loginEmail); // Save email on successful login
       setLoginError('');
     } catch (err) {
       setLoginError('Incorrect email or password.');
@@ -153,12 +162,43 @@ export default function Login() {
     setRegSuccess('');
     try {
       await createUserWithEmailAndPassword(auth, regEmail, regPassword);
+      saveEmail(regEmail); // Save email on successful registration
       setRegSuccess('Registration successful! You can now log in.');
       setRegEmail('');
       setRegPassword('');
     } catch (err) {
       setRegError(err.message);
     }
+  };
+
+  // Email autocomplete helper functions
+  const getSavedEmails = () => {
+    try {
+      return JSON.parse(localStorage.getItem('savedEmails') || '[]');
+    } catch {
+      return [];
+    }
+  };
+
+  const saveEmail = (email) => {
+    try {
+      const savedEmails = getSavedEmails();
+      if (!savedEmails.includes(email)) {
+        savedEmails.unshift(email); // Add to beginning
+        // Keep only last 10 emails
+        const trimmedEmails = savedEmails.slice(0, 10);
+        localStorage.setItem('savedEmails', JSON.stringify(trimmedEmails));
+      }
+    } catch (error) {
+      // console.error('Failed to save email:', error);
+    }
+  };
+
+  const getFilteredEmails = (input, savedEmails) => {
+    if (!input || input.length < 1) return [];
+    return savedEmails.filter(email => 
+      email.toLowerCase().includes(input.toLowerCase())
+    ).slice(0, 5); // Show max 5 suggestions
   };
 
   const handleResetPassword = async (e) => {
@@ -169,6 +209,79 @@ export default function Login() {
       setResetMessage('Password reset email sent! Check your inbox.');
     } catch (err) {
       setResetMessage('Failed to send reset email. Please check the email address.');
+    }
+  };
+
+  // Keyboard navigation handlers
+  const handleLoginKeyDown = (e) => {
+    const filteredEmails = getFilteredEmails(loginEmail, getSavedEmails());
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedLoginIndex(prev => 
+        prev < filteredEmails.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedLoginIndex(prev => 
+        prev > 0 ? prev - 1 : filteredEmails.length - 1
+      );
+    } else if (e.key === 'Enter' && selectedLoginIndex >= 0 && filteredEmails[selectedLoginIndex]) {
+      e.preventDefault();
+      setLoginEmail(filteredEmails[selectedLoginIndex]);
+      setShowLoginSuggestions(false);
+      setSelectedLoginIndex(-1);
+    } else if (e.key === 'Escape') {
+      setShowLoginSuggestions(false);
+      setSelectedLoginIndex(-1);
+    }
+  };
+
+  const handleRegKeyDown = (e) => {
+    const filteredEmails = getFilteredEmails(regEmail, getSavedEmails());
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedRegIndex(prev => 
+        prev < filteredEmails.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedRegIndex(prev => 
+        prev > 0 ? prev - 1 : filteredEmails.length - 1
+      );
+    } else if (e.key === 'Enter' && selectedRegIndex >= 0 && filteredEmails[selectedRegIndex]) {
+      e.preventDefault();
+      setRegEmail(filteredEmails[selectedRegIndex]);
+      setShowRegSuggestions(false);
+      setSelectedRegIndex(-1);
+    } else if (e.key === 'Escape') {
+      setShowRegSuggestions(false);
+      setSelectedRegIndex(-1);
+    }
+  };
+
+  const handleResetKeyDown = (e) => {
+    const filteredEmails = getFilteredEmails(resetEmail, getSavedEmails());
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedResetIndex(prev => 
+        prev < filteredEmails.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedResetIndex(prev => 
+        prev > 0 ? prev - 1 : filteredEmails.length - 1
+      );
+    } else if (e.key === 'Enter' && selectedResetIndex >= 0 && filteredEmails[selectedResetIndex]) {
+      e.preventDefault();
+      setResetEmail(filteredEmails[selectedResetIndex]);
+      setShowResetSuggestions(false);
+      setSelectedResetIndex(-1);
+    } else if (e.key === 'Escape') {
+      setShowResetSuggestions(false);
+      setSelectedResetIndex(-1);
     }
   };
 
@@ -215,16 +328,141 @@ export default function Login() {
         {tab === 'login' ? (
           <>
             <h2 className="login-title">Login</h2>
-            <form onSubmit={handleLogin} style={{marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 16}}>
-              <input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Email" required style={{ color: '#232323', background: '#fff', padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em' }} />
-              <input type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Password" required style={{ color: '#232323', background: '#fff', padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em' }} />
+            <form onSubmit={handleLogin} style={{marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 16, width: '100%', maxWidth: '100%'}}>
+              <div style={{ position: 'relative', width: '100%' }}>
+                <input 
+                  type="email" 
+                  value={loginEmail} 
+                  onChange={e => {
+                    setLoginEmail(e.target.value);
+                    setShowLoginSuggestions(e.target.value.length > 0);
+                    setSelectedLoginIndex(-1);
+                  }}
+                  onKeyDown={handleLoginKeyDown}
+                  onFocus={() => setShowLoginSuggestions(loginEmail.length > 0)}
+                  onBlur={() => setTimeout(() => setShowLoginSuggestions(false), 200)}
+                  placeholder="Email" 
+                  required 
+                  style={{ color: '#232323', background: '#fff', padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em', width: '100%', boxSizing: 'border-box' }} 
+                />
+                {showLoginSuggestions && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    background: '#fff',
+                    border: '1.5px solid #b6b6d8',
+                    borderRadius: '0 0 10px 10px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    zIndex: 1000,
+                    maxHeight: 200,
+                    overflowY: 'auto',
+                    width: '100%'
+                  }}>
+                    {getFilteredEmails(loginEmail, getSavedEmails()).map((email, index) => (
+                      <div
+                        key={index}
+                        onClick={() => {
+                          setLoginEmail(email);
+                          setShowLoginSuggestions(false);
+                          setSelectedLoginIndex(-1);
+                        }}
+                        style={{
+                          padding: '0.8em 1em',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f0f0f0',
+                          fontSize: '1em',
+                          color: '#232323',
+                          transition: 'background 0.15s',
+                          backgroundColor: index === selectedLoginIndex ? '#f0f8ff' : '#fff'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = '#f5f5f5';
+                          setSelectedLoginIndex(index);
+                        }}
+                        onMouseLeave={(e) => e.target.style.background = index === selectedLoginIndex ? '#f0f8ff' : '#fff'}
+                      >
+                        {email}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <input 
+                type="password" 
+                value={loginPassword} 
+                onChange={e => setLoginPassword(e.target.value)} 
+                placeholder="Password" 
+                required 
+                style={{ color: '#232323', background: '#fff', padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em', width: '100%', boxSizing: 'border-box' }} 
+              />
               <button type="submit">Login</button>
               {loginError && <div className="error-message">{loginError}</div>}
             </form>
             <button onClick={() => setShowReset(v => !v)} style={{ background: 'none', border: 'none', color: '#1976d2', fontWeight: 600, marginTop: 10, cursor: 'pointer', textDecoration: 'underline', fontSize: '1em' }}>Forgot Password?</button>
             {showReset && (
-              <form onSubmit={handleResetPassword} style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <input type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder="Enter your email" required style={{ color: '#232323', background: '#fff', padding: '0.8em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1em' }} />
+              <form onSubmit={handleResetPassword} style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: '100%' }}>
+                <div style={{ position: 'relative', width: '100%' }}>
+                  <input 
+                    type="email" 
+                    value={resetEmail} 
+                    onChange={e => {
+                      setResetEmail(e.target.value);
+                      setShowResetSuggestions(e.target.value.length > 0);
+                      setSelectedResetIndex(-1);
+                    }}
+                    onKeyDown={handleResetKeyDown}
+                    onFocus={() => setShowResetSuggestions(resetEmail.length > 0)}
+                    onBlur={() => setTimeout(() => setShowResetSuggestions(false), 200)}
+                    placeholder="Enter your email" 
+                    required 
+                    style={{ color: '#232323', background: '#fff', padding: '0.8em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1em', width: '100%', boxSizing: 'border-box' }} 
+                  />
+                  {showResetSuggestions && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      background: '#fff',
+                      border: '1.5px solid #b6b6d8',
+                      borderRadius: '0 0 10px 10px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      zIndex: 1000,
+                      maxHeight: 200,
+                      overflowY: 'auto',
+                      width: '100%'
+                    }}>
+                      {getFilteredEmails(resetEmail, getSavedEmails()).map((email, index) => (
+                        <div
+                          key={index}
+                          onClick={() => {
+                            setResetEmail(email);
+                            setShowResetSuggestions(false);
+                            setSelectedResetIndex(-1);
+                          }}
+                          style={{
+                            padding: '0.8em 1em',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #f0f0f0',
+                            fontSize: '1em',
+                            color: '#232323',
+                            transition: 'background 0.15s',
+                            backgroundColor: index === selectedResetIndex ? '#f0f8ff' : '#fff'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background = '#f5f5f5';
+                            setSelectedResetIndex(index);
+                          }}
+                          onMouseLeave={(e) => e.target.style.background = index === selectedResetIndex ? '#f0f8ff' : '#fff'}
+                        >
+                          {email}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button type="submit">Send Reset Email</button>
                 {resetMessage && <div style={{ color: resetMessage.includes('sent') ? '#1976d2' : '#c00', fontWeight: 600 }}>{resetMessage}</div>}
               </form>
@@ -236,9 +474,75 @@ export default function Login() {
         ) : (
           <>
             <h2 className="login-title">Register</h2>
-            <form onSubmit={handleRegister} style={{marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 16}}>
-              <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="Email" required style={{ color: '#232323', background: '#fff', padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em' }} />
-              <input type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="Password" required style={{ color: '#232323', background: '#fff', padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em' }} />
+            <form onSubmit={handleRegister} style={{marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 16, width: '100%', maxWidth: '100%'}}>
+              <div style={{ position: 'relative', width: '100%' }}>
+                <input 
+                  type="email" 
+                  value={regEmail} 
+                  onChange={e => {
+                    setRegEmail(e.target.value);
+                    setShowRegSuggestions(e.target.value.length > 0);
+                    setSelectedRegIndex(-1);
+                  }}
+                  onKeyDown={handleRegKeyDown}
+                  onFocus={() => setShowRegSuggestions(regEmail.length > 0)}
+                  onBlur={() => setTimeout(() => setShowRegSuggestions(false), 200)}
+                  placeholder="Email" 
+                  required 
+                  style={{ color: '#232323', background: '#fff', padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em', width: '100%', boxSizing: 'border-box' }} 
+                />
+                {showRegSuggestions && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    background: '#fff',
+                    border: '1.5px solid #b6b6d8',
+                    borderRadius: '0 0 10px 10px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    zIndex: 1000,
+                    maxHeight: 200,
+                    overflowY: 'auto',
+                    width: '100%'
+                  }}>
+                    {getFilteredEmails(regEmail, getSavedEmails()).map((email, index) => (
+                      <div
+                        key={index}
+                        onClick={() => {
+                          setRegEmail(email);
+                          setShowRegSuggestions(false);
+                          setSelectedRegIndex(-1);
+                        }}
+                        style={{
+                          padding: '0.8em 1em',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f0f0f0',
+                          fontSize: '1em',
+                          color: '#232323',
+                          transition: 'background 0.15s',
+                          backgroundColor: index === selectedRegIndex ? '#f0f8ff' : '#fff'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = '#f5f5f5';
+                          setSelectedRegIndex(index);
+                        }}
+                        onMouseLeave={(e) => e.target.style.background = index === selectedRegIndex ? '#f0f8ff' : '#fff'}
+                      >
+                        {email}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <input 
+                type="password" 
+                value={regPassword} 
+                onChange={e => setRegPassword(e.target.value)} 
+                placeholder="Password" 
+                required 
+                style={{ color: '#232323', background: '#fff', padding: '0.9em 1em', borderRadius: 10, border: '1.5px solid #b6b6d8', fontSize: '1.08em', width: '100%', boxSizing: 'border-box' }} 
+              />
               <button type="submit">Register</button>
               {regError && <div className="error-message">{regError}</div>}
               {regSuccess && <div style={{ color: '#1976d2', fontWeight: 600, marginTop: 4 }}>{regSuccess}</div>}

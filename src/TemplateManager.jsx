@@ -140,7 +140,6 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       toast.success('Template added successfully');
 
     } catch (error) {
-      console.error('Error adding template:', error);
       alert('Error adding template');
     }
   };
@@ -175,7 +174,6 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       toast.success('Template updated successfully');
 
     } catch (error) {
-      console.error('Error updating template:', error);
       alert('Error updating template');
     }
   };
@@ -187,7 +185,6 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       toast.success('Template deleted successfully');
 
     } catch (error) {
-      console.error('Error deleting template:', error);
       alert('Error deleting template');
     }
   };
@@ -214,7 +211,6 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       toast.success('Template moved to trash successfully');
 
     } catch (error) {
-      console.error('Error removing template:', error);
       alert('Error removing template');
     }
   };
@@ -240,7 +236,6 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       toast.success('Category added successfully');
 
     } catch (error) {
-      console.error('Error adding category:', error);
       alert('Error adding category');
     }
   };
@@ -260,7 +255,6 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       toast.success('Category deleted successfully');
 
     } catch (error) {
-      console.error('Error deleting category:', error);
       alert('Error deleting category');
     }
   };

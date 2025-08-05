@@ -1,32 +1,51 @@
-// All sessions expire at 6 PM every day
+// Session timeout is set to 1 hour (3600000 milliseconds)
+const SESSION_TIMEOUT_MS = 3600000; // 1 hour in milliseconds
 
-// Returns a Date object for the next 6 PM cutoff after a given date
-function getNext6PMAfter(date) {
-  const cutoff = new Date(date);
-  cutoff.setHours(18, 0, 0, 0); // 18:00:00.000
-  if (date >= cutoff) {
-    cutoff.setDate(cutoff.getDate() + 1);
+// Track user activity to reset the session timer
+let lastActivityTime = Date.now();
+
+// Update activity time whenever user interacts with the page
+export const updateActivityTime = () => {
+  lastActivityTime = Date.now();
+  const user = getAuth().currentUser;
+  if (user) {
+    localStorage.setItem(`lastActivity_${user.uid}`, lastActivityTime.toString());
   }
-  return cutoff;
-}
-
-// Returns true if the session is expired based on session start time
-export const isSessionExpired = () => {
-  const start = getSessionStartTime();
-  if (!start) return false; // No session started yet
-  const now = new Date();
-  const cutoff = getNext6PMAfter(new Date(start));
-  return now >= cutoff;
 };
 
-// Returns milliseconds remaining until 6 PM
+// Returns true if the session is expired based on last activity
+export const isSessionExpired = () => {
+  const user = getAuth().currentUser;
+  if (!user) return false;
+  
+  const lastActivity = localStorage.getItem(`lastActivity_${user.uid}`);
+  if (!lastActivity) return false;
+  
+  const lastActivityNum = Number(lastActivity);
+  if (isNaN(lastActivityNum)) return false;
+  
+  const now = Date.now();
+  const timeSinceLastActivity = now - lastActivityNum;
+  
+  return timeSinceLastActivity >= SESSION_TIMEOUT_MS;
+};
+
+// Returns milliseconds remaining until session expires
 export const getRemainingSessionTime = () => {
-  const start = getSessionStartTime();
-  if (!start) return 0;
-  const now = new Date();
-  const cutoff = getNext6PMAfter(new Date(start));
-  const diff = cutoff - now;
-  return isNaN(diff) ? 0 : diff;
+  const user = getAuth().currentUser;
+  if (!user) return 0;
+  
+  const lastActivity = localStorage.getItem(`lastActivity_${user.uid}`);
+  if (!lastActivity) return 0;
+  
+  const lastActivityNum = Number(lastActivity);
+  if (isNaN(lastActivityNum)) return 0;
+  
+  const now = Date.now();
+  const timeSinceLastActivity = now - lastActivityNum;
+  const remainingTime = SESSION_TIMEOUT_MS - timeSinceLastActivity;
+  
+  return Math.max(0, remainingTime);
 };
 
 // Format remaining time in a human-readable format
@@ -50,7 +69,10 @@ import { getAuth } from 'firebase/auth';
 export function setSessionStartTime() {
   const user = getAuth().currentUser;
   if (user) {
-    localStorage.setItem(`sessionStartTime_${user.uid}`, Date.now().toString());
+    const now = Date.now();
+    localStorage.setItem(`sessionStartTime_${user.uid}`, now.toString());
+    localStorage.setItem(`lastActivity_${user.uid}`, now.toString());
+    lastActivityTime = now;
   }
 }
 
@@ -69,5 +91,26 @@ export function clearSessionStartTime() {
   const user = getAuth().currentUser;
   if (user) {
     localStorage.removeItem(`sessionStartTime_${user.uid}`);
+    localStorage.removeItem(`lastActivity_${user.uid}`);
   }
-} 
+}
+
+// Set up activity listeners to track user interaction
+export const setupActivityTracking = () => {
+  const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+  
+  const activityHandler = () => {
+    updateActivityTime();
+  };
+  
+  events.forEach(event => {
+    document.addEventListener(event, activityHandler, true);
+  });
+  
+  // Return cleanup function
+  return () => {
+    events.forEach(event => {
+      document.removeEventListener(event, activityHandler, true);
+    });
+  };
+}; 

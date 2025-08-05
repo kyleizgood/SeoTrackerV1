@@ -1,11 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from './ChatManager';
 import { getAuth } from 'firebase/auth';
 import { createPortal } from 'react-dom';
+import { auth, db } from '../firebase';
+import { doc, setDoc, collection, getDocs } from 'firebase/firestore';
+import { toast } from 'sonner';
 
 const ChatUsersPage = () => {
-  const { userList, openChat } = useChat();
   const currentUser = getAuth().currentUser;
+  const { userList, openChat, loadingUsers } = useChat(currentUser);
   const [search, setSearch] = useState('');
   const [hoveredUser, setHoveredUser] = useState(null);
   const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
@@ -22,6 +25,56 @@ const ChatUsersPage = () => {
   const listRef = useRef();
   const hidePopupTimeout = useRef(null); // <-- add this
   const [bioCache, setBioCache] = useState({}); // userId -> bio
+  const [hasResetUsers, setHasResetUsers] = useState(() => {
+    // Check if we've already done the reset in this session
+    return localStorage.getItem('userStatusResetDone') === 'true';
+  });
+
+  // One-time reset all users to offline status (only runs once per session)
+  useEffect(() => {
+    const resetAllUsersToOffline = async () => {
+      if (!currentUser || hasResetUsers) return;
+      
+      try {
+        console.log('🔄 Starting one-time user status reset...');
+        
+        // Get all users from Firestore
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        const resetPromises = [];
+        
+        usersSnapshot.forEach((userDoc) => {
+          const userData = userDoc.data();
+          // Only reset users who are currently online or away
+          if (userData.status === 'online' || userData.status === 'away') {
+            const resetPromise = setDoc(doc(db, 'users', userDoc.id), {
+              ...userData,
+              status: 'offline',
+              lastSeen: new Date().toISOString()
+            }, { merge: true });
+            resetPromises.push(resetPromise);
+          }
+        });
+        
+        if (resetPromises.length > 0) {
+          await Promise.all(resetPromises);
+          console.log(`✅ Reset ${resetPromises.length} users to offline status`);
+          toast.success(`✅ Reset ${resetPromises.length} users to offline status`);
+        } else {
+          console.log('✅ No users needed reset - all already offline');
+        }
+        
+        // Mark as done in localStorage so it persists across page visits
+        localStorage.setItem('userStatusResetDone', 'true');
+        setHasResetUsers(true);
+      } catch (error) {
+        console.error('❌ Failed to reset users:', error);
+        toast.error('Failed to reset users to offline status');
+      }
+    };
+
+    // Run the reset once when component mounts (only if not already done)
+    resetAllUsersToOffline();
+  }, [currentUser, hasResetUsers]);
 
   // Helper to save nickname locally
   const saveNickname = (userId, nickname) => {
@@ -30,9 +83,61 @@ const ChatUsersPage = () => {
     localStorage.setItem('userNicknames', JSON.stringify(newNicks));
   };
 
-  // Sort users: online > away > offline
+  // Format last seen timestamp to human-readable text
+  const formatLastSeen = (lastSeen, status) => {
+    // If user is online or away, don't show last seen
+    if (status === 'online' || status === 'away') {
+      return status === 'online' ? 'Online' : 'Away';
+    }
+    
+    if (!lastSeen) return 'Never online';
+    
+    const lastSeenDate = new Date(lastSeen);
+    const now = new Date();
+    const diffMs = now.getTime() - lastSeenDate.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `Last online ${diffMins} minutes ago`;
+    if (diffHours < 24) return `Last online ${diffHours} hours ago`;
+    if (diffDays < 7) return `Last online ${diffDays} days ago`;
+    return 'Last online over a week ago';
+  };
+
+  // Clean up stale online statuses and sort users: online > away > offline
   const sortedUsers = Array.isArray(userList)
     ? [...userList].filter(u => u && (u.displayName || u.email) && (!currentUser || u.id !== currentUser.uid))
+        .map(u => {
+          // Auto-cleanup: Only mark users as offline if they haven't been seen for more than 30 minutes
+          // AND they're not the current user (to avoid marking ourselves offline)
+          // AND they're not currently active (to be extra safe)
+          if ((u.status === 'online' || u.status === 'away') && u.lastSeen && u.id !== currentUser?.uid) {
+            const lastSeen = new Date(u.lastSeen);
+            const now = new Date();
+            const timeDiff = now.getTime() - lastSeen.getTime();
+            const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds (very conservative)
+            
+            if (timeDiff > thirtyMinutes) {
+              // This user should be marked as offline
+              console.log(`🕐 Auto-cleanup: Marking ${u.email || u.displayName} as offline (last seen ${Math.round(timeDiff/1000/60)} minutes ago)`);
+              
+              // Actually update the database to mark them as offline
+              const userRef = doc(db, 'users', u.id);
+              setDoc(userRef, {
+                ...u,
+                status: 'offline',
+                lastSeen: new Date().toISOString()
+              }, { merge: true }).catch(error => {
+                console.error(`❌ Failed to mark ${u.email} as offline:`, error);
+              });
+              
+              return { ...u, status: 'offline' };
+            }
+          }
+          return u;
+        })
         .sort((a, b) => {
           const statusOrder = { online: 0, away: 1, offline: 2 };
           const aStatus = statusOrder[a.status] ?? 2;
@@ -58,6 +163,14 @@ const ChatUsersPage = () => {
       overflowY: 'auto',
       fontFamily: 'Inter, Segoe UI, Arial, sans-serif',
     }}>
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
       <section style={{
         maxWidth: 420,
         width: '100%',
@@ -119,6 +232,29 @@ const ChatUsersPage = () => {
             />
           </div>
         </div>
+        {/* Loading indicator */}
+        {loadingUsers && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: '20px',
+            color: '#1976d2',
+            fontSize: '16px',
+            fontWeight: '500'
+          }}>
+            <div style={{
+              width: '20px',
+              height: '20px',
+              border: '2px solid #e0e7ef',
+              borderTop: '2px solid #1976d2',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              marginRight: '10px'
+            }} />
+            Loading users...
+          </div>
+        )}
         {/* User list */}
         <ul
           ref={listRef}
@@ -229,24 +365,40 @@ const ChatUsersPage = () => {
                             : "?"}
                       </span>
                     )}
-                    {/* Display Name */}
-                    <span style={{
-                      fontWeight: 600,
-                      fontSize: 17,
-                      color: '#222',
+                    {/* User Info Container */}
+                    <div style={{
                       flex: 1,
-                      overflow: 'visible',
-                      whiteSpace: 'normal',
-                      textOverflow: 'clip',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
                       minWidth: 0,
                     }}>
-                      {u.displayName || u.email || u.id}
-                      {nickname && (
-                        <span style={{ fontWeight: 500, fontSize: 13, color: '#888', marginLeft: 6 }}>
-                          ({nickname})
-                        </span>
-                      )}
-                    </span>
+                      {/* Display Name */}
+                      <span style={{
+                        fontWeight: 600,
+                        fontSize: 17,
+                        color: '#222',
+                        overflow: 'visible',
+                        whiteSpace: 'normal',
+                        textOverflow: 'clip',
+                      }}>
+                        {u.displayName || u.email || u.id}
+                        {nickname && (
+                          <span style={{ fontWeight: 500, fontSize: 13, color: '#888', marginLeft: 6 }}>
+                            ({nickname})
+                          </span>
+                        )}
+                      </span>
+                      {/* Last Seen / Status */}
+                      <span style={{
+                        fontWeight: 400,
+                        fontSize: 13,
+                        color: u.status === 'online' ? '#43a047' : u.status === 'away' ? '#fbc02d' : '#888',
+                        fontStyle: 'italic',
+                      }}>
+                        {formatLastSeen(u.lastSeen, u.status)}
+                      </span>
+                    </div>
                     {/* Online/Offline Indicator */}
                     {u.status === 'online' && <span style={{ marginLeft: 'auto', color: '#43a047', fontSize: 18 }} title="Online">●</span>}
                     {u.status === 'away' && <span style={{ marginLeft: 'auto', color: '#fbc02d', fontSize: 18 }} title="Away">●</span>}
@@ -300,24 +452,35 @@ const ChatUsersPage = () => {
 function MiniProfilePopup({ user, nickname, bioCache, setBioCache, editingNickname, setEditingNickname, nicknameInput, setNicknameInput, hoverPos, onMouseEnter, onMouseLeave, saveNickname }) {
   const [loadingBio, setLoadingBio] = useState(false);
   const [bio, setBio] = useState(user.bio || bioCache[user.id] || '');
-
+  
   React.useEffect(() => {
-    if (!user.bio && !bioCache[user.id]) {
-      setLoadingBio(true);
-      import('../firebase').then(({ db }) => {
-        import('firebase/firestore').then(({ doc, getDoc }) => {
-          getDoc(doc(db, 'users', user.id)).then(docSnap => {
-            if (docSnap.exists()) {
-              const fetchedBio = docSnap.data().bio || '';
-              setBio(fetchedBio);
-              setBioCache(prev => ({ ...prev, [user.id]: fetchedBio }));
-            }
-            setLoadingBio(false);
-          }).catch(() => setLoadingBio(false));
+    // Always fetch fresh bio data from Firestore to ensure it's current
+    setLoadingBio(true);
+    
+    import('../firebase').then(({ db }) => {
+      import('firebase/firestore').then(({ doc, getDoc }) => {
+        getDoc(doc(db, 'users', user.id)).then(docSnap => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            const fetchedBio = userData.bio || '';
+            setBio(fetchedBio);
+            // Update cache with fresh data
+            setBioCache(prev => ({ 
+              ...prev, 
+              [user.id]: fetchedBio,
+              [`${user.id}_timestamp`]: Date.now()
+            }));
+          } else {
+            console.log('❌ User document not found:', user.id);
+          }
+          setLoadingBio(false);
+        }).catch((error) => {
+          console.error('❌ Error fetching bio:', error);
+          setLoadingBio(false);
         });
       });
-    }
-  }, [user, bioCache, setBioCache]);
+    });
+  }, [user.id, setBioCache]);
 
   return (
     <div

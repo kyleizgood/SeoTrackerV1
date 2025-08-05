@@ -115,7 +115,7 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
   useEffect(() => {
     if (history && history.length > 0) {
       saveHistoryLog('linkbuilding', history).catch(err => {
-        console.error('Error saving history:', err);
+        // console.error('Error saving history:', err);
       });
     }
   }, [history]);

@@ -14,7 +14,6 @@ export default function GitsPage({ darkMode }) {
       setGitServers(gits);
       setLoading(false);
     }).catch(error => {
-      console.error('Error loading git servers:', error);
       setLoading(false);
     });
   }, []);
@@ -42,7 +41,6 @@ export default function GitsPage({ darkMode }) {
       setEditData({ name: '', ip: '' });
       toast.success('Git server updated successfully');
     } catch (error) {
-      console.error('Error updating git server:', error);
       alert('Error updating git server');
     }
   };

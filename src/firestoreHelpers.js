@@ -1,10 +1,11 @@
 import { db } from './firebase';
 import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, query, where, orderBy, onSnapshot, addDoc, updateDoc, arrayUnion, limit as fsLimit, startAfter as fsStartAfter, enableIndexedDbPersistence } from 'firebase/firestore';
 import { auth } from './firebase';
+import { addOptimisticUpdate, completeOptimisticUpdate, failOptimisticUpdate, addBackgroundOperation } from './optimisticUI.js';
 
-// Simple in-memory cache for frequently accessed data
+// Enhanced in-memory cache for frequently accessed data
 const cache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes (increased from 10)
 
 // Cache helper functions
 const getCachedData = (key) => {
@@ -19,51 +20,357 @@ const setCachedData = (key, data) => {
   cache.set(key, { data, timestamp: Date.now() });
 };
 
-// Clear cache when data changes
 const clearCache = (pattern) => {
   if (pattern) {
-    for (const key of cache.keys()) {
+    Array.from(cache.keys()).forEach(key => {
       if (key.includes(pattern)) {
         cache.delete(key);
       }
-    }
+    });
   } else {
     cache.clear();
   }
 };
 
-// Throttling for write operations
-const writeThrottles = new Map();
-const MIN_WRITE_INTERVAL = 2000; // 2 seconds minimum between writes to same collection
+// Enhanced write throttling with optimistic updates
+const writeThrottle = new Map();
+const MIN_WRITE_INTERVAL = 5000; // 5 seconds
 
 const throttleWrite = (key) => {
   const now = Date.now();
-  const lastWrite = writeThrottles.get(key) || 0;
+  const lastWrite = writeThrottle.get(key) || 0;
+  
   if (now - lastWrite < MIN_WRITE_INTERVAL) {
     return false; // Throttled
   }
-  writeThrottles.set(key, now);
-  return true; // Allowed
+  
+  writeThrottle.set(key, now);
+  return true; // Not throttled
 };
 
-// After initializing Firestore (db), enable offline persistence
-try {
-  enableIndexedDbPersistence(db);
-  console.log('Firestore offline persistence enabled');
-} catch (err) {
-  console.warn('Could not enable offline persistence:', err);
+// Optimistic save company function
+export async function saveCompanyOptimistic(company, onSuccess, onError) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  const throttleKey = `saveCompany_${user.uid}`;
+  
+  // Create optimistic update
+  const optimisticId = addOptimisticUpdate('update', company, () => 
+    setDoc(doc(db, 'users', user.uid, 'companies', company.id.toString()), company)
+  );
+  
+  // Apply optimistic update immediately
+  if (onSuccess) onSuccess(company);
+  
+  // Execute background operation
+  addBackgroundOperation(async () => {
+    try {
+      if (!throttleWrite(throttleKey)) {
+        console.log('Save company throttled, skipping write');
+        completeOptimisticUpdate(optimisticId);
+        return;
+      }
+      
+      await setDoc(doc(db, 'users', user.uid, 'companies', company.id.toString()), company);
+      clearCache(`companies_${user.uid}`);
+      completeOptimisticUpdate(optimisticId);
+      console.log('Company saved to Firestore (optimistic)');
+    } catch (error) {
+      console.error('Failed to save company:', error);
+      failOptimisticUpdate(optimisticId, error);
+      if (onError) onError(error);
+    }
+  });
+  
+  return optimisticId;
 }
 
-// Save a company for the current user
+// Optimistic delete company function
+export async function deleteCompanyOptimistic(companyId, onSuccess, onError) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  const throttleKey = `deleteCompany_${user.uid}`;
+  
+  // Create optimistic update
+  const optimisticId = addOptimisticUpdate('delete', { id: companyId }, () => 
+    deleteDoc(doc(db, 'users', user.uid, 'companies', companyId.toString()))
+  );
+  
+  // Apply optimistic update immediately
+  if (onSuccess) onSuccess(companyId);
+  
+  // Execute background operation
+  addBackgroundOperation(async () => {
+    try {
+      if (!throttleWrite(throttleKey)) {
+        console.log('Delete company throttled, skipping write');
+        completeOptimisticUpdate(optimisticId);
+        return;
+      }
+      
+      await deleteDoc(doc(db, 'users', user.uid, 'companies', companyId.toString()));
+      clearCache(`companies_${user.uid}`);
+      completeOptimisticUpdate(optimisticId);
+      console.log('Company deleted from Firestore (optimistic)');
+    } catch (error) {
+      console.error('Failed to delete company:', error);
+      failOptimisticUpdate(optimisticId, error);
+      if (onError) onError(error);
+    }
+  });
+  
+  return optimisticId;
+}
+
+// Optimistic save template function
+export async function saveTemplateOptimistic(template, onSuccess, onError) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  const throttleKey = `saveTemplate_${user.uid}`;
+  
+  // Create optimistic update
+  const optimisticId = addOptimisticUpdate('update', template, () => 
+    setDoc(doc(db, 'users', user.uid, 'templates', template.id.toString()), template)
+  );
+  
+  // Apply optimistic update immediately
+  if (onSuccess) onSuccess(template);
+  
+  // Execute background operation
+  addBackgroundOperation(async () => {
+    try {
+      if (!throttleWrite(throttleKey)) {
+        console.log('Save template throttled, skipping write');
+        completeOptimisticUpdate(optimisticId);
+        return;
+      }
+      
+      await setDoc(doc(db, 'users', user.uid, 'templates', template.id.toString()), template);
+      clearCache(`templates_${user.uid}`);
+      completeOptimisticUpdate(optimisticId);
+      console.log('Template saved to Firestore (optimistic)');
+    } catch (error) {
+      console.error('Failed to save template:', error);
+      failOptimisticUpdate(optimisticId, error);
+      if (onError) onError(error);
+    }
+  });
+  
+  return optimisticId;
+}
+
+// Optimistic delete template function
+export async function deleteTemplateOptimistic(templateId, onSuccess, onError) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  const throttleKey = `deleteTemplate_${user.uid}`;
+  
+  // Create optimistic update
+  const optimisticId = addOptimisticUpdate('delete', { id: templateId }, () => 
+    deleteDoc(doc(db, 'users', user.uid, 'templates', templateId.toString()))
+  );
+  
+  // Apply optimistic update immediately
+  if (onSuccess) onSuccess(templateId);
+  
+  // Execute background operation
+  addBackgroundOperation(async () => {
+    try {
+      if (!throttleWrite(throttleKey)) {
+        console.log('Delete template throttled, skipping write');
+        completeOptimisticUpdate(optimisticId);
+        return;
+      }
+      
+      await deleteDoc(doc(db, 'users', user.uid, 'templates', templateId.toString()));
+      clearCache(`templates_${user.uid}`);
+      completeOptimisticUpdate(optimisticId);
+      console.log('Template deleted from Firestore (optimistic)');
+    } catch (error) {
+      console.error('Failed to delete template:', error);
+      failOptimisticUpdate(optimisticId, error);
+      if (onError) onError(error);
+    }
+  });
+  
+  return optimisticId;
+}
+
+// Optimistic save ticket function
+export async function saveTicketOptimistic(ticket, onSuccess, onError) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  const throttleKey = `saveTicket_${user.uid}`;
+  
+  // Create optimistic update
+  const optimisticId = addOptimisticUpdate('update', ticket, () => 
+    setDoc(doc(db, 'users', user.uid, 'tickets', ticket.id.toString()), ticket)
+  );
+  
+  // Apply optimistic update immediately
+  if (onSuccess) onSuccess(ticket);
+  
+  // Execute background operation
+  addBackgroundOperation(async () => {
+    try {
+      if (!throttleWrite(throttleKey)) {
+        console.log('Save ticket throttled, skipping write');
+        completeOptimisticUpdate(optimisticId);
+        return;
+      }
+      
+      await setDoc(doc(db, 'users', user.uid, 'tickets', ticket.id.toString()), ticket);
+      clearCache(`tickets_${user.uid}`);
+      completeOptimisticUpdate(optimisticId);
+      console.log('Ticket saved to Firestore (optimistic)');
+    } catch (error) {
+      console.error('Failed to save ticket:', error);
+      failOptimisticUpdate(optimisticId, error);
+      if (onError) onError(error);
+    }
+  });
+  
+  return optimisticId;
+}
+
+// Optimistic delete ticket function
+export async function deleteTicketOptimistic(ticketId, onSuccess, onError) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  const throttleKey = `deleteTicket_${user.uid}`;
+  
+  // Create optimistic update
+  const optimisticId = addOptimisticUpdate('delete', { id: ticketId }, () => 
+    deleteDoc(doc(db, 'users', user.uid, 'tickets', ticketId.toString()))
+  );
+  
+  // Apply optimistic update immediately
+  if (onSuccess) onSuccess(ticketId);
+  
+  // Execute background operation
+  addBackgroundOperation(async () => {
+    try {
+      if (!throttleWrite(throttleKey)) {
+        console.log('Delete ticket throttled, skipping write');
+        completeOptimisticUpdate(optimisticId);
+        return;
+      }
+      
+      await deleteDoc(doc(db, 'users', user.uid, 'tickets', ticketId.toString()));
+      clearCache(`tickets_${user.uid}`);
+      completeOptimisticUpdate(optimisticId);
+      console.log('Ticket deleted from Firestore (optimistic)');
+    } catch (error) {
+      console.error('Failed to delete ticket:', error);
+      failOptimisticUpdate(optimisticId, error);
+      if (onError) onError(error);
+    }
+  });
+  
+  return optimisticId;
+}
+
+// Optimistic save note function
+export async function saveNoteOptimistic(note, onSuccess, onError) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  const throttleKey = `saveNote_${user.uid}`;
+  
+  // Create optimistic update
+  const optimisticId = addOptimisticUpdate('update', note, () => 
+    setDoc(doc(db, 'users', user.uid, 'notes', note.id.toString()), note)
+  );
+  
+  // Apply optimistic update immediately
+  if (onSuccess) onSuccess(note);
+  
+  // Execute background operation
+  addBackgroundOperation(async () => {
+    try {
+      if (!throttleWrite(throttleKey)) {
+        console.log('Save note throttled, skipping write');
+        completeOptimisticUpdate(optimisticId);
+        return;
+      }
+      
+      await setDoc(doc(db, 'users', user.uid, 'notes', note.id.toString()), note);
+      clearCache(`notes_${user.uid}`);
+      completeOptimisticUpdate(optimisticId);
+      console.log('Note saved to Firestore (optimistic)');
+    } catch (error) {
+      console.error('Failed to save note:', error);
+      failOptimisticUpdate(optimisticId, error);
+      if (onError) onError(error);
+    }
+  });
+  
+  return optimisticId;
+}
+
+// Optimistic delete note function
+export async function deleteNoteOptimistic(noteId, onSuccess, onError) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  const throttleKey = `deleteNote_${user.uid}`;
+  
+  // Create optimistic update
+  const optimisticId = addOptimisticUpdate('delete', { id: noteId }, () => 
+    deleteDoc(doc(db, 'users', user.uid, 'notes', noteId.toString()))
+  );
+  
+  // Apply optimistic update immediately
+  if (onSuccess) onSuccess(noteId);
+  
+  // Execute background operation
+  addBackgroundOperation(async () => {
+    try {
+      if (!throttleWrite(throttleKey)) {
+        console.log('Delete note throttled, skipping write');
+        completeOptimisticUpdate(optimisticId);
+        return;
+      }
+      
+      await deleteDoc(doc(db, 'users', user.uid, 'notes', noteId.toString()));
+      clearCache(`notes_${user.uid}`);
+      completeOptimisticUpdate(optimisticId);
+      console.log('Note deleted from Firestore (optimistic)');
+    } catch (error) {
+      console.error('Failed to delete note:', error);
+      failOptimisticUpdate(optimisticId, error);
+      if (onError) onError(error);
+    }
+  });
+  
+  return optimisticId;
+}
+
+// Keep existing functions for backward compatibility
 export async function saveCompany(company) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  const throttleKey = `saveCompany_${user.uid}`;
+  
+  if (!throttleWrite(throttleKey)) {
+    // console.log('Save company throttled, skipping write');
+    return;
+  }
+  
   await setDoc(doc(db, 'users', user.uid, 'companies', company.id.toString()), company);
   // Clear cache to ensure fresh data
   clearCache(`companies_${user.uid}`);
+  // console.log('Company saved to Firestore (throttled)');
 }
 
-// Get all companies for the current user (with caching)
+// Get all companies for the current user (with enhanced caching)
 export async function getCompanies() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
@@ -71,6 +378,7 @@ export async function getCompanies() {
   const cacheKey = `companies_${user.uid}`;
   const cached = getCachedData(cacheKey);
   if (cached) {
+    // console.log('Using cached companies data');
     return cached;
   }
   
@@ -85,9 +393,18 @@ export async function deleteCompany(companyId) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
   if (!companyId) throw new Error('No companyId provided to deleteCompany');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `deleteCompany_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    // console.log('Delete company throttled, skipping write');
+    return;
+  }
+  
   await deleteDoc(doc(db, 'users', user.uid, 'companies', companyId.toString()));
   // Clear cache to ensure fresh data
   clearCache(`companies_${user.uid}`);
+      // console.log('Company deleted from Firestore (throttled)');
 }
 
 // --- PACKAGE HELPERS ---
@@ -108,6 +425,7 @@ export async function savePackages(packages) {
   clearCache('packages');
   console.log('Packages saved to Firestore (throttled)');
 }
+
 export async function getPackages() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
@@ -116,7 +434,7 @@ export async function getPackages() {
   const cacheKey = `packages_${user.uid}`;
   const cached = getCachedData(cacheKey);
   if (cached) {
-    console.log('Using cached packages data');
+    // console.log('Using cached packages data');
     return cached;
   }
   
@@ -128,41 +446,91 @@ export async function getPackages() {
   setCachedData(cacheKey, packages);
   return packages;
 }
+
 // --- TEMPLATE HELPERS ---
 export async function saveTemplate(template) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `saveTemplate_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Save template throttled, skipping write');
+    return;
+  }
+  
   await setDoc(doc(db, 'users', user.uid, 'templates', template.id.toString()), template);
+  console.log('Template saved to Firestore (throttled)');
 }
+
 export async function getTemplates() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Check cache first
+  const cacheKey = `templates_${user.uid}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    // console.log('Using cached templates data');
+    return cached;
+  }
+  
   const snapshot = await getDocs(collection(db, 'users', user.uid, 'templates'));
-  return snapshot.docs.map(doc => doc.data());
+  const data = snapshot.docs.map(doc => doc.data());
+  setCachedData(cacheKey, data);
+  return data;
 }
+
 export async function deleteTemplate(templateId) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `deleteTemplate_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Delete template throttled, skipping write');
+    return;
+  }
+  
   await deleteDoc(doc(db, 'users', user.uid, 'templates', templateId.toString()));
+  console.log('Template deleted from Firestore (throttled)');
 }
+
 // --- TICKET HELPERS ---
 export async function saveTicket(ticket) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
   
-  // Throttle writes to prevent excessive operations
-  const throttleKey = `saveTicket_${user.uid}`;
-  if (!throttleWrite(throttleKey)) {
-    console.log('Save ticket throttled, skipping write');
-    return;
+  console.log('🎫 saveTicket called with ticket:', ticket);
+  console.log('🎫 Ticket taskType:', ticket.taskType);
+  
+  // Skip throttling for business profile claiming tickets (critical operation)
+  const isBusinessProfileClaiming = ticket.taskType === 'businessProfileClaiming';
+  
+  if (!isBusinessProfileClaiming) {
+    // Throttle writes to prevent excessive operations (only for non-critical tickets)
+    const throttleKey = `saveTicket_${user.uid}`;
+    if (!throttleWrite(throttleKey)) {
+      console.log('🎫 Save ticket throttled, skipping write');
+      return;
+    }
+  } else {
+    console.log('🚨 Bypassing throttling for Business Profile Claiming ticket');
   }
   
-  await setDoc(doc(db, 'users', user.uid, 'tickets', ticket.id.toString()), ticket);
-  
-  // Clear cache when tickets are updated
-  clearCache('tickets');
-  console.log('Ticket saved to Firestore (throttled)');
+  try {
+    console.log('🎫 Attempting to save ticket to Firestore...');
+    await setDoc(doc(db, 'users', user.uid, 'tickets', ticket.id.toString()), ticket);
+    
+    // Clear cache when tickets are updated
+    clearCache('tickets');
+    console.log(`🎫 Ticket saved to Firestore ${isBusinessProfileClaiming ? '(critical operation)' : '(throttled)'}`);
+  } catch (error) {
+    console.error('❌ Error in saveTicket:', error);
+    throw error; // Re-throw to be caught by the calling function
+  }
 }
+
 export async function getTickets() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
@@ -171,7 +539,7 @@ export async function getTickets() {
   const cacheKey = `tickets_${user.uid}`;
   const cached = getCachedData(cacheKey);
   if (cached) {
-    console.log('Using cached tickets data');
+    // console.log('Using cached tickets data');
     return cached;
   }
   
@@ -182,65 +550,157 @@ export async function getTickets() {
   setCachedData(cacheKey, tickets);
   return tickets;
 }
+
 export async function deleteTicket(ticketId) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `deleteTicket_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Delete ticket throttled, skipping write');
+    return;
+  }
+  
   await deleteDoc(doc(db, 'users', user.uid, 'tickets', ticketId.toString()));
+  // Clear cache when tickets are updated
+  clearCache('tickets');
+  console.log('Ticket deleted from Firestore (throttled)');
 }
+
 // --- TRASH HELPERS ---
 export async function saveTrash(trash) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `saveTrash_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Save trash throttled, skipping write');
+    return;
+  }
+  
   await setDoc(doc(db, 'users', user.uid, 'meta', 'trash'), { trash });
+  console.log('Trash saved to Firestore (throttled)');
 }
+
 export async function getTrash() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Check cache first
+  const cacheKey = `trash_${user.uid}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    // console.log('Using cached trash data');
+    return cached;
+  }
+  
   const docSnap = await getDocs(collection(db, 'users', user.uid, 'meta'));
   const meta = docSnap.docs.find(d => d.id === 'trash');
-  return meta ? meta.data().trash : [];
+  const trash = meta ? meta.data().trash : [];
+  
+  // Cache the result
+  setCachedData(cacheKey, trash);
+  return trash;
 }
 
-// Update a specific audit status field for a company
+// --- COMPANY STATUS HELPERS ---
 export async function updateCompanyAuditStatus(companyId, field, value) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
-  const companyRef = doc(db, 'users', user.uid, 'companies', companyId.toString());
-  await setDoc(companyRef, { [field]: value }, { merge: true });
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `updateCompanyAuditStatus_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Update company audit status throttled, skipping write');
+    return;
+  }
+  
+  await updateDoc(doc(db, 'users', user.uid, 'companies', companyId.toString()), {
+    [field]: value
+  });
+  console.log('Company audit status updated (throttled)');
 }
 
-// Update a specific status field for a company inside a package in meta/packages
 export async function updatePackageCompanyStatus(companyId, pkg, field, value) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
-  // Get current packages
-  const docSnap = await getDocs(collection(db, 'users', user.uid, 'meta'));
-  const meta = docSnap.docs.find(d => d.id === 'packages');
-  let packages = meta ? meta.data().packages : { 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] };
-  // Update the company in the correct package
-  packages[pkg] = (packages[pkg] || []).map(c =>
-    c.id === companyId ? { ...c, [field]: value } : c
-  );
-  // Save back to Firestore
-  await setDoc(doc(db, 'users', user.uid, 'meta', 'packages'), { packages });
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `updatePackageCompanyStatus_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Update package company status throttled, skipping write');
+    return;
+  }
+  
+  const packages = await getPackages();
+  if (packages[pkg]) {
+    const updatedCompanies = packages[pkg].map(company => {
+      if (company.id === companyId) {
+        return { ...company, [field]: value };
+      }
+      return company;
+    });
+    packages[pkg] = updatedCompanies;
+    await savePackages(packages);
+    console.log('Package company status updated (throttled)');
+  }
 }
 
-// NOTES HELPERS
+// --- NOTES HELPERS ---
 export async function getNotes() {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Check cache first
+  const cacheKey = `notes_${user.uid}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    // console.log('Using cached notes data');
+    return cached;
+  }
+  
   const snapshot = await getDocs(collection(db, 'users', user.uid, 'notes'));
-  return snapshot.docs.map(doc => doc.data());
+  const notes = snapshot.docs.map(doc => doc.data());
+  
+  // Cache the result
+  setCachedData(cacheKey, notes);
+  return notes;
 }
+
 export async function saveNote(note) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
-  await setDoc(doc(db, 'users', user.uid, 'notes', note.id), note);
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `saveNote_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Save note throttled, skipping write');
+    return;
+  }
+  
+  await setDoc(doc(db, 'users', user.uid, 'notes', note.id.toString()), note);
+  // Clear cache when notes are updated
+  clearCache('notes');
+  console.log('Note saved to Firestore (throttled)');
 }
+
 export async function deleteNote(noteId) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
-  await deleteDoc(doc(db, 'users', user.uid, 'notes', noteId));
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `deleteNote_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Delete note throttled, skipping write');
+    return;
+  }
+  
+  await deleteDoc(doc(db, 'users', user.uid, 'notes', noteId.toString()));
+  // Clear cache when notes are updated
+  clearCache('notes');
+  console.log('Note deleted from Firestore (throttled)');
 }
 
 // --- PAGINATED NOTES HELPER ---

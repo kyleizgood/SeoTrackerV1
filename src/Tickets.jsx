@@ -112,12 +112,6 @@ function Tickets({ darkMode, setDarkMode }) {
     try {
       let startAfterDoc = loadMore ? lastDoc : null;
       const { items: fetched, lastDoc: newLastDoc, hasMore: more } = await getTicketsPaginated(20, startAfterDoc);
-      console.log('Fetched tickets:', fetched);
-      console.log('Number of tickets fetched:', fetched.length);
-      if (fetched.length > 0) {
-        console.log('First ticket sample:', fetched[0]);
-        console.log('Last ticket sample:', fetched[fetched.length - 1]);
-      }
       setTickets(prev => loadMore ? [...prev, ...fetched] : fetched);
       setLastDoc(newLastDoc);
       setHasMore(more);
@@ -181,7 +175,7 @@ function Tickets({ darkMode, setDarkMode }) {
   useEffect(() => {
     if (history && history.length > 0) {
       saveHistoryLog('tickets', history).catch(err => {
-        console.error('Error saving history:', err);
+        // console.error('Error saving history:', err);
       });
     }
   }, [history]);
@@ -197,7 +191,7 @@ function Tickets({ darkMode, setDarkMode }) {
     const unsubscribe = onSnapshot(ticketsColRef, (snapshot) => {
       const now = Date.now();
       if (now - lastUpdate > THROTTLE_DELAY) {
-        console.log('Tickets collection changed, refreshing...');
+        // console.log('Tickets collection changed, refreshing...');
         // Clear cache when tickets change
         localStorage.removeItem(TICKETS_CACHE_KEY);
         // Refresh tickets with a small delay to prevent rapid refreshes
@@ -205,10 +199,15 @@ function Tickets({ darkMode, setDarkMode }) {
           fetchTickets(false);
         }, 500);
         lastUpdate = now;
-        console.log('Tickets updated from Firestore (throttled)');
+        // console.log('Tickets updated from Firestore (throttled)');
       }
     }, (error) => {
-      console.error('Error listening to tickets:', error);
+      // console.error('Error listening to tickets:', error);
+      // Don't break the app on permission errors during logout
+      if (error.code === 'permission-denied' && !auth.currentUser) {
+        // console.log('Tickets listener permission error during logout - ignoring');
+        return;
+      }
     });
     
     return () => unsubscribe();
@@ -304,10 +303,11 @@ function Tickets({ darkMode, setDarkMode }) {
             
             if (updated) {
               await savePackages(packages);
-              toast.success(`Package task updated for ${ticketWithDefaults.company}`);
+              toast.success(`✅ Package task updated for ${ticketWithDefaults.company}`);
             }
           } catch (error) {
-            console.error('Error syncing with packages:', error);
+            // console.error('Error syncing with packages:', error);
+            toast.error('Failed to sync with package task');
           }
         }
       }
@@ -847,38 +847,9 @@ function Tickets({ darkMode, setDarkMode }) {
                     try {
                       await saveTicket({ ...selectedTicket, status: newStatus, updatedAt: new Date().toISOString() });
                       
-                      // Sync with packages if this is a Business Profile Claiming ticket
-                      if (selectedTicket.taskType === 'businessProfileClaiming' && oldStatus !== newStatus) {
-                        try {
-                          const { getPackages, savePackages } = await import('./firestoreHelpers');
-                          const packages = await getPackages();
-                          let updated = false;
-                          
-                          // Find and update the company in the correct package
-                          for (const [pkgName, pkgCompanies] of Object.entries(packages)) {
-                            const companyIndex = pkgCompanies.findIndex(c => c.ticketId === selectedTicket.id);
-                            if (companyIndex !== -1) {
-                              if (newStatus === 'closed') {
-                                // Mark Business Profile Claiming as Completed
-                                packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Completed';
-                                updated = true;
-                              } else if (newStatus === 'open' && oldStatus === 'closed') {
-                                // Mark Business Profile Claiming as Ticket if reopened
-                                packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Ticket';
-                                updated = true;
-                              }
-                              break;
-                            }
-                          }
-                          
-                          if (updated) {
-                            await savePackages(packages);
-                            toast.success(`✅ Package task updated for ${selectedTicket.company}`);
-                          }
-                        } catch (error) {
-                          console.error('Error syncing with packages:', error);
-                        }
-                      }
+                      // Let the ticket listener in App.jsx handle the package sync
+                      // This ensures consistent behavior and avoids duplicate sync logic
+                      // console.log(`🎫 Ticket status updated to ${newStatus}, letting listener handle package sync`);
                       
                       // If ticket moved out of current tab, clear selection
                       const isNowClosed = newStatus === 'closed';
