@@ -5,9 +5,10 @@ import { toast } from 'sonner';
 export default function GitsPage({ darkMode }) {
   const [gitServers, setGitServers] = useState([]);
   const [editingIndex, setEditingIndex] = useState(null);
-  const [editData, setEditData] = useState({ name: '', ip: '' });
+  const [editData, setEditData] = useState({ label: '', ip: '' });
   const [loading, setLoading] = useState(true);
-
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newGitData, setNewGitData] = useState({ label: '', ip: '' });
 
   useEffect(() => {
     getGits().then(gits => {
@@ -20,7 +21,6 @@ export default function GitsPage({ darkMode }) {
 
   const copyToClipboard = (ip, idx) => {
     navigator.clipboard.writeText(ip);
-    // setCopiedIdx(idx); // This state was removed, so this line is removed.
     setTimeout(() => {
       // setCopiedIdx(null); // This state was removed, so this line is removed.
     }, 1200);
@@ -28,7 +28,7 @@ export default function GitsPage({ darkMode }) {
 
   const handleEdit = (idx) => {
     setEditingIndex(idx);
-    setEditData({ name: gitServers[idx].name, ip: gitServers[idx].ip });
+    setEditData({ label: gitServers[idx].label, ip: gitServers[idx].ip });
   };
 
   const handleEditSave = async (idx) => {
@@ -38,16 +38,44 @@ export default function GitsPage({ darkMode }) {
       setGitServers(updatedServers);
       await saveGits(updatedServers);
       setEditingIndex(null);
-      setEditData({ name: '', ip: '' });
+      setEditData({ label: '', ip: '' });
       toast.success('Git server updated successfully');
     } catch (error) {
-      alert('Error updating git server');
+      toast.error(`Error updating git server: ${error.message}`);
     }
   };
 
   const handleEditCancel = () => {
     setEditingIndex(null);
-    setEditData({ name: '', ip: '' });
+    setEditData({ label: '', ip: '' });
+  };
+
+  const handleAddNew = () => {
+    setShowAddForm(true);
+    setNewGitData({ label: '', ip: '' });
+  };
+
+  const handleAddSave = async () => {
+    if (!newGitData.label.trim() || !newGitData.ip.trim()) {
+      toast.error('Please fill in both label and IP address');
+      return;
+    }
+
+    try {
+      const updatedServers = [...gitServers, newGitData];
+      setGitServers(updatedServers);
+      await saveGits(updatedServers);
+      setShowAddForm(false);
+      setNewGitData({ label: '', ip: '' });
+      toast.success('Git server added successfully');
+    } catch (error) {
+      toast.error(`Error adding git server: ${error.message}`);
+    }
+  };
+
+  const handleAddCancel = () => {
+    setShowAddForm(false);
+    setNewGitData({ label: '', ip: '' });
   };
 
   if (loading) {
@@ -74,7 +102,124 @@ export default function GitsPage({ darkMode }) {
           <span style={{ fontSize: '2.5em', color: '#1976d2' }}>🌐</span>
           <h1 className="fancy-title" style={{ fontSize: '2.2em', fontWeight: 800, letterSpacing: '0.04em', margin: 0 }}>Git servers for this week</h1>
         </div>
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'row', gap: 32, alignItems: 'flex-start', justifyContent: 'center' }}>
+
+        {/* Add New Git Server Button */}
+        <button 
+          onClick={handleAddNew}
+          style={{
+            background: 'linear-gradient(90deg, #1976d2 60%, #1565c0 100%)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 12,
+            fontWeight: 700,
+            fontSize: '1.1em',
+            padding: '0.8em 1.5em',
+            cursor: 'pointer',
+            boxShadow: '0 2px 12px rgba(25, 118, 210, 0.3)',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+          onMouseOver={(e) => {
+            e.target.style.transform = 'translateY(-2px)';
+            e.target.style.boxShadow = '0 4px 16px rgba(25, 118, 210, 0.4)';
+          }}
+          onMouseOut={(e) => {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = '0 2px 12px rgba(25, 118, 210, 0.3)';
+          }}
+        >
+          <span style={{ fontSize: '1.2em' }}>➕</span>
+          Add New Git Server
+        </button>
+
+        {/* Add New Git Server Form */}
+        {showAddForm && (
+          <div style={{
+            background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+            borderRadius: 16,
+            padding: '1.5em',
+            border: '2px solid #dee2e6',
+            width: '100%',
+            maxWidth: 500,
+            marginBottom: 16,
+          }}>
+            <h3 style={{ margin: '0 0 1em 0', color: '#495057', fontSize: '1.3em' }}>Add New Git Server</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600, color: '#495057' }}>Label:</label>
+                <input
+                  type="text"
+                  value={newGitData.label}
+                  onChange={e => setNewGitData(prev => ({ ...prev, label: e.target.value }))}
+                  placeholder="e.g., Git 5"
+                  style={{
+                    width: '100%',
+                    padding: '0.6em',
+                    border: '1px solid #ced4da',
+                    borderRadius: 8,
+                    fontSize: '1em',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: 4, fontWeight: 600, color: '#495057' }}>IP Address:</label>
+                <input
+                  type="text"
+                  value={newGitData.ip}
+                  onChange={e => setNewGitData(prev => ({ ...prev, ip: e.target.value }))}
+                  placeholder="e.g., 192.168.1.100"
+                  style={{
+                    width: '100%',
+                    padding: '0.6em',
+                    border: '1px solid #ced4da',
+                    borderRadius: 8,
+                    fontSize: '1em',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                <button
+                  onClick={handleAddSave}
+                  style={{
+                    background: '#28a745',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    fontSize: '1em',
+                    padding: '0.6em 1.2em',
+                    cursor: 'pointer',
+                    flex: 1
+                  }}
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleAddCancel}
+                  style={{
+                    background: '#6c757d',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    fontSize: '1em',
+                    padding: '0.6em 1.2em',
+                    cursor: 'pointer',
+                    flex: 1
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'row', gap: 32, alignItems: 'flex-start', justifyContent: 'center', flexWrap: 'wrap' }}>
           {gitServers.map((server, i) => (
             <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <button style={{ marginBottom: 8, background: '#fff0b2', color: '#b68c00', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '1em', padding: '0.2em 0.7em', cursor: 'pointer' }} onClick={() => handleEdit(i)} title="Edit IP">✏️</button>
@@ -125,13 +270,11 @@ export default function GitsPage({ darkMode }) {
                     </button>
                   </>
                 )}
-                {/* Removed copiedIdx state, so this block is removed. */}
               </div>
             </div>
           ))}
         </div>
       </div>
-
     </section>
   );
 }

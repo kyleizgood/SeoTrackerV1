@@ -20,7 +20,7 @@ import { onSnapshot, collection, doc as firestoreDoc, doc, deleteDoc, setDoc, ge
 import { db } from './firebase';
 import GitsPage from './GitsPage';
 import SiteAuditsPage from './SiteAuditsPage';
-import { setSessionStartTime, isSessionExpired, clearSessionStartTime, getRemainingSessionTime, formatRemainingTime } from './sessionUtils';
+import { setSessionStartTime, isSessionExpired, clearSessionStartTime, getTimeUntil6PM, formatRemainingTime } from './sessionUtils';
 import ResourcesPage from './ResourcesPage';
 import CompanyOverview from './CompanyOverview';
 import NotesPage from './NotesPage';
@@ -5628,24 +5628,19 @@ function App() {
 
   // Update session time display - runs every minute
   useEffect(() => {
-    if (!user) {
-      setSessionTimeDisplay('');
-      return;
-    }
-    
-    const updateSessionDisplay = () => {
-      const remainingTime = getRemainingSessionTime();
+    const updateTimerDisplay = () => {
+      const remainingTime = getTimeUntil6PM();
       setSessionTimeDisplay(formatRemainingTime(remainingTime));
     };
     
     // Update immediately
-    updateSessionDisplay();
+    updateTimerDisplay();
     
     // Then update every minute
-    const sessionDisplayInterval = setInterval(updateSessionDisplay, 60000);
+    const timerDisplayInterval = setInterval(updateTimerDisplay, 60000);
     
-    return () => clearInterval(sessionDisplayInterval);
-  }, [user]);
+    return () => clearInterval(timerDisplayInterval);
+  }, []);
 
   useEffect(() => {
     if (location.pathname === '/company-tracker' && location.state && location.state.editData) {
@@ -6044,7 +6039,7 @@ function App() {
             >
               {darkMode ? '🌙' : '☀️'}
             </button>
-            {/* Session Time Display */}
+            {/* Countdown Timer to 6 PM */}
             {sessionTimeDisplay && (
               <div style={{
                 background: 'rgba(255, 255, 255, 0.95)',
@@ -6060,7 +6055,7 @@ function App() {
                 gap: 6,
                 marginRight: 8,
               }}
-              title="Session Time Remaining"
+              title="Time until 6 PM"
               >
                 <span role="img" aria-label="clock">⏰</span>
                 {sessionTimeDisplay}

@@ -34,7 +34,6 @@
   background: var(--bg-card) !important;
   border-right: 1.5px solid var(--border) !important;
   box-shadow: none !important;
-  border: 2px solid red !important; /* Debug: remove after verifying */
 }
 .sidebar--collapsed .sidebar-logo-text,
 .sidebar--collapsed .sidebar-link-text {
