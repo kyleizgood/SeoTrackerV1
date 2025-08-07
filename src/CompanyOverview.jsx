@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { auth } from './firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase';
+import { addBackgroundOperation } from './optimisticUI.js';
 
 const PACKAGE_COLORS = {
   'SEO - BASIC': '#4E342E',
@@ -536,48 +537,51 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
     }
   };
 
-  // Update handleEOCDateUpdate to update the local state only for the edited row
+  // Update handleEOCDateUpdate to use optimistic updates
   const handleEOCDateUpdate = async (row) => {
-    try {
-      if (!selectedDate) {
-        alert('Please select a date');
-        return;
-      }
-      
-      const formattedDate = formatDate(selectedDate);
-      const oldValue = row.eocDate || 'N/A';
-      await updateEOCDate(row.id, row.package, formattedDate);
-      
-      // Update local state
-      setRows(prevRows => {
-        const updatedRows = prevRows.map(r => 
-          r.id === row.id ? { ...r, eocDate: formattedDate } : r
-        );
-        console.log('[CompanyOverview] Updated rows after EOC date change:', updatedRows);
-        return updatedRows;
-      });
-      // Update selectedRow if it matches the edited row
-      setSelectedRow(prev => prev && prev.id === row.id ? { ...prev, eocDate: formattedDate } : prev);
-      
-      // Add to history
-      const historyEntry = createHistoryEntry(
-        row.id,
-        row.name,
-        row.package,
-        'EOC Date',
-        oldValue,
-        formattedDate
-      );
-      addToHistory(historyEntry);
-      
-      setEditingEOCDate(false);
-      setSelectedDate(null);
-      toast.success('EOC date updated successfully');
-
-    } catch (error) {
-      console.error('Error updating EOC date:', error);
-      alert('Error updating EOC date');
+    if (!selectedDate) {
+      alert('Please select a date');
+      return;
     }
+    
+    const formattedDate = formatDate(selectedDate);
+    const oldValue = row.eocDate || 'N/A';
+    
+    // Optimistically update UI immediately
+    setRows(prevRows => {
+      const updatedRows = prevRows.map(r => 
+        r.id === row.id ? { ...r, eocDate: formattedDate } : r
+      );
+      return updatedRows;
+    });
+    
+    // Update selectedRow if it matches the edited row
+    setSelectedRow(prev => prev && prev.id === row.id ? { ...prev, eocDate: formattedDate } : prev);
+    
+    // Add to history
+    const historyEntry = createHistoryEntry(
+      row.id,
+      row.name,
+      row.package,
+      'EOC Date',
+      oldValue,
+      formattedDate
+    );
+    addToHistory(historyEntry);
+    
+    setEditingEOCDate(false);
+    setSelectedDate(null);
+    toast.success('EOC date updated successfully');
+    
+    // Background operation - save to Firestore
+    addBackgroundOperation(async () => {
+      try {
+        await updateEOCDate(row.id, row.package, formattedDate);
+      } catch (error) {
+        console.error('Error updating EOC date:', error);
+        toast.error('Failed to save EOC date - will retry');
+      }
+    });
   };
 
   const isFinalEOC = (row) => {
@@ -586,96 +590,101 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
     return row.status !== 'OnHold' && (!row.extension || row.extension === 0);
   };
 
-  // Update updateStatus for EOC status change
+  // Update updateStatus for EOC status change with optimistic updates
   const updateStatus = async (row, fieldKey, value) => {
-    try {
-      const oldValue = row[fieldKey] || 'N/A';
-      
-      if (fieldKey === 'status' && value === 'EOC') {
-        // Only allow marking as EOC if the account is final
-        if (!isFinalEOC(row)) {
-          alert('Cannot mark as EOC: Account is not final (may be on hold or has extension).');
-          return;
-        }
-        // Use the current eocDate as the final date
-        const finalEOCDate = row.eocDate;
-        if (!finalEOCDate) {
-          alert('Cannot mark as EOC: EOC date must be set and final.');
-          return;
-        }
-        const updatedCompany = await markAsEOC(row.id, row.package, finalEOCDate);
-        console.log('Received updated company:', updatedCompany);
-        
-        // Update only the specific row to maintain order
-        setRows(prevRows => {
-          const newRows = prevRows.map(r =>
-            r.id === row.id ? {
-              ...r,
-              ...updatedCompany,
-              status: 'EOC', // Explicitly set status to EOC
-              eocDate: updatedCompany.eocDate || finalEOCDate
-            } : r
-          );
-          console.log('Updated rows:', newRows);
-          return newRows;
-        });
-        
-        // Update selectedRow if it matches
-        setSelectedRow(prev => prev && prev.id === row.id ? 
-          { ...prev, status: 'EOC', eocDate: updatedCompany.eocDate || finalEOCDate } : prev);
-        
-        // Add to history
-        const historyEntry = createHistoryEntry(
-          row.id,
-          row.name,
-          row.package,
-          'Status',
-          oldValue,
-          value
-        );
-        addToHistory(historyEntry);
-        
-        await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
-
-        if (value === 'EOC') {
-          toast.success('Company moved to EOC accounts');
-        }
-      } else {
-        // For non-EOC status changes, update only the specific row
-        await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
-        
-        // Update only the specific row to maintain order
-        setRows(prevRows => {
-          const newRows = prevRows.map(r =>
-            r.id === row.id ? { ...r, [fieldKey]: value } : r
-          );
-          return newRows;
-        });
-        
-        // Update selectedRow if it matches
-        setSelectedRow(prev => prev && prev.id === row.id && prev.package === row.package ? 
-          { ...prev, [fieldKey]: value } : prev);
-        
-        // Add to history for all status changes (including regular status changes)
-        const historyEntry = createHistoryEntry(
-          row.id,
-          row.name,
-          row.package,
-          fieldKey === 'status' ? 'Status' :
-          fieldKey === 'reportI' ? 'Report I' : 
-          fieldKey === 'reportII' ? 'Report II' : 
-          fieldKey === 'linkBuildingStatus' ? 'Link Building' :
-          fieldKey === 'siteAuditBStatus' ? 'Site Audit B' :
-          fieldKey === 'siteAuditCStatus' ? 'Site Audit C' :
-          fieldKey === 'bmCreation' ? 'Bookmarking Creation' :
-          fieldKey === 'bmSubmission' ? 'Bookmarking Submission' : fieldKey,
-          oldValue,
-          value
-        );
-        addToHistory(historyEntry);
+    const oldValue = row[fieldKey] || 'N/A';
+    
+    if (fieldKey === 'status' && value === 'EOC') {
+      // Only allow marking as EOC if the account is final
+      if (!isFinalEOC(row)) {
+        alert('Cannot mark as EOC: Account is not final (may be on hold or has extension).');
+        return;
       }
-    } catch (error) {
-      console.error('Error updating status:', error);
+      // Use the current eocDate as the final date
+      const finalEOCDate = row.eocDate;
+      if (!finalEOCDate) {
+        alert('Cannot mark as EOC: EOC date must be set and final.');
+        return;
+      }
+      
+      // Optimistically update UI immediately
+      setRows(prevRows => {
+        const newRows = prevRows.map(r =>
+          r.id === row.id ? {
+            ...r,
+            status: 'EOC',
+            eocDate: finalEOCDate
+          } : r
+        );
+        return newRows;
+      });
+      
+      // Update selectedRow if it matches
+      setSelectedRow(prev => prev && prev.id === row.id ? 
+        { ...prev, status: 'EOC', eocDate: finalEOCDate } : prev);
+      
+      // Add to history
+      const historyEntry = createHistoryEntry(
+        row.id,
+        row.name,
+        row.package,
+        'Status',
+        oldValue,
+        value
+      );
+      addToHistory(historyEntry);
+      
+      // Background operation - save to Firestore
+      addBackgroundOperation(async () => {
+        try {
+          const updatedCompany = await markAsEOC(row.id, row.package, finalEOCDate);
+          await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
+          toast.success('Company moved to EOC accounts');
+        } catch (error) {
+          console.error('Error updating EOC status:', error);
+          toast.error('Failed to save EOC status - will retry');
+        }
+      });
+    } else {
+      // For non-EOC status changes - Optimistic UI update
+      setRows(prevRows => {
+        const newRows = prevRows.map(r =>
+          r.id === row.id ? { ...r, [fieldKey]: value } : r
+        );
+        return newRows;
+      });
+      
+      // Update selectedRow if it matches
+      setSelectedRow(prev => prev && prev.id === row.id && prev.package === row.package ? 
+        { ...prev, [fieldKey]: value } : prev);
+      
+      // Add to history for all status changes
+      const historyEntry = createHistoryEntry(
+        row.id,
+        row.name,
+        row.package,
+        fieldKey === 'status' ? 'Status' :
+        fieldKey === 'reportI' ? 'Report I' : 
+        fieldKey === 'reportII' ? 'Report II' : 
+        fieldKey === 'linkBuildingStatus' ? 'Link Building' :
+        fieldKey === 'siteAuditBStatus' ? 'Site Audit B' :
+        fieldKey === 'siteAuditCStatus' ? 'Site Audit C' :
+        fieldKey === 'bmCreation' ? 'Bookmarking Creation' :
+        fieldKey === 'bmSubmission' ? 'Bookmarking Submission' : fieldKey,
+        oldValue,
+        value
+      );
+      addToHistory(historyEntry);
+      
+      // Background operation - save to Firestore
+      addBackgroundOperation(async () => {
+        try {
+          await updatePackageCompanyStatus(row.id, row.package, fieldKey, value);
+        } catch (error) {
+          console.error('Error updating status:', error);
+          toast.error('Failed to save status change - will retry');
+        }
+      });
     }
   };
 

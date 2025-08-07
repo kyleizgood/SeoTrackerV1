@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { updateCompanyAuditStatus, getPackages, savePackages, updatePackageCompanyStatus } from './firestoreHelpers';
 import { getAdjustedEOC, getActiveDays } from './App.jsx';
+import { addBackgroundOperation } from './optimisticUI.js';
+import { toast } from 'sonner';
 
 const AUDIT_STATUS_KEY = 'siteAuditStatus';
 const PRE_EOC_STATUS_KEY = 'sitePreEOCStatus';
@@ -157,33 +159,27 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
 
   const confirmRevert = async () => {
     const historyEntry = revertModal;
-    try {
-      const field = historyEntry.field === 'Site Audit B' ? 'siteAuditBStatus' : 'siteAuditCStatus';
-      const value = historyEntry.oldValue;
-      
-      // Update in Firestore
-      await updateCompanyAuditStatus(historyEntry.companyId, field, value);
-      
-      // Update in packages
-      const pkgs = await getPackages();
-      let updated = false;
-      Object.keys(pkgs).forEach(pkg => {
-        pkgs[pkg] = pkgs[pkg].map(c => {
-          if (c.id === historyEntry.companyId) {
-            updated = true;
-            return { ...c, [field]: value };
-          }
-          return c;
-        });
+    const field = historyEntry.field === 'Site Audit B' ? 'siteAuditBStatus' : 'siteAuditCStatus';
+    const value = historyEntry.oldValue;
+    
+    // Optimistically update local state immediately
+    const updatedPackages = { ...packages };
+    let updated = false;
+    Object.keys(updatedPackages).forEach(pkg => {
+      updatedPackages[pkg] = updatedPackages[pkg].map(c => {
+        if (c.id === historyEntry.companyId) {
+          updated = true;
+          return { ...c, [field]: value };
+        }
+        return c;
       });
-      
-      if (updated) {
-        await savePackages(pkgs);
-        setPackages(pkgs);
-      }
+    });
+    
+    if (updated) {
+      setPackages(updatedPackages);
       
       // Update local status maps
-      const all = Object.values(pkgs).flat();
+      const all = Object.values(updatedPackages).flat();
       const auditB = {};
       const auditC = {};
       all.forEach(c => {
@@ -192,24 +188,36 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
       });
       setAuditStatus(auditB);
       setPreEOCStatus(auditC);
-      
-      // Add revert entry to history
-      const revertEntry = createHistoryEntry(
-        historyEntry.companyId,
-        historyEntry.companyName,
-        historyEntry.packageName,
-        historyEntry.field,
-        historyEntry.newValue,
-        historyEntry.oldValue,
-        'reverted'
-      );
-      addToHistory(revertEntry);
-      
-      setRevertModal(null);
-      
-    } catch (err) {
-      alert('Failed to revert change. Please try again.');
     }
+    
+    // Background operation - save to Firestore
+    addBackgroundOperation(async () => {
+      try {
+        // Update in Firestore
+        await updateCompanyAuditStatus(historyEntry.companyId, field, value);
+        
+        // Save packages to Firestore
+        const { savePackagesOptimistic } = await import('./firestoreHelpers');
+        await savePackagesOptimistic(updatedPackages);
+        
+        // Add revert entry to history
+        const revertEntry = createHistoryEntry(
+          historyEntry.companyId,
+          historyEntry.companyName,
+          historyEntry.packageName,
+          historyEntry.field,
+          historyEntry.newValue,
+          historyEntry.oldValue,
+          'reverted'
+        );
+        addToHistory(revertEntry);
+        
+        setRevertModal(null);
+      } catch (error) {
+        console.error('Failed to revert change:', error);
+        toast.error('Failed to revert change - will retry');
+      }
+    });
   };
 
   const handleAuditStatusChange = async (id, value) => {
@@ -253,79 +261,75 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
   };
 
   const performStatusUpdate = async (id, field, value, company, oldValue, fieldName) => {
-    // Optimistically update local state
+    // Optimistically update local state immediately
     if (field === 'siteAuditBStatus') {
       setAuditStatus(prev => ({ ...prev, [id]: value }));
     } else {
       setPreEOCStatus(prev => ({ ...prev, [id]: value }));
     }
-    try {
-      // Only update in Firestore (meta/packages structure)
-      if (company && company.package) {
-        try {
-          await updatePackageCompanyStatus(id, company.package, field, value);
-        } catch (err) {
-          console.error('Error in updatePackageCompanyStatus:', err);
-          throw new Error('updatePackageCompanyStatus failed: ' + err.message);
+    
+    // Also update packages state optimistically
+    const updatedPackages = { ...packages };
+    let updated = false;
+    Object.keys(updatedPackages).forEach(pkg => {
+      updatedPackages[pkg] = updatedPackages[pkg].map(c => {
+        if (c.id === id) {
+          updated = true;
+          return { ...c, [field]: value };
         }
-      }
-      // Also update in meta/packages (UI state)
-      let pkgs;
-      try {
-        pkgs = await getPackages();
-      } catch (err) {
-        console.error('Error in getPackages:', err);
-        throw new Error('getPackages failed: ' + err.message);
-      }
-      let updated = false;
-      Object.keys(pkgs).forEach(pkg => {
-        pkgs[pkg] = pkgs[pkg].map(c => {
-          if (c.id === id) {
-            updated = true;
-            return { ...c, [field]: value };
-          }
-          return c;
-        });
+        return c;
       });
-      if (updated) {
-        try {
-          await savePackages(pkgs);
-        } catch (err) {
-          console.error('Error in savePackages:', err);
-          throw new Error('savePackages failed: ' + err.message);
-        }
-        // Update local packages state
-        setPackages(pkgs);
-      }
-      // Update local status maps
-      const all = Object.values(pkgs).flat();
-      const auditB = {};
-      const auditC = {};
-      all.forEach(c => {
-        auditB[c.id] = c.siteAuditBStatus || 'Pending';
-        auditC[c.id] = c.siteAuditCStatus || 'Pending';
-      });
-      setAuditStatus(auditB);
-      setPreEOCStatus(auditC);
-      // Add to history
-      const historyEntry = createHistoryEntry(
-        id,
-        company?.name || 'Unknown Company',
-        company?.package || 'Unknown Package',
-        fieldName,
-        oldValue,
-        value
-      );
-      addToHistory(historyEntry);
-    } catch (err) {
-      // Revert optimistic update on error
-      if (field === 'siteAuditBStatus') {
-        setAuditStatus(prev => ({ ...prev, [id]: 'Pending' }));
-      } else {
-        setPreEOCStatus(prev => ({ ...prev, [id]: 'Pending' }));
-      }
-      alert('Failed to update status. Please try again.\n' + (err && err.message ? err.message : err));
+    });
+    
+    if (updated) {
+      setPackages(updatedPackages);
     }
+    
+    // Background operation - save to Firestore
+    addBackgroundOperation(async () => {
+      try {
+        // Update in Firestore (meta/packages structure)
+        if (company && company.package) {
+          await updatePackageCompanyStatus(id, company.package, field, value);
+        }
+        
+        // Also update in meta/packages (UI state)
+        const { savePackagesOptimistic } = await import('./firestoreHelpers');
+        await savePackagesOptimistic(updatedPackages);
+        
+        // Update local status maps
+        const all = Object.values(updatedPackages).flat();
+        const auditB = {};
+        const auditC = {};
+        all.forEach(c => {
+          auditB[c.id] = c.siteAuditBStatus || 'Pending';
+          auditC[c.id] = c.siteAuditCStatus || 'Pending';
+        });
+        setAuditStatus(auditB);
+        setPreEOCStatus(auditC);
+        
+        // Add to history
+        const historyEntry = createHistoryEntry(
+          id,
+          company?.name || 'Unknown Company',
+          company?.package || 'Unknown Package',
+          fieldName,
+          oldValue,
+          value
+        );
+        addToHistory(historyEntry);
+      } catch (error) {
+        console.error('Failed to save audit status change:', error);
+        toast.error('Failed to save changes - will retry');
+        
+        // Revert optimistic update on error
+        if (field === 'siteAuditBStatus') {
+          setAuditStatus(prev => ({ ...prev, [id]: oldValue }));
+        } else {
+          setPreEOCStatus(prev => ({ ...prev, [id]: oldValue }));
+        }
+      }
+    });
   };
 
   const confirmStatusChange = async () => {

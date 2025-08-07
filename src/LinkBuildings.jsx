@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { savePackages, saveHistoryLog, loadHistoryLog, clearHistoryLog } from './firestoreHelpers';
+import { addBackgroundOperation } from './optimisticUI.js';
+import { toast } from 'sonner';
 
 const PACKAGE_KEY = 'company-package-pages';
 const TRASH_KEY = 'company-trash';
@@ -148,8 +150,26 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
   const handleStatusChange = async (pkg, companyId, value) => {
     const updatedPackages = { ...packages };
     updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c => c.id === companyId ? { ...c, linkBuildingStatus: value } : c);
-    setPackages(updatedPackages); // Optimistically update UI
-    await savePackages(updatedPackages); // Persist to Firestore
+    
+    // Apply optimistic updates immediately
+    setPackages(updatedPackages);
+    
+    // Update alerts immediately
+    if (window.fetchAlerts) {
+      window.fetchAlerts();
+    }
+    
+    // Background operation - save to Firestore
+    addBackgroundOperation(async () => {
+      try {
+        const { savePackagesOptimistic } = await import('./firestoreHelpers');
+        await savePackagesOptimistic(updatedPackages);
+      } catch (error) {
+        console.error('Failed to save link building status change:', error);
+        toast.error('Failed to save changes - will retry');
+      }
+    });
+    
     // Add to history
     const company = (updatedPackages[pkg] || []).find(c => c.id === companyId);
     const oldValue = status[companyId] || 'Pending';

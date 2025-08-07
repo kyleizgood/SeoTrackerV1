@@ -408,6 +408,42 @@ export async function deleteCompany(companyId) {
 }
 
 // --- PACKAGE HELPERS ---
+export async function savePackagesOptimistic(packages, onSuccess, onError) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  // Create optimistic update
+  const optimisticId = addOptimisticUpdate('update', packages, () => 
+    setDoc(doc(db, 'users', user.uid, 'meta', 'packages'), { packages })
+  );
+  
+  // Apply optimistic update immediately
+  if (onSuccess) onSuccess(packages);
+  
+  // Execute background operation
+  addBackgroundOperation(async () => {
+    try {
+      const throttleKey = `savePackages_${user.uid}`;
+      if (!throttleWrite(throttleKey)) {
+        console.log('Save packages throttled, skipping write');
+        completeOptimisticUpdate(optimisticId);
+        return;
+      }
+      
+      await setDoc(doc(db, 'users', user.uid, 'meta', 'packages'), { packages });
+      clearCache('packages');
+      completeOptimisticUpdate(optimisticId);
+      console.log('Packages saved to Firestore (optimistic)');
+    } catch (error) {
+      console.error('Failed to save packages:', error);
+      failOptimisticUpdate(optimisticId, error);
+      if (onError) onError(error);
+    }
+  });
+  
+  return optimisticId;
+}
+
 export async function savePackages(packages) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');

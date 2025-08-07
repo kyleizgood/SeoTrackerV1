@@ -16,6 +16,7 @@ import Login from './Login';
 import Register from './Register';
 import { getCompanies, saveCompany, deleteCompany, getConversations } from './firestoreHelpers';
 import { getPackages, savePackages, getTrash, saveTrash, getTickets, saveTicket, loadHistoryLog, saveHistoryLog, clearHistoryLog, saveTemplate } from './firestoreHelpers';
+import { addBackgroundOperation } from './optimisticUI.js';
 import { onSnapshot, collection, doc as firestoreDoc, doc, deleteDoc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import GitsPage from './GitsPage';
@@ -313,14 +314,30 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
         Object.values(pkgs).forEach(arr => arr.forEach(c => packagedIds.add(c.id)));
         
         // Only show companies not in any package
-        setCompanies(validCompanies.filter(c => !packagedIds.has(c.id)));
+        const unassignedCompanies = validCompanies.filter(c => !packagedIds.has(c.id));
+        
+        // Only update if the list has actually changed to prevent overwriting optimistic updates
+        setCompanies(prevCompanies => {
+          const prevIds = new Set(prevCompanies.map(c => c.id));
+          const newIds = new Set(unassignedCompanies.map(c => c.id));
+          
+          // Check if the lists are different
+          if (prevIds.size !== newIds.size) return unassignedCompanies;
+          
+          for (const id of prevIds) {
+            if (!newIds.has(id)) return unassignedCompanies;
+          }
+          
+          // Lists are the same, keep current state
+          return prevCompanies;
+        });
       } catch (error) {
         setCompanies([]);
       }
     }
     
     loadUnassignedCompanies();
-  }, [packages]); // Only depend on packages changes
+  }, []); // Only run on mount, not on packages changes
 
   // If editData is provided (from package page), load it into the form
   useEffect(() => {
@@ -357,29 +374,53 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
     e.preventDefault();
     if (!form.name.trim() || !form.startDate) return;
     const start = form.startDate ? `${months[form.startDate.getMonth()]} ${form.startDate.getDate()}, ${form.startDate.getFullYear()}` : '';
+    
     if (editId) {
+      // Edit existing company
       const updated = { ...form, start, id: editId };
-      await saveCompany(updated);
-              setCompanies(await getCompanies());
-        setEditId(null);
-        toast.success('Company updated successfully');
-
+      
+      // Optimistic UI update
+      setCompanies(prev => prev.map(c => c.id === editId ? updated : c));
+      setEditId(null);
+      toast.success('Company updated successfully');
+      
+      // Background operation
+      addBackgroundOperation(async () => {
+        try {
+          await saveCompany(updated);
+        } catch (error) {
+          console.error('Failed to save company update:', error);
+          toast.error('Failed to save changes - will retry');
+        }
+      });
     } else {
-              const newCompany = { 
-          ...form, 
-          start, 
-          id: Date.now(), 
-          siteAuditBStatus: 'Pending', 
-          siteAuditCStatus: 'Pending',
-          onholdStartDate: null,
-          onholdEndDate: null,
-          totalOnholdDays: 0
-        };
-              await saveCompany(newCompany);
-        setCompanies(await getCompanies());
-        toast.success('Company added successfully');
-
+      // Add new company
+      const newCompany = { 
+        ...form, 
+        start, 
+        id: Date.now(), 
+        siteAuditBStatus: 'Pending', 
+        siteAuditCStatus: 'Pending',
+        onholdStartDate: null,
+        onholdEndDate: null,
+        totalOnholdDays: 0
+      };
+      
+      // Optimistic UI update
+      setCompanies(prev => [...prev, newCompany]);
+      toast.success('Company added successfully');
+      
+      // Background operation
+      addBackgroundOperation(async () => {
+        try {
+          await saveCompany(newCompany);
+        } catch (error) {
+          console.error('Failed to save new company:', error);
+          toast.error('Failed to save changes - will retry');
+        }
+      });
     }
+    
     setForm({ name: '', startDate: null, status: 'Active' });
   };
 
@@ -387,24 +428,36 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
     // Find the company to delete
     const companyToDelete = companies.find(c => c.id === id);
     if (!companyToDelete) return;
-    // Add to trash before deleting
-    const trash = await getTrash();
-    await saveTrash([...(trash || []), { ...companyToDelete, type: 'company' }]);
-    // Optimistically update UI
+    
+    // Optimistic UI update - remove immediately
     setCompanies(prev => prev.filter(c => c.id !== id));
-    if (window.fetchAlerts) fetchAlerts();
-    await deleteCompany(id);
-    setCompanies(await getCompanies());
     if (editId === id) {
       setEditId(null);
       setForm({ name: '', startDate: null, status: 'Active' });
     }
-    // Remove from all package pages
-    getPackages().then(packages => {
-      Object.keys(packages).forEach(pkg => {
-        packages[pkg] = packages[pkg].filter(c => c.id !== id);
-      });
-      savePackages(packages);
+    
+    // Background operations
+    addBackgroundOperation(async () => {
+      try {
+        // Add to trash before deleting
+        const trash = await getTrash();
+        await saveTrash([...(trash || []), { ...companyToDelete, type: 'company' }]);
+        
+        // Delete from Firestore
+        await deleteCompany(id);
+        
+        // Remove from all package pages
+        const packages = await getPackages();
+        Object.keys(packages).forEach(pkg => {
+          packages[pkg] = packages[pkg].filter(c => c.id !== id);
+        });
+        await savePackages(packages);
+        
+        if (window.fetchAlerts) fetchAlerts();
+      } catch (error) {
+        console.error('Failed to delete company:', error);
+        toast.error('Failed to delete company - will retry');
+      }
     });
   };
 
@@ -431,14 +484,11 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
 
   // Add to package pages
   const handleAddToPackage = async (company, pkg) => {
-    // Remove from CompanyTracker (Firestore and local state)
-    await deleteCompany(company.id);
-    setCompanies(prev => prev.filter(c => c.id !== company.id));
-    // Add to package
+    // Optimistic UI update - apply changes immediately
     const updatedPackages = { ...packages };
     if (!updatedPackages[pkg]) updatedPackages[pkg] = [];
     if (!updatedPackages[pkg].some(c => c.id === company.id)) {
-      updatedPackages[pkg].push({
+      const companyWithPackage = {
         ...company,
         package: pkg,
         tasks: {
@@ -452,10 +502,28 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
         reportII: 'Pending',
         bmCreation: 'Pending',
         bmSubmission: 'Pending',
-      });
+      };
+      
+      // Apply optimistic updates immediately
+      updatedPackages[pkg].push(companyWithPackage);
       setPackages(updatedPackages);
-      await savePackages(updatedPackages);
+      setCompanies(prev => prev.filter(c => c.id !== company.id));
       toast.success(`Company added to ${pkg} successfully`);
+      
+      // Background operations
+      addBackgroundOperation(async () => {
+        try {
+          // Remove from CompanyTracker (Firestore)
+          await deleteCompany(company.id);
+          
+          // Save packages to Firestore
+          const { savePackagesOptimistic } = await import('./firestoreHelpers');
+          await savePackagesOptimistic(updatedPackages);
+        } catch (error) {
+          console.error('Failed to save company to package:', error);
+          toast.error('Failed to save changes - will retry');
+        }
+      });
     }
     setShowAddToPackage(null);
   };
@@ -1634,7 +1702,7 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
       
     }
     
-    // Regular task update
+    // Regular task update - Optimistic UI
     const updatedPackages = { ...packages };
     let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
       if (c.id === companyId) {
@@ -1646,9 +1714,26 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
       return c;
     });
     updatedPackages[pkg] = pkgCompanies;
-    setPackages(updatedPackages); // Optimistically update UI
-    await savePackages(updatedPackages); // Persist to Firestore
+    
+    // Apply optimistic updates immediately
+    setPackages(updatedPackages);
     setCompanies(pkgCompanies);
+    
+    // Update alerts immediately
+    if (window.fetchAlerts) {
+      window.fetchAlerts();
+    }
+    
+    // Background operation - save to Firestore
+    addBackgroundOperation(async () => {
+      try {
+        const { savePackagesOptimistic } = await import('./firestoreHelpers');
+        await savePackagesOptimistic(updatedPackages);
+      } catch (error) {
+        console.error('Failed to save task change:', error);
+        toast.error('Failed to save changes - will retry');
+      }
+    });
     
     // Add to history
     const fieldName = taskLabels[taskKeys.indexOf(taskKey)] || taskKey;
@@ -1844,13 +1929,19 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
     setPackages(updatedPackages);
     setCompanies(updatedPackages[pkg]);
     
+    // Update alerts immediately
+    if (window.fetchAlerts) {
+      window.fetchAlerts();
+    }
+    
     // Show success message immediately
     toast.success(`Status changed to ${newStatus}`);
     
     // Background operation - save to Firestore
     addBackgroundOperation(async () => {
       try {
-        await savePackages(updatedPackages);
+        const { savePackagesOptimistic } = await import('./firestoreHelpers');
+        await savePackagesOptimistic(updatedPackages);
         console.log('Status change saved to Firestore');
       } catch (error) {
         console.error('Failed to save status change:', error);
@@ -2972,6 +3063,13 @@ function Report({ packages, setPackages }) {
     }
   }, []);
 
+  // Force re-render when packages change
+  const [renderKey, setRenderKey] = useState(0);
+  useEffect(() => {
+    // This effect ensures the component re-renders when packages change
+    setRenderKey(prev => prev + 1);
+  }, [packages]);
+
   const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
 
   // History entry structure
@@ -3076,8 +3174,25 @@ function Report({ packages, setPackages }) {
     updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
       c.id === companyId ? { ...c, [reportKey]: value } : c
     );
-    setPackages(updatedPackages); // Optimistically update UI
-    await savePackages(updatedPackages); // Persist to Firestore
+    
+    // Apply optimistic updates immediately
+    setPackages(updatedPackages);
+    
+    // Update alerts immediately
+    if (window.fetchAlerts) {
+      window.fetchAlerts();
+    }
+    
+    // Background operation - save to Firestore
+    addBackgroundOperation(async () => {
+      try {
+        const { savePackagesOptimistic } = await import('./firestoreHelpers');
+        await savePackagesOptimistic(updatedPackages);
+      } catch (error) {
+        console.error('Failed to save report status change:', error);
+        toast.error('Failed to save changes - will retry');
+      }
+    });
     
     // Add to history
     const historyEntry = createHistoryEntry(
@@ -3483,9 +3598,10 @@ function Report({ packages, setPackages }) {
         const currentPage = page[pkg] || 1;
         const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
         const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-        const pendingCount = filtered.filter(c => (c.reportI || 'Pending') !== 'Completed' || (c.reportII || 'Pending') !== 'Completed').length;
-        return (
-          <div key={pkg} style={{ marginBottom: 32, width: '100%' }}>
+        const pendingCount = companies.filter(c => (c.reportI || 'Pending') !== 'Completed' || (c.reportII || 'Pending') !== 'Completed').length;
+
+                  return (
+            <div key={`${pkg}-${renderKey}-${JSON.stringify(packages[pkg]?.map(c => `${c.id}-${c.reportI}-${c.reportII}`))}`} style={{ marginBottom: 32, width: '100%' }}>
             {/* Alert banner for pending reports */}
             {pendingCount > 0 && (
               <div style={{
@@ -3985,8 +4101,25 @@ function Bookmarking({ packages, setPackages }) {
     updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
       c.id === companyId ? { ...c, [bmKey]: value } : c
     );
-    setPackages(updatedPackages); // Optimistically update UI
-    await savePackages(updatedPackages); // Persist to Firestore
+    
+    // Apply optimistic updates immediately
+    setPackages(updatedPackages);
+    
+    // Update alerts immediately
+    if (window.fetchAlerts) {
+      window.fetchAlerts();
+    }
+    
+    // Background operation - save to Firestore
+    addBackgroundOperation(async () => {
+      try {
+        const { savePackagesOptimistic } = await import('./firestoreHelpers');
+        await savePackagesOptimistic(updatedPackages);
+      } catch (error) {
+        console.error('Failed to save BM status change:', error);
+        toast.error('Failed to save changes - will retry');
+      }
+    });
     
     // Add to history
     const historyEntry = createHistoryEntry(
@@ -4055,6 +4188,13 @@ function Bookmarking({ packages, setPackages }) {
       });
     }
   }, [history]);
+
+  // Force re-render when packages change
+  const [renderKey, setRenderKey] = useState(0);
+  useEffect(() => {
+    // This effect ensures the component re-renders when packages change
+    setRenderKey(prev => prev + 1);
+  }, [packages]);
 
   const handleClearHistory = async () => {
     setHistory([]);
@@ -4318,7 +4458,9 @@ function Bookmarking({ packages, setPackages }) {
           </div>
         </div>
       )}
-      {packageNames.map(pkg => {
+      {/* Only render the selected package's table */}
+      {(() => {
+        const pkg = selectedPackage;
         const companies = (packages[pkg] || []).filter(c => c.status !== 'OnHold');
         const filtered = companies.filter(c => {
           const matchesSearch = !search[pkg] || c.name.toLowerCase().includes((search[pkg] || '').toLowerCase());
@@ -4330,9 +4472,10 @@ function Bookmarking({ packages, setPackages }) {
         const currentPage = page[pkg] || 1;
         const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
         const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-        const pendingCount = filtered.filter(c => (c.bmCreation || 'Pending') !== 'Completed' || (c.bmSubmission || 'Pending') !== 'Completed').length;
-        return (
-          <div key={pkg} style={{ marginBottom: 32, width: '100%' }}>
+        const pendingCount = companies.filter(c => (c.bmCreation || 'Pending') !== 'Completed' || (c.bmSubmission || 'Pending') !== 'Completed').length;
+
+                  return (
+            <div key={`${pkg}-${renderKey}-${JSON.stringify(packages[pkg]?.map(c => `${c.id}-${c.bmCreation}-${c.bmSubmission}`))}`} style={{ marginBottom: 32, width: '100%' }}>
             {/* Alert banner for pending bookmarking */}
             {pendingCount > 0 && (
               <div style={{
@@ -4519,7 +4662,7 @@ function Bookmarking({ packages, setPackages }) {
             )}
           </div>
         );
-      })}
+      })()}
       {/* Confirmation Modal */}
       {confirmModal && (
         <div style={{
@@ -5050,6 +5193,13 @@ function App() {
   const setAlertsRef = useRef(setAlerts);
   useEffect(() => { packagesRef.current = packages; }, [packages]);
   useEffect(() => { setAlertsRef.current = setAlerts; }, [setAlerts]);
+  
+  // Update alerts when packages change
+  useEffect(() => {
+    if (packages && Object.keys(packages).length > 0 && window.fetchAlerts) {
+      window.fetchAlerts();
+    }
+  }, [packages]);
 
   // Daily usage monitoring
   const [dailyUsage, setDailyUsage] = useState(getDailyUsage());
