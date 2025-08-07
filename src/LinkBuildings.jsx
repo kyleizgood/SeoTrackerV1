@@ -11,6 +11,13 @@ const linksPerPackage = {
   'SEO - ULTIMATE': '42 Links',
 };
 
+const packageColors = {
+  'SEO - BASIC': '#4A3C31',
+  'SEO - PREMIUM': '#00bcd4',
+  'SEO - PRO': '#8E24AA',
+  'SEO - ULTIMATE': '#1A237E',
+};
+
 export default function LinkBuildings({ packages, setPackages, darkMode, setDarkMode }) {
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -24,7 +31,7 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
 
   // Add per-package page state
   const [page, setPage] = useState({});
-  const PAGE_SIZE = 15;
+  const PAGE_SIZE = 10;
 
   // --- History Log State ---
   const [history, setHistory] = useState([]);
@@ -176,6 +183,8 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
     transition: 'background 0.18s, color 0.18s',
   });
 
+  const [selectedPackage, setSelectedPackage] = useState(packageNames[0]);
+
   return (
     <section className="company-tracker-page" style={{paddingTop: 12, background: darkMode ? '#181a1b' : '#f7f6f2'}}>
       {/* Header with History Button */}
@@ -200,6 +209,35 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
         >
           📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
         </button>
+      </div>
+      {/* Package Tabs */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+        {packageNames.map(pkg => (
+          <button
+            key={pkg}
+            onClick={() => setSelectedPackage(pkg)}
+            style={{
+              padding: '10px 24px',
+              borderRadius: 8,
+              border: selectedPackage === pkg
+                ? `2.5px solid ${packageColors[pkg]}`
+                : `1.5px solid ${packageColors[pkg]}`,
+              background: selectedPackage === pkg
+                ? packageColors[pkg]
+                : '#fff',
+              color: selectedPackage === pkg ? '#fff' : packageColors[pkg],
+              fontWeight: selectedPackage === pkg ? 700 : 500,
+              fontSize: '1.08em',
+              cursor: 'pointer',
+              boxShadow: selectedPackage === pkg ? `0 2px 8px ${packageColors[pkg]}22` : '0 1px 4px #ececec',
+              transition: 'all 0.18s',
+              outline: 'none',
+              minWidth: 120
+            }}
+          >
+            {pkg.replace('SEO - ', '')}
+          </button>
+        ))}
       </div>
       <p className="hero-desc" style={{marginBottom: 10}}>All companies, grouped by SEO package for link building.</p>
       {/* History Panel */}
@@ -405,7 +443,9 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
           </div>
         </div>
       )}
-      {packageNames.map(pkg => {
+      {/* Only render the selected package's table */}
+      {(() => {
+        const pkg = selectedPackage;
         const companies = (packages[pkg] || []).filter(c => c.status !== 'OnHold');
         const filteredCompanies = companies.filter(c => {
           const matchesSearch = !search[pkg] || c.name.toLowerCase().includes(search[pkg].toLowerCase());
@@ -486,7 +526,6 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
                       </div>
                     </th>
                     <th className="report-col" style={{minWidth:120}}>Start Date</th>
-                    {/* Remove the action column header */}
                   </tr>
                 </thead>
                 <tbody>
@@ -519,7 +558,6 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
                       <td className="report-col" style={{textAlign:'center', fontWeight:500, fontSize:'1em'}}>
                         {c.start || '-'}
                       </td>
-                      {/* Remove the action column with X button */}
                     </tr>
                   ))}
                   {filteredCompanies.length > PAGE_SIZE && filteredCompanies.slice(PAGE_SIZE).map((c, i) => (
@@ -530,25 +568,34 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
             </div>
             {/* Pagination controls */}
             {pageCount > 1 && (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 12, gap: 16 }}>
-                <button
-                  onClick={() => setPage(p => ({ ...p, [pkg]: (p[pkg] || 1) - 1 }))}
-                  disabled={currentPage === 1}
-                  style={{ padding: '0.4em 1.2em', borderRadius: 8, border: '1.5px solid #b6b6d8', background: currentPage === 1 ? '#eee' : '#faf9f6', color: '#232323', fontWeight: 600, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
-                >Prev</button>
-                <span style={{ fontWeight: 600, fontSize: '1.05em' }}>Page {currentPage} of {pageCount}</span>
-                <button
-                  onClick={() => setPage(p => ({ ...p, [pkg]: (p[pkg] || 1) + 1 }))}
-                  disabled={currentPage === pageCount}
-                  style={{ padding: '0.4em 1.2em', borderRadius: 8, border: '1.5px solid #b6b6d8', background: currentPage === pageCount ? '#eee' : '#faf9f6', color: '#232323', fontWeight: 600, cursor: currentPage === pageCount ? 'not-allowed' : 'pointer' }}
-                >Next</button>
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16, gap: 8 }}>
+                {Array.from({ length: pageCount }, (_, i) => i + 1).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(pg => ({ ...pg, [pkg]: p }))}
+                    style={{
+                      padding: '6px 16px',
+                      borderRadius: 6,
+                      border: p === currentPage ? '2px solid #1976d2' : '1.5px solid #b6b6d8',
+                      background: p === currentPage ? '#e3f2fd' : '#fff',
+                      color: p === currentPage ? '#1976d2' : '#232323',
+                      fontWeight: p === currentPage ? 700 : 500,
+                      fontSize: '1em',
+                      cursor: 'pointer',
+                      boxShadow: p === currentPage ? '0 2px 8px #e3f2fd' : '0 1px 4px #ececec',
+                      transition: 'all 0.18s',
+                      outline: 'none',
+                      minWidth: 40
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
               </div>
             )}
           </div>
         );
-      })}
-      {/* Remove the confirmation modal since we're removing X buttons */}
-
+      })()}
     </section>
   );
 } 

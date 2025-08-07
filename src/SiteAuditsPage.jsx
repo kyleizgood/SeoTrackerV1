@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { updateCompanyAuditStatus, getPackages, savePackages } from './firestoreHelpers';
+import { updateCompanyAuditStatus, getPackages, savePackages, updatePackageCompanyStatus } from './firestoreHelpers';
 import { getAdjustedEOC, getActiveDays } from './App.jsx';
 
 const AUDIT_STATUS_KEY = 'siteAuditStatus';
@@ -101,23 +101,36 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
     return activeDays >= 183 && (auditStatus[c.id] !== 'Completed');
   });
 
-  // Table 2: Pre-EOC audit (1 month before adjusted EOC date)
+  // Helper to add onHold days to a date string
+  function addOnHoldDays(dateStr, onholdDays) {
+    const date = parseDisplayDateToInput(dateStr);
+    if (!date) return null;
+    return new Date(date.getTime() + (onholdDays * 24 * 60 * 60 * 1000));
+  }
+
+  // Table 2: Pre-EOC audit (EOC date within the past 30 days up to today)
   const table2 = companies.filter(c => {
     if (!c.start) return false;
-    
-    // Get adjusted EOC date (including OnHold extensions)
-    const adjustedEOC = getAdjustedEOC(c);
-    if (!adjustedEOC) return false;
-    
-    // Parse adjusted EOC date
-    const eocDate = parseDisplayDateToInput(adjustedEOC);
-    if (!eocDate) return false;
-    
-    // Calculate days until EOC
-    const daysUntilEOC = daysBetween(today, eocDate);
-    
-    // Site Audit C: 30 days before adjusted EOC date
-    return daysUntilEOC <= 30 && daysUntilEOC > 0 && (preEOCStatus[c.id] !== 'Completed');
+    const today = new Date();
+    // Default EOC (start + 1 year + onHoldDays)
+    const defaultEOC = getEOC(c.start);
+    const adjustedDefaultEOC = addOnHoldDays(defaultEOC, c.totalOnholdDays || 0);
+    // Manual EOC
+    const manualEOC = c.eocDate;
+    // Collect EOC dates to check
+    const eocDatesToCheck = [];
+    if (adjustedDefaultEOC) eocDatesToCheck.push(adjustedDefaultEOC);
+    if (manualEOC) {
+      const manualDate = parseDisplayDateToInput(manualEOC);
+      if (manualDate) eocDatesToCheck.push(manualDate);
+    }
+    // Check if any EOC date is within the window
+    const inAuditCWindow = eocDatesToCheck.some(eocDate => {
+      if (!eocDate) return false;
+      const daysFromEOC = daysBetween(eocDate, today);
+      return daysFromEOC >= 0 && daysFromEOC <= 30;
+    });
+    return inAuditCWindow && (preEOCStatus[c.id] !== 'Completed');
   });
 
   // Alert logic
@@ -246,13 +259,24 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
     } else {
       setPreEOCStatus(prev => ({ ...prev, [id]: value }));
     }
-    
     try {
-      // Update in Firestore
-      await updateCompanyAuditStatus(id, field, value);
-      
-      // Also update in meta/packages
-      const pkgs = await getPackages();
+      // Only update in Firestore (meta/packages structure)
+      if (company && company.package) {
+        try {
+          await updatePackageCompanyStatus(id, company.package, field, value);
+        } catch (err) {
+          console.error('Error in updatePackageCompanyStatus:', err);
+          throw new Error('updatePackageCompanyStatus failed: ' + err.message);
+        }
+      }
+      // Also update in meta/packages (UI state)
+      let pkgs;
+      try {
+        pkgs = await getPackages();
+      } catch (err) {
+        console.error('Error in getPackages:', err);
+        throw new Error('getPackages failed: ' + err.message);
+      }
       let updated = false;
       Object.keys(pkgs).forEach(pkg => {
         pkgs[pkg] = pkgs[pkg].map(c => {
@@ -263,13 +287,16 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
           return c;
         });
       });
-      
       if (updated) {
-        await savePackages(pkgs);
+        try {
+          await savePackages(pkgs);
+        } catch (err) {
+          console.error('Error in savePackages:', err);
+          throw new Error('savePackages failed: ' + err.message);
+        }
         // Update local packages state
         setPackages(pkgs);
       }
-      
       // Update local status maps
       const all = Object.values(pkgs).flat();
       const auditB = {};
@@ -280,7 +307,6 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
       });
       setAuditStatus(auditB);
       setPreEOCStatus(auditC);
-      
       // Add to history
       const historyEntry = createHistoryEntry(
         id,
@@ -291,15 +317,14 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
         value
       );
       addToHistory(historyEntry);
-      
     } catch (err) {
       // Revert optimistic update on error
       if (field === 'siteAuditBStatus') {
         setAuditStatus(prev => ({ ...prev, [id]: 'Pending' }));
       } else {
-      setPreEOCStatus(prev => ({ ...prev, [id]: 'Pending' }));
+        setPreEOCStatus(prev => ({ ...prev, [id]: 'Pending' }));
       }
-      alert('Failed to update status. Please try again.');
+      alert('Failed to update status. Please try again.\n' + (err && err.message ? err.message : err));
     }
   };
 

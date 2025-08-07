@@ -236,22 +236,19 @@ export function getEOC(start) {
 // Enhanced EOC calculation that accounts for OnHold periods
 export function getAdjustedEOC(company) {
   if (!company.start) return '';
-  
+  // If a manual EOC date is set, always use it
+  if (company.eocDate) return company.eocDate;
   // Get base EOC date
   const baseEOC = getEOC(company.start);
   if (!baseEOC) return '';
-  
   // Parse base EOC date
   const match = baseEOC.match(/^(\w+) (\d{1,2}), (\d{4})$/);
   if (!match) return baseEOC;
-  
   const [_, month, day, year] = match;
   const baseEOCDate = new Date(`${month} ${day}, ${year}`);
-  
   // Add OnHold days to extend EOC
   const onholdDays = company.totalOnholdDays || 0;
   const adjustedEOCDate = new Date(baseEOCDate.getTime() + (onholdDays * 24 * 60 * 60 * 1000));
-  
   return `${months[adjustedEOCDate.getMonth()]} ${adjustedEOCDate.getDate()}, ${adjustedEOCDate.getFullYear()}`;
 }
 
@@ -1672,7 +1669,6 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
     setEditStart(parseDisplayDateToInput(company.start));
     setEditEOC(parseDisplayDateToInput(company.eocDate || company.eoc || getEOC(company.start)));
   };
-
   const handleEditSave = async (company) => {
     const updatedCompany = {
       ...company,
@@ -2132,7 +2128,6 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
           </div>
         </div>
       )}
-
       <div className="table-scroll-container table-responsive">
         <table className="company-table">
           <thead>
@@ -2924,7 +2919,7 @@ function Report({ packages, setPackages }) {
   // Remove confirmRemove state since we're removing X buttons
   // Add per-package page state
   const [page, setPage] = useState({});
-  const PAGE_SIZE = 15;
+  const PAGE_SIZE = 10;
   
   // History system states
   const [history, setHistory] = useState([]); // Array of history entries
@@ -3141,11 +3136,18 @@ function Report({ packages, setPackages }) {
     setClearHistoryModal(false);
   };
 
+  const [selectedPackage, setSelectedPackage] = useState(packageNames[0]);
+  const packageColors = {
+    'SEO - BASIC': '#4A3C31',
+    'SEO - PREMIUM': '#00bcd4',
+    'SEO - PRO': '#8E24AA',
+    'SEO - ULTIMATE': '#1A237E',
+  };
   return (
     <section className="company-tracker-page" style={{paddingTop: 12}}>
       {/* Header with History Button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-      <h1 className="fancy-title">Report for {currentMonth}</h1>
+        <h1 className="fancy-title">Reports for {currentMonth}</h1>
         <button
           onClick={() => setShowHistory(!showHistory)}
           style={{
@@ -3166,78 +3168,35 @@ function Report({ packages, setPackages }) {
           📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
         </button>
       </div>
-      {/* Clear History Confirmation Modal */}
-      {clearHistoryModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          background: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          backdropFilter: 'blur(5px)',
-          animation: 'fadeIn 0.3s ease-out'
-        }}>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: 12,
-            padding: '30px',
-            width: '90%',
-            maxWidth: 400,
-            textAlign: 'center',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-            animation: 'scaleIn 0.3s ease-out'
-          }}>
-            <h3 style={{ marginBottom: 15, color: '#333' }}>Clear History Log?</h3>
-            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
-              Are you sure you want to clear the entire history log? This cannot be undone.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
-              <button
-                onClick={handleClearHistory}
-                style={{
-                  padding: '10px 25px',
-                  background: '#dc3545',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: '1em',
-                  fontWeight: '600',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
-              >
-                Yes, Clear All
-              </button>
-              <button
-                onClick={() => setClearHistoryModal(false)}
-                style={{
-                  padding: '10px 25px',
-                  background: '#6c757d',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: '1em',
-                  fontWeight: '600',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      <p className="hero-desc" style={{marginBottom: 10}}>All companies, sorted by SEO package.</p>
-      
+      {/* Package Tabs */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+        {packageNames.map(pkg => (
+          <button
+            key={pkg}
+            onClick={() => setSelectedPackage(pkg)}
+            style={{
+              padding: '10px 24px',
+              borderRadius: 8,
+              border: selectedPackage === pkg
+                ? `2.5px solid ${packageColors[pkg]}`
+                : `1.5px solid ${packageColors[pkg]}`,
+              background: selectedPackage === pkg
+                ? packageColors[pkg]
+                : '#fff',
+              color: selectedPackage === pkg ? '#fff' : packageColors[pkg],
+              fontWeight: selectedPackage === pkg ? 700 : 500,
+              fontSize: '1.08em',
+              cursor: 'pointer',
+              boxShadow: selectedPackage === pkg ? `0 2px 8px ${packageColors[pkg]}22` : '0 1px 4px #ececec',
+              transition: 'all 0.18s',
+              outline: 'none',
+              minWidth: 120
+            }}
+          >
+            {pkg.replace('SEO - ', '')}
+          </button>
+        ))}
+      </div>
       {/* History Panel */}
       {showHistory && (
         <div style={{
@@ -3441,43 +3400,111 @@ function Report({ packages, setPackages }) {
           </div>
         </div>
       )}
-      
-      {packageNames.map(pkg => {
-        // Filter companies by report status for this package
-        const filtered = (packages[pkg] || [])
-          .filter(c => c.status !== 'OnHold')
-          .filter(c => {
-            const matchI = !filterI[pkg] || (c.reportI || 'Pending') === filterI[pkg];
-            const matchII = !filterII[pkg] || (c.reportII || 'Pending') === filterII[pkg];
-            const matchSearch = !search[pkg] || c.name.toLowerCase().includes(search[pkg].toLowerCase());
-            return matchI && matchII && matchSearch;
-          });
+      {/* Clear History Confirmation Modal */}
+      {clearHistoryModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '30px',
+            width: '90%',
+            maxWidth: 400,
+            textAlign: 'center',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            animation: 'scaleIn 0.3s ease-out'
+          }}>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Clear History Log?</h3>
+            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+              Are you sure you want to clear the entire history log? This cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+              <button
+                onClick={handleClearHistory}
+                style={{
+                  padding: '10px 25px',
+                  background: '#dc3545',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Yes, Clear All
+              </button>
+              <button
+                onClick={() => setClearHistoryModal(false)}
+                style={{
+                  padding: '10px 25px',
+                  background: '#6c757d',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: '1em',
+                  fontWeight: '600',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Only render the selected package's table */}
+      {(() => {
+        const pkg = selectedPackage;
+        const companies = (packages[pkg] || []).filter(c => c.status !== 'OnHold');
+        const filtered = companies.filter(c => {
+          const matchesSearch = !search[pkg] || c.name.toLowerCase().includes((search[pkg] || '').toLowerCase());
+          const matchesI = !filterI[pkg] || (c.reportI || 'Pending') === filterI[pkg];
+          const matchesII = !filterII[pkg] || (c.reportII || 'Pending') === filterII[pkg];
+          return matchesSearch && matchesI && matchesII;
+        });
         // Pagination logic
         const currentPage = page[pkg] || 1;
         const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
         const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-        // Count companies with Report I not completed (excluding OnHold)
-        const pendingReportICount = (packages[pkg] || []).filter(c => c.status !== 'OnHold' && c.reportI !== 'Completed').length;
+        const pendingCount = filtered.filter(c => (c.reportI || 'Pending') !== 'Completed' || (c.reportII || 'Pending') !== 'Completed').length;
         return (
           <div key={pkg} style={{ marginBottom: 32, width: '100%' }}>
-            {pendingReportICount > 0 && (
+            {/* Alert banner for pending reports */}
+            {pendingCount > 0 && (
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                background: '#fffbe6',
-                color: '#b26a00',
+                background: '#ffeaea',
+                color: '#c00',
                 borderRadius: 999,
                 padding: '0.5em 1.5em',
                 fontWeight: 700,
                 fontSize: '1.08em',
-                border: '1.5px solid #ffe082',
-                boxShadow: '0 1px 4px #fffbe6',
+                border: '1.5px solid #ffd6d6',
+                boxShadow: '0 1px 4px #ffeaea',
                 marginBottom: 18,
                 marginLeft: 2,
                 letterSpacing: '0.03em',
               }}>
-                <span style={{fontSize:'1.2em',marginRight:8}}>⚠️</span>
-                {pendingReportICount} compan{pendingReportICount === 1 ? 'y' : 'ies'} under the {pkg.replace('SEO - ', '').toUpperCase()} SEO package are still pending for Report I this month.
+                <span style={{fontSize:'1.2em',marginRight:8}}>📄</span>
+                {pendingCount} compan{pendingCount === 1 ? 'y' : 'ies'} under the {pkg.replace('SEO - ', '').toUpperCase()} SEO package still need reports this month.
               </div>
             )}
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 0}}>
@@ -3678,7 +3705,7 @@ function Report({ packages, setPackages }) {
             )}
           </div>
         );
-      })}
+      })()}
       {/* Confirmation Modal */}
       {confirmModal && (
         <div style={{
@@ -3749,7 +3776,6 @@ function Report({ packages, setPackages }) {
           </div>
         </div>
       )}
-
       {/* Revert Confirmation Modal */}
       {revertModal && (
         <div style={{
@@ -3825,6 +3851,12 @@ function Report({ packages, setPackages }) {
 }
 
 function Bookmarking({ packages, setPackages }) {
+  const packageColors = {
+    'SEO - BASIC': '#4A3C31',
+    'SEO - PREMIUM': '#00bcd4',
+    'SEO - PRO': '#8E24AA',
+    'SEO - ULTIMATE': '#1A237E',
+  };
   // Store filters for each package in an object
   const [filterCreation, setFilterCreation] = useState({});
   const [filterSubmission, setFilterSubmission] = useState({});
@@ -3834,7 +3866,7 @@ function Bookmarking({ packages, setPackages }) {
 
   // Add per-package page state
   const [page, setPage] = useState({});
-  const PAGE_SIZE = 15;
+  const PAGE_SIZE = 10;
   
   // History system states
   const [history, setHistory] = useState([]); // Array of history entries
@@ -4029,11 +4061,12 @@ function Bookmarking({ packages, setPackages }) {
     await clearHistoryLog('bookmarking');
     setClearHistoryModal(false);
   };
+  const [selectedPackage, setSelectedPackage] = useState(packageNames[0]);
   return (
     <section className="company-tracker-page" style={{paddingTop: 12}}>
       {/* Header with History Button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-      <h1 className="fancy-title">Bookmarking for {currentMonth}</h1>
+        <h1 className="fancy-title">Bookmarking for {currentMonth}</h1>
         <button
           onClick={() => setShowHistory(!showHistory)}
           style={{
@@ -4054,78 +4087,35 @@ function Bookmarking({ packages, setPackages }) {
           📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
         </button>
       </div>
-      {/* Clear History Confirmation Modal */}
-      {clearHistoryModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          background: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          backdropFilter: 'blur(5px)',
-          animation: 'fadeIn 0.3s ease-out'
-        }}>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: 12,
-            padding: '30px',
-            width: '90%',
-            maxWidth: 400,
-            textAlign: 'center',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-            animation: 'scaleIn 0.3s ease-out'
-          }}>
-            <h3 style={{ marginBottom: 15, color: '#333' }}>Clear History Log?</h3>
-            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
-              Are you sure you want to clear the entire history log? This cannot be undone.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
-              <button
-                onClick={handleClearHistory}
-                style={{
-                  padding: '10px 25px',
-                  background: '#dc3545',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: '1em',
-                  fontWeight: '600',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
-              >
-                Yes, Clear All
-              </button>
-              <button
-                onClick={() => setClearHistoryModal(false)}
-                style={{
-                  padding: '10px 25px',
-                  background: '#6c757d',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: '1em',
-                  fontWeight: '600',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      <p className="hero-desc" style={{marginBottom: 10}}>All companies, sorted by SEO package.</p>
-      
+      {/* Package Tabs */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+        {packageNames.map(pkg => (
+          <button
+            key={pkg}
+            onClick={() => setSelectedPackage(pkg)}
+            style={{
+              padding: '10px 24px',
+              borderRadius: 8,
+              border: selectedPackage === pkg
+                ? `2.5px solid ${packageColors[pkg]}`
+                : `1.5px solid ${packageColors[pkg]}`,
+              background: selectedPackage === pkg
+                ? packageColors[pkg]
+                : '#fff',
+              color: selectedPackage === pkg ? '#fff' : packageColors[pkg],
+              fontWeight: selectedPackage === pkg ? 700 : 500,
+              fontSize: '1.08em',
+              cursor: 'pointer',
+              boxShadow: selectedPackage === pkg ? `0 2px 8px ${packageColors[pkg]}22` : '0 1px 4px #ececec',
+              transition: 'all 0.18s',
+              outline: 'none',
+              minWidth: 120
+            }}
+          >
+            {pkg.replace('SEO - ', '')}
+          </button>
+        ))}
+      </div>
       {/* History Panel */}
       {showHistory && (
         <div style={{
@@ -4329,27 +4319,22 @@ function Bookmarking({ packages, setPackages }) {
         </div>
       )}
       {packageNames.map(pkg => {
-        // Filter companies by BM status for this package
-        const filtered = (packages[pkg] || [])
-          .filter(c => c.status !== 'OnHold')
-          .filter(c => {
-            const matchCreation = !filterCreation[pkg] || (c.bmCreation || 'Pending') === filterCreation[pkg];
-            const matchSubmission = !filterSubmission[pkg] || (c.bmSubmission || 'Pending') === filterSubmission[pkg];
-            const matchSearch = !search[pkg] || c.name.toLowerCase().includes(search[pkg].toLowerCase());
-            return matchCreation && matchSubmission && matchSearch;
-          });
+        const companies = (packages[pkg] || []).filter(c => c.status !== 'OnHold');
+        const filtered = companies.filter(c => {
+          const matchesSearch = !search[pkg] || c.name.toLowerCase().includes((search[pkg] || '').toLowerCase());
+          const matchesCreation = !filterCreation[pkg] || (c.bmCreation || 'Pending') === filterCreation[pkg];
+          const matchesSubmission = !filterSubmission[pkg] || (c.bmSubmission || 'Pending') === filterSubmission[pkg];
+          return matchesSearch && matchesCreation && matchesSubmission;
+        });
         // Pagination logic
         const currentPage = page[pkg] || 1;
         const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
         const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-        // Count companies with BM Creation not completed (excluding OnHold)
-        const pendingBMCreationCount = (packages[pkg] || []).filter(c => c.status !== 'OnHold' && c.bmCreation !== 'Completed').length;
-        // Count companies with BM Submission not completed (excluding OnHold)
-        const pendingBMSubmissionCount = (packages[pkg] || []).filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length;
+        const pendingCount = filtered.filter(c => (c.bmCreation || 'Pending') !== 'Completed' || (c.bmSubmission || 'Pending') !== 'Completed').length;
         return (
           <div key={pkg} style={{ marginBottom: 32, width: '100%' }}>
-            {/* BM Creation Alert Banner */}
-            {pendingBMCreationCount > 0 && (
+            {/* Alert banner for pending bookmarking */}
+            {pendingCount > 0 && (
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -4362,32 +4347,11 @@ function Bookmarking({ packages, setPackages }) {
                 border: '1.5px solid #ffd6d6',
                 boxShadow: '0 1px 4px #ffeaea',
                 marginBottom: 18,
-                marginLeft: 12,
-                letterSpacing: '0.03em',
-              }}>
-                <span style={{fontSize:'1.2em',marginRight:8}}>📝</span>
-                {pendingBMCreationCount} compan{pendingBMCreationCount === 1 ? 'y' : 'ies'} under the {pkg.replace('SEO - ', '').toUpperCase()} SEO package are still pending for BM Creation this month.
-              </div>
-            )}
-            {/* BM Submission Action Banner (distinct from notification bell) */}
-            {pendingBMSubmissionCount > 0 && (
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                background: 'linear-gradient(90deg, #fffbe6 60%, #ffe0b2 100%)',
-                color: '#b26a00',
-                borderRadius: 12,
-                border: '2.5px solid #ff9800',
-                padding: '1em 2em',
-                fontWeight: 700,
-                fontSize: '1.13em',
-                boxShadow: '0 2px 8px #ffe082',
-                marginBottom: 18,
                 marginLeft: 2,
                 letterSpacing: '0.03em',
               }}>
-                <span style={{fontSize:'1.4em',marginRight:12}}>🚩</span>
-                Action Needed: You have <b>{pendingBMSubmissionCount}</b>&nbsp;compan{pendingBMSubmissionCount === 1 ? 'y' : 'ies'} in this package that still need BM Submission.
+                <span style={{fontSize:'1.2em',marginRight:8}}>🔖</span>
+                {pendingCount} compan{pendingCount === 1 ? 'y' : 'ies'} under the {pkg.replace('SEO - ', '').toUpperCase()} SEO package still need bookmarking this month.
               </div>
             )}
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 0}}>
@@ -4462,7 +4426,6 @@ function Bookmarking({ packages, setPackages }) {
                       </div>
                     </th>
                     <th className="report-col" style={{minWidth:120}}>Start Date</th>
-                    {/* Remove the action column header */}
                   </tr>
                 </thead>
                 <tbody>
@@ -4529,11 +4492,10 @@ function Bookmarking({ packages, setPackages }) {
                       <td className="report-col" style={{textAlign:'center', fontWeight:500, fontSize:'1em'}}>
                         {c.start || '-'}
                       </td>
-                        {/* Remove the action column with X button */}
                     </tr>
                     );
                   })}
-                  {filtered.length > 15 && filtered.slice(15).map((c, i) => (
+                  {filtered.length > 10 && filtered.slice(10).map((c, i) => (
                     <tr key={c.id} style={{display:'none'}}></tr>
                   ))}
                 </tbody>
@@ -4699,9 +4661,6 @@ function Bookmarking({ packages, setPackages }) {
           </div>
         </div>
       )}
-      
-      {/* Remove the confirmation modal since we're removing X buttons */}
-
     </section>
   );
 }
@@ -4897,14 +4856,12 @@ let fetchAlertsRef = { current: null };
 export function setFetchAlertsImpl(fn) {
   fetchAlertsRef.current = fn;
 }
-
 // Add caching for tickets to prevent excessive reads
 const ticketsCache = {
   data: null,
   timestamp: 0,
   cacheDuration: 60000 // 60 seconds cache to reduce Firestore reads
 };
-
 export async function fetchAlerts() {
   if (!fetchAlertsRef.current) return;
   try {
@@ -4967,7 +4924,6 @@ const updateDailyUsage = (type, count = 1) => {
   
   return usage;
 };
-
 // Function to handle quota exceeded errors
 const handleQuotaError = () => {
   QUOTA_ERROR_COUNT++;
@@ -5610,7 +5566,6 @@ function App() {
       fetchUserBio();
     }
   }, [user]);
-
   // Periodic session check - runs every minute
   useEffect(() => {
     if (!user) return;
@@ -5674,7 +5629,6 @@ function App() {
     };
     fetchPackages();
   }, []);
-
   // Real-time listener for packages - with improved throttling and coordination
   useEffect(() => {
     if (!user) return;
@@ -5788,7 +5742,6 @@ function App() {
       if (alertDebounceTimer) clearTimeout(alertDebounceTimer);
     };
   }, [packages]);
-
   // Real-time listener for tickets (alerts) - with improved debouncing and throttling
   useEffect(() => {
     if (!user) return;
@@ -5980,7 +5933,6 @@ function App() {
   if (!user && location.pathname === '/') {
     return <Navigate to="/login" replace />;
   }
-
   return (
     <>
       {/* User join notification banner */}
@@ -6627,7 +6579,6 @@ function App() {
     </>
   );
 }
-
 // Floating chat button with online user count and unread message badge
 function ChatUsersFloatingButton() {
   const navigate = useNavigate();
