@@ -31,6 +31,7 @@ import ChatManager from './ChatSystem/ChatManager';
 import ChatUsersPage from './ChatSystem/ChatUsersPage';
 import { useChat } from './ChatSystem/ChatManager';
 import EOCAccounts from './EOCAccounts';
+import MonthlyTasksPage from './MonthlyTasksPage';
 
 function HomeHero({ userEmail }) {
   const navigate = useNavigate();
@@ -108,17 +109,6 @@ function HomeHero({ userEmail }) {
     "🧑‍🔧 Repair with care.",
     "🧑‍🚒 Stay cool under pressure.",
     "🧑‍✈️ Soar with confidence.",
-    "🧑‍🌾 Reap what you sow.",
-    "🧑‍🍳 Savor your achievements.",
-    "🧑‍🔬 Analyze, adapt, advance.",
-    "🧑‍🎨 Imagine the impossible.",
-    "🧑‍🚀 Boldly go forward.",
-    "🧑‍💻 Type your own story.",
-    "🧑‍🏫 Mentor with kindness.",
-    "🧑‍🎤 Find your harmony.",
-    "🧑‍🔧 Fine-tune your craft.",
-    "🧑‍🚒 Be a hero in small ways.",
-    "🧑‍✈️ Glide through challenges.",
     "🧑‍🌾 Water your dreams daily.",
     "🧑‍🍳 Mix in gratitude.",
     "🧑‍🔬 Observe, reflect, improve.",
@@ -987,12 +977,24 @@ function parseDisplayDateToInput(dateStr) {
 }
 
 function formatDateToDisplay(dateObj) {
-  if (!dateObj) return '';
+  if (!dateObj) return '-';
+  
+  // Handle case where dateObj might be a string or Date object
+  let date;
+  if (dateObj instanceof Date) {
+    date = dateObj;
+  } else {
+    date = new Date(dateObj);
+  }
+  
+  // Check if the date is valid
+  if (!date || isNaN(date.getTime())) return '-';
+  
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
-  return `${months[dateObj.getMonth()]} ${dateObj.getDate()}, ${dateObj.getFullYear()}`;
+  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
 function TicketModalForm({ ticket, onSave, onCancel }) {
@@ -1140,7 +1142,1441 @@ function TicketModalForm({ ticket, onSave, onCancel }) {
     </form>
   );
 }
-function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
+// New Unified Packages Component
+function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets, setTickets, saveTickets, user }) {
+  const [selectedPackage, setSelectedPackage] = useState('SEO - BASIC');
+  const [companies, setCompanies] = useState([]);
+  const [editId, setEditId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editStart, setEditStart] = useState(null);
+  const [editEOC, setEditEOC] = useState(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState(null);
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterVSO, setFilterVSO] = useState('');
+  const [filterRevision, setFilterRevision] = useState('');
+  const [filterRA, setFilterRA] = useState('');
+  const [filterDistribution, setFilterDistribution] = useState('');
+  const [filterBusinessProfileClaiming, setFilterBusinessProfileClaiming] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+  
+  // History Log State
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [revertModal, setRevertModal] = useState(null);
+  const [clearHistoryModal, setClearHistoryModal] = useState(false);
+  const [pendingHistorySave, setPendingHistorySave] = useState(false);
+  const [saveTimeout, setSaveTimeout] = useState(null);
+  const [ticketModal, setTicketModal] = useState(null);
+  const [recentChanges, setRecentChanges] = useState(new Set());
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  
+  // Business Profile Claiming Ticket Modal State
+  const [showTicketModal, setShowTicketModal] = useState(false);
+  const [ticketModalData, setTicketModalData] = useState({
+    subject: '',
+    ticketIdLink: '',
+    followUpDate: null,
+    description: ''
+  });
+  const [pendingTicketCompany, setPendingTicketCompany] = useState(null);
+
+  // Helper function to find ticket for a specific company and task type
+  const findTicketForCompany = (companyId, taskType, packageName) => {
+    return tickets.find(ticket => 
+      ticket.companyId === companyId && 
+      ticket.type === taskType &&
+      ticket.package === packageName
+    );
+  };
+
+  // Package configuration
+  const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
+  const taskLabels = ['VSO', 'Revision', 'RA', 'Distribution', 'Business Profile Claiming'];
+  const taskKeys = ['forVSO', 'forRevision', 'ra', 'distribution', 'businessProfileClaiming'];
+  
+  const taskOptions = [
+    { value: 'Pending', label: '🔴 Pending' },
+    { value: 'Completed', label: '🟢 Completed' }
+  ];
+  
+  const businessProfileClaimingOptions = [
+    { value: 'Pending', label: '🔴 Pending' },
+    { value: 'Completed', label: '🟢 Completed' },
+    { value: 'Ticket', label: '🔴 Ticket' }
+  ];
+
+  const packageColors = {
+    'SEO - BASIC': '#4A3C31',
+    'SEO - PREMIUM': '#00bcd4',
+    'SEO - PRO': '#8E24AA',
+    'SEO - ULTIMATE': '#1A237E',
+  };
+
+  const packageIcons = {
+    'SEO - BASIC': '📦',
+    'SEO - PREMIUM': '⭐',
+    'SEO - PRO': '🚀',
+    'SEO - ULTIMATE': '💎',
+  };
+
+  // Filter companies based on search and filters
+  const filteredCompanies = companies.filter(c => {
+    const matchesSearch = !search || 
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.start && c.start.toLowerCase().includes(search.toLowerCase()));
+    
+    const matchesStatus = !filterStatus || c.status === filterStatus;
+    const matchesVSO = !filterVSO || c.tasks?.forVSO === filterVSO;
+    const matchesRevision = !filterRevision || c.tasks?.forRevision === filterRevision;
+    const matchesRA = !filterRA || c.tasks?.ra === filterRA;
+    const matchesDistribution = !filterDistribution || c.tasks?.distribution === filterDistribution;
+    const matchesBusinessProfileClaiming = !filterBusinessProfileClaiming || c.tasks?.businessProfileClaiming === filterBusinessProfileClaiming;
+    
+    return matchesSearch && matchesStatus && matchesVSO && matchesRevision && matchesRA && matchesDistribution && matchesBusinessProfileClaiming;
+  });
+
+  // Sync companies state with packages prop for real-time updates
+  useEffect(() => {
+    if (packages && packages[selectedPackage]) {
+      let pkgCompanies = (packages[selectedPackage] || []).map(c => {
+        const companyWithTasks = {
+          ...c,
+          tasks: {
+            forVSO: c.tasks?.forVSO || 'Pending',
+            forRevision: c.tasks?.forRevision || 'Pending',
+            ra: c.tasks?.ra || 'Pending',
+            distribution: c.tasks?.distribution || 'Pending',
+            businessProfileClaiming: c.tasks?.businessProfileClaiming || 'Pending',
+          },
+        };
+        return companyWithTasks;
+      });
+      
+      setCompanies(pkgCompanies);
+      
+      // Only save back if tasks were completely missing
+      const hasMissingTasks = pkgCompanies.some((c, i) => {
+        const originalCompany = packages[selectedPackage][i] || {};
+        return !originalCompany.tasks || 
+               !originalCompany.tasks.forVSO || 
+               !originalCompany.tasks.forRevision || 
+               !originalCompany.tasks.ra || 
+               !originalCompany.tasks.distribution || 
+               !originalCompany.tasks.businessProfileClaiming;
+      });
+      
+      if (hasMissingTasks) {
+        const updatedPackages = { ...packages };
+        updatedPackages[selectedPackage] = pkgCompanies;
+        savePackages(updatedPackages);
+      }
+    }
+  }, [packages, selectedPackage]);
+
+  // History entry structure
+  const createPackageHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
+    id: Date.now() + Math.random(),
+    timestamp: new Date().toISOString(),
+    companyId,
+    companyName,
+    packageName,
+    field,
+    oldValue,
+    newValue,
+    action
+  });
+
+  const formatPackageTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  const addToPackageHistory = (entry) => {
+    setHistory(prev => [entry, ...prev.slice(0, 49)]);
+    setRecentChanges(prev => new Set([...prev, entry.companyId]));
+    setTimeout(() => {
+      setRecentChanges(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entry.companyId);
+        return newSet;
+      });
+    }, 5000);
+  };
+
+  // Handle status changes
+  const handleStatusChange = async (companyId, newStatus) => {
+    try {
+      setIsUpdatingStatus(true);
+      
+      const company = companies.find(c => c.id === companyId);
+      if (!company) {
+        toast.error('Company not found');
+        return;
+      }
+
+      const oldStatus = company.status;
+      
+      const historyEntry = createPackageHistoryEntry(
+        companyId,
+        company.name,
+        selectedPackage,
+        'status',
+        oldStatus,
+        newStatus,
+        'changed'
+      );
+      addToPackageHistory(historyEntry);
+
+      const updatedCompanies = companies.map(c =>
+        c.id === companyId ? { ...c, status: newStatus } : c
+      );
+      setCompanies(updatedCompanies);
+
+        const updatedPackages = { ...packages };
+      updatedPackages[selectedPackage] = updatedCompanies;
+        setPackages(updatedPackages);
+
+      addBackgroundOperation(async () => {
+        try {
+        await savePackages(updatedPackages);
+          await saveHistoryLog('package', history);
+        } catch (error) {
+          console.error('Failed to save status change:', error);
+          toast.error('Failed to save changes - will retry');
+        }
+      });
+
+      toast.success('Status updated successfully');
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Failed to update status');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+        // Handle task changes
+    const handleTaskChange = async (companyId, taskKey, newValue) => {
+    try {
+      setIsUpdatingStatus(true);
+      
+      const company = companies.find(c => c.id === companyId);
+      if (!company) {
+        toast.error('Company not found');
+        return;
+      }
+
+      const oldValue = company.tasks?.[taskKey] || 'Pending';
+      
+      // Handle Business Profile Claiming "Ticket" status
+      if (taskKey === 'businessProfileClaiming' && newValue === 'Ticket') {
+        // Check if a ticket already exists for this company and task type
+        const existingTicket = tickets.find(ticket => 
+          ticket.companyId === companyId && 
+          ticket.type === 'Business Profile Claiming' &&
+          ticket.package === selectedPackage
+        );
+
+        if (existingTicket) {
+          // Reopen existing ticket instead of creating a new one
+          try {
+            const updatedTicket = {
+              ...existingTicket,
+              status: 'open',
+              updatedAt: new Date().toISOString()
+            };
+            
+            // Update ticket in state
+            setTickets(prevTickets => 
+              prevTickets.map(t => t.id === existingTicket.id ? updatedTicket : t)
+            );
+            
+            // Update the company's Business Profile Claiming status to "Ticket"
+            const updatedCompanies = companies.map(c =>
+              c.id === companyId 
+                ? { 
+                    ...c,
+                    tasks: {
+                      ...c.tasks, 
+                      businessProfileClaiming: 'Ticket'
+                    } 
+                  } 
+                : c
+            );
+            setCompanies(updatedCompanies);
+
+            const updatedPackages = { ...packages };
+            updatedPackages[selectedPackage] = updatedCompanies;
+            setPackages(updatedPackages);
+
+            // Save ticket and packages to Firestore
+            addBackgroundOperation(async () => {
+              try {
+                await saveTicket(updatedTicket);
+                await savePackages(updatedPackages);
+                toast.success(`Reopened existing ticket for ${company.name}`);
+              } catch (error) {
+                console.error('Failed to reopen ticket:', error);
+                toast.error('Failed to reopen ticket');
+              }
+            });
+          } catch (error) {
+            console.error('Error reopening ticket:', error);
+            toast.error('Failed to reopen ticket');
+            return;
+          }
+        } else {
+          // Create new ticket modal
+          setPendingTicketCompany(company);
+          setTicketModalData({
+            subject: `Business Profile Claiming - ${company.name}`,
+            ticketIdLink: '',
+            followUpDate: null,
+            description: ''
+          });
+          setShowTicketModal(true);
+          return; // Don't update the task yet, wait for modal submission
+        }
+      }
+      
+      const historyEntry = createPackageHistoryEntry(
+        companyId,
+        company.name,
+        selectedPackage,
+        taskKey,
+        oldValue,
+        newValue,
+        'changed'
+      );
+      addToPackageHistory(historyEntry);
+
+      const updatedCompanies = companies.map(c =>
+        c.id === companyId 
+          ? { 
+        ...c,
+        tasks: {
+                ...c.tasks, 
+                [taskKey]: newValue 
+              } 
+            } 
+          : c
+      );
+      setCompanies(updatedCompanies);
+
+      const updatedPackages = { ...packages };
+      updatedPackages[selectedPackage] = updatedCompanies;
+      setPackages(updatedPackages);
+
+      addBackgroundOperation(async () => {
+        try {
+          await savePackages(updatedPackages);
+          await saveHistoryLog('package', history);
+        } catch (error) {
+          console.error('Failed to save task change:', error);
+          toast.error('Failed to save changes - will retry');
+        }
+      });
+
+      toast.success('Task updated successfully');
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast.error('Failed to update task');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Business Profile Claiming Ticket Modal Handlers
+  const handleTicketModalSubmit = async () => {
+    if (!pendingTicketCompany || !ticketModalData.subject.trim()) {
+      toast.error('Please fill in the subject field');
+      return;
+    }
+
+    try {
+      setIsUpdatingStatus(true);
+      
+      const ticketData = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        companyId: pendingTicketCompany.id,
+        companyName: pendingTicketCompany.name,
+        package: selectedPackage,
+        type: 'Business Profile Claiming',
+        status: 'open',
+        priority: 'High',
+        subject: ticketModalData.subject,
+        ticketIdLink: ticketModalData.ticketIdLink,
+        followUpDate: ticketModalData.followUpDate?.toISOString(),
+        description: ticketModalData.description || `Business Profile Claiming issue for ${pendingTicketCompany.name} in ${selectedPackage} package`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: user?.email || 'System',
+        assignedTo: '',
+        notes: '',
+        isBusinessProfileClaiming: true
+      };
+
+      // Add ticket to tickets state
+      setTickets(prevTickets => [...prevTickets, ticketData]);
+      
+      // Update the company's Business Profile Claiming status to "Ticket"
+      const updatedCompanies = companies.map(c =>
+        c.id === pendingTicketCompany.id 
+          ? { 
+              ...c,
+              tasks: {
+                ...c.tasks, 
+                businessProfileClaiming: 'Ticket'
+              } 
+            } 
+          : c
+      );
+      setCompanies(updatedCompanies);
+
+      const updatedPackages = { ...packages };
+      updatedPackages[selectedPackage] = updatedCompanies;
+      setPackages(updatedPackages);
+
+      // Save ticket to Firestore
+      addBackgroundOperation(async () => {
+        try {
+          await saveTickets([...tickets, ticketData]);
+          await savePackages(updatedPackages);
+          toast.success(`Ticket created for ${pendingTicketCompany.name}`);
+        } catch (error) {
+          console.error('Failed to create ticket:', error);
+          toast.error('Failed to create ticket');
+        }
+      });
+
+      // Close modal and reset
+      setShowTicketModal(false);
+      setPendingTicketCompany(null);
+      setTicketModalData({
+        subject: '',
+        ticketIdLink: '',
+        followUpDate: null,
+        description: ''
+      });
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+      toast.error('Failed to create ticket');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleTicketModalCancel = () => {
+    setShowTicketModal(false);
+    setPendingTicketCompany(null);
+    setTicketModalData({
+      subject: '',
+      ticketIdLink: '',
+      followUpDate: null,
+      description: ''
+    });
+  };
+
+  // Handle edit functions
+  const handleEdit = (company) => {
+    setEditId(company.id);
+    setEditName(company.name);
+    setEditStart(company.start ? new Date(company.start) : null);
+    setEditEOC(company.eoc ? new Date(company.eoc) : null);
+  };
+
+  const handleEditSave = async (company) => {
+    try {
+      setIsUpdatingStatus(true);
+      
+      const oldName = company.name;
+      const oldStart = company.start;
+      const oldEOC = company.eoc;
+      
+      const historyEntry = createPackageHistoryEntry(
+        company.id,
+        oldName,
+        selectedPackage,
+        'company_details',
+        `${oldName}|${oldStart}|${oldEOC}`,
+        `${editName}|${editStart?.toISOString()}|${editEOC?.toISOString()}`,
+        'edited'
+      );
+      addToPackageHistory(historyEntry);
+
+      const updatedCompanies = companies.map(c =>
+        c.id === company.id 
+          ? { 
+              ...c, 
+              name: editName,
+              start: editStart?.toISOString(),
+              eoc: editEOC?.toISOString()
+            } 
+          : c
+      );
+      setCompanies(updatedCompanies);
+
+      const updatedPackages = { ...packages };
+      updatedPackages[selectedPackage] = updatedCompanies;
+      setPackages(updatedPackages);
+
+      addBackgroundOperation(async () => {
+        try {
+          await savePackages(updatedPackages);
+          await saveHistoryLog('package', history);
+        } catch (error) {
+          console.error('Failed to save company edit:', error);
+          toast.error('Failed to save changes - will retry');
+        }
+      });
+
+      setEditId(null);
+      setEditName('');
+      setEditStart(null);
+      setEditEOC(null);
+      
+      toast.success('Company updated successfully');
+    } catch (error) {
+      console.error('Error updating company:', error);
+      toast.error('Failed to update company');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditId(null);
+    setEditName('');
+    setEditStart(null);
+    setEditEOC(null);
+  };
+
+  const handleRemove = async (company) => {
+    try {
+      setIsUpdatingStatus(true);
+      
+      const historyEntry = createPackageHistoryEntry(
+        company.id,
+        company.name,
+        selectedPackage,
+        'removed',
+        'active',
+        'removed',
+        'removed'
+      );
+      addToPackageHistory(historyEntry);
+
+      const updatedCompanies = companies.filter(c => c.id !== company.id);
+      setCompanies(updatedCompanies);
+
+      const updatedPackages = { ...packages };
+      updatedPackages[selectedPackage] = updatedCompanies;
+      setPackages(updatedPackages);
+
+      addBackgroundOperation(async () => {
+        try {
+          await savePackages(updatedPackages);
+          await saveHistoryLog('package', history);
+    } catch (error) {
+          console.error('Failed to remove company:', error);
+          toast.error('Failed to remove company - will retry');
+        }
+      });
+
+      toast.success('Company removed successfully');
+    } catch (error) {
+      console.error('Error removing company:', error);
+      toast.error('Failed to remove company');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleClearPackageHistory = async () => {
+    try {
+      setHistory([]);
+      await clearHistoryLog('package');
+      setClearHistoryModal(false);
+      toast.success('History cleared successfully');
+    } catch (error) {
+      console.error('Failed to clear history:', error);
+      toast.error('Failed to clear history');
+    }
+  };
+
+  const pageCount = Math.ceil(filteredCompanies.length / PAGE_SIZE);
+  const paginatedCompanies = filteredCompanies.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Calculate package statistics
+  const getPackageStats = (pkg) => {
+    const pkgCompanies = packages[pkg] || [];
+    const total = pkgCompanies.length;
+    const active = pkgCompanies.filter(c => c.status === 'Active').length;
+    const onHold = pkgCompanies.filter(c => c.status === 'OnHold').length;
+    const completed = pkgCompanies.filter(c => 
+      c.tasks?.forVSO === 'Completed' && 
+      c.tasks?.forRevision === 'Completed' && 
+      c.tasks?.ra === 'Completed' && 
+      c.tasks?.distribution === 'Completed' && 
+      c.tasks?.businessProfileClaiming === 'Completed'
+    ).length;
+    
+    return { total, active, onHold, completed };
+  };
+
+             return (
+        <section className="company-tracker-page" style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          paddingTop: '0',
+          marginTop: '0'
+        }}>
+       {/* Package Statistics Cards */}
+       <div style={{
+         display: 'flex',
+         justifyContent: 'space-between',
+         gap: '10px',
+         marginBottom: '10px',
+         padding: '0 16px',
+         flexWrap: 'wrap',
+         maxWidth: '100%'
+       }}>
+        {packageNames.map(pkg => {
+          const stats = getPackageStats(pkg);
+          const isSelected = selectedPackage === pkg;
+          return (
+            <div
+              key={pkg}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                flex: '1 1 0',
+                minWidth: '130px'
+              }}
+            >
+              {/* Package Statistics Card */}
+              <div
+                onClick={() => setSelectedPackage(pkg)}
+                style={{
+                  background: isSelected ? packageColors[pkg] : '#ffffff',
+                  color: isSelected ? '#ffffff' : '#333333',
+                  border: `2px solid ${isSelected ? packageColors[pkg] : packageColors[pkg]}`,
+                  borderRadius: '8px',
+                  padding: '10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  boxShadow: isSelected 
+                    ? `0 2px 8px ${packageColors[pkg]}40, 0 0 20px ${packageColors[pkg]}30` 
+                    : `0 2px 4px rgba(0,0,0,0.08), 0 0 8px ${packageColors[pkg]}20`,
+                  transform: isSelected ? 'translateY(-2px)' : 'translateY(0)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  width: '100%',
+                  marginBottom: '6px',
+                  animation: isSelected ? 'heartbeat 2s ease-in-out infinite' : 'none'
+                }}
+                onMouseEnter={e => {
+                  if (!isSelected) {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = `0 4px 12px rgba(0,0,0,0.15), 0 0 15px ${packageColors[pkg]}40`;
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isSelected) {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = `0 2px 4px rgba(0,0,0,0.08), 0 0 8px ${packageColors[pkg]}20`;
+                  }
+                }}
+              >
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '8px'
+                }}>
+                  <div style={{ fontSize: '18px' }}>{packageIcons[pkg]}</div>
+                  <div style={{
+                    fontSize: '10px',
+                    fontWeight: '700',
+                    padding: '3px 6px',
+                    borderRadius: '6px',
+                    background: isSelected ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.08)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    {pkg.replace('SEO - ', '')}
+                  </div>
+                </div>
+                
+                <div style={{ fontSize: '18px', fontWeight: '800', marginBottom: '3px', textAlign: 'center' }}>
+                  {stats.total}
+                </div>
+                <div style={{ fontSize: '10px', opacity: 0.8, textAlign: 'center', marginBottom: '2px' }}>
+                  Total Companies
+                </div>
+                
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginTop: '8px',
+                  fontSize: '9px',
+                  gap: '4px'
+                }}>
+                 <div style={{
+                   background: 'rgba(76, 175, 80, 0.1)',
+                   padding: '4px 6px',
+                   borderRadius: '4px',
+                   textAlign: 'center',
+                   flex: '1'
+                 }}>
+                   <div style={{ fontWeight: '700', color: '#4caf50', fontSize: '10px' }}>{stats.active}</div>
+                   <div style={{ opacity: 0.8, fontSize: '7px' }}>Active</div>
+                 </div>
+                 <div style={{
+                   background: 'rgba(255, 152, 0, 0.1)',
+                   padding: '4px 6px',
+                   borderRadius: '4px',
+                   textAlign: 'center',
+                   flex: '1'
+                 }}>
+                   <div style={{ fontWeight: '700', color: '#ff9800', fontSize: '10px' }}>{stats.onHold}</div>
+                   <div style={{ opacity: 0.8, fontSize: '7px' }}>On Hold</div>
+                 </div>
+               </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Package Selection Buttons with Show History */}
+       <div style={{
+         display: 'flex',
+         justifyContent: 'space-between',
+         gap: '10px',
+         marginBottom: '12px',
+         padding: '0 16px',
+         flexWrap: 'wrap',
+         maxWidth: '100%'
+       }}>
+        {packageNames.map(pkg => {
+          const isSelected = selectedPackage === pkg;
+          return (
+            <button
+              key={pkg}
+              onClick={() => setSelectedPackage(pkg)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '8px',
+                border: selectedPackage === pkg
+                  ? `2px solid ${packageColors[pkg]}`
+                  : `1px solid ${packageColors[pkg]}`,
+                background: selectedPackage === pkg
+                  ? packageColors[pkg]
+                  : '#fff',
+                color: selectedPackage === pkg ? '#fff' : packageColors[pkg],
+                fontWeight: selectedPackage === pkg ? 700 : 600,
+                fontSize: '0.85em',
+                cursor: 'pointer',
+                boxShadow: selectedPackage === pkg 
+                  ? `0 2px 8px ${packageColors[pkg]}40, 0 0 15px ${packageColors[pkg]}30` 
+                  : `0 2px 4px rgba(0,0,0,0.08), 0 0 6px ${packageColors[pkg]}20`,
+                transition: 'all 0.3s ease',
+                outline: 'none',
+                flex: '1 1 0',
+                minWidth: '110px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}
+              onMouseEnter={e => {
+                if (selectedPackage !== pkg) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = `0 4px 12px ${packageColors[pkg]}30`;
+                }
+              }}
+              onMouseLeave={e => {
+                if (selectedPackage !== pkg) {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.08)';
+                }
+              }}
+            >
+              <span style={{ fontSize: '14px' }}>{packageIcons[pkg]}</span>
+              {pkg.replace('SEO - ', '')}
+            </button>
+          );
+        })}
+        
+        {/* Show History Button - Beside the package buttons */}
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          style={{
+            padding: '8px 16px',
+            background: showHistory ? packageColors[selectedPackage] : '#f8f9fa',
+            color: showHistory ? '#ffffff' : '#495057',
+            border: '1px solid #dee2e6',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            fontWeight: '600',
+            transition: 'all 0.3s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            position: 'relative',
+            whiteSpace: 'nowrap',
+            flex: '0 0 auto',
+            minWidth: '130px',
+            boxShadow: showHistory ? `0 2px 8px ${packageColors[selectedPackage]}40` : '0 2px 4px rgba(0,0,0,0.08)'
+          }}
+          onMouseEnter={e => {
+            if (!showHistory) {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            }
+          }}
+          onMouseLeave={e => {
+            if (!showHistory) {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.08)';
+            }
+          }}
+        >
+          📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
+          {pendingHistorySave && (
+            <span style={{
+              position: 'absolute',
+              top: '-4px',
+              right: '-4px',
+              width: '8px',
+              height: '8px',
+              background: '#ffc107',
+              borderRadius: '50%',
+              animation: 'pulse 1.5s infinite'
+            }} />
+          )}
+        </button>
+      </div>
+
+       
+
+                {/* History Panel */}
+         {showHistory && (
+           <div style={{
+             background: '#ffffff',
+             border: '1px solid #e0e7ef',
+             borderRadius: '8px',
+             padding: '12px',
+             marginBottom: '8px',
+             position: 'relative',
+             boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+             width: '100%',
+             maxWidth: '1200px',
+             margin: '0 auto 8px'
+           }}>
+           <button
+             onClick={() => setClearHistoryModal(true)}
+             title="Clear History"
+             style={{
+               position: 'absolute',
+               top: '24px',
+               right: '24px',
+               background: 'none',
+               border: 'none',
+               cursor: 'pointer',
+               padding: 0,
+               margin: 0,
+               width: '40px',
+               height: '40px',
+               display: 'flex',
+               alignItems: 'center',
+               justifyContent: 'center',
+               borderRadius: '50%',
+               transition: 'background 0.18s',
+               zIndex: 1
+             }}
+             onMouseOver={e => e.currentTarget.style.background = '#f8d7da'}
+             onMouseOut={e => e.currentTarget.style.background = 'none'}
+           >
+             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+               <polyline points="3 6 5 6 21 6" />
+               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+               <line x1="10" y1="11" x2="10" y2="17" />
+               <line x1="14" y1="11" x2="14" y2="17" />
+             </svg>
+           </button>
+           <div style={{ paddingRight: '40px' }}>
+             <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#495057' }}>History Log</h3>
+           </div>
+           <div style={{ maxHeight: '300px', overflowY: 'auto', paddingRight: '16px', marginTop: '20px' }}>
+             {history.length === 0 ? (
+               <p style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', margin: '30px 0', fontSize: '1.1rem' }}>
+                 No history entries yet
+               </p>
+             ) : (
+               <div>
+                 {history.map((entry, index) => (
+                   <div
+                     key={entry.id}
+                     style={{
+                       display: 'flex',
+                       alignItems: 'flex-start',
+                       gap: 12,
+                       padding: '12px',
+                       borderRadius: 8,
+                       background: index % 2 === 0 ? '#f8f9fa' : '#ffffff',
+                       border: '1px solid #e9ecef',
+                       marginBottom: 8,
+                       fontSize: '0.9rem'
+                     }}
+                   >
+                     <div style={{ minWidth: '80px', color: '#6c757d', fontSize: '0.8rem' }}>
+                       {formatPackageTimestamp(entry.timestamp)}
+                     </div>
+                     <div style={{ flex: 1 }}>
+                       <strong>{entry.companyName}</strong> - {entry.field} changed from <span style={{ color: '#dc3545' }}>{entry.oldValue}</span> to <span style={{ color: '#28a745' }}>{entry.newValue}</span>
+                     </div>
+                     <button
+                       onClick={() => setRevertModal(entry)}
+                       style={{
+                         background: 'none',
+                         border: 'none',
+                         color: '#007bff',
+                         cursor: 'pointer',
+                         fontSize: '0.8rem',
+                         padding: '4px 8px',
+                         borderRadius: 4
+                       }}
+                     >
+                       ↶ Revert
+                     </button>
+                   </div>
+                 ))}
+               </div>
+             )}
+           </div>
+         </div>
+       )}
+
+                        {/* Main Table - The Detailed Tracker */}
+                 <div style={{ overflowX: 'auto', marginBottom: '8px', flex: 1, minHeight: 0, maxWidth: '100%' }}>
+         <table className="company-table">
+           <thead>
+             <tr>
+                                <th style={{ minWidth: '200px', fontSize: '0.85rem', padding: '8px 4px' }}>Company Name</th>
+                 <th style={{ minWidth: '100px', fontSize: '0.85rem', padding: '8px 4px' }}>Package</th>
+                 <th style={{ minWidth: '80px', fontSize: '0.85rem', padding: '8px 4px' }}>Start Date</th>
+                 <th style={{ minWidth: '80px', fontSize: '0.85rem', padding: '8px 4px' }}>EOC Date</th>
+                                  <th style={{ minWidth: '80px', fontSize: '0.85rem', padding: '8px 4px' }}>Status</th>
+                 {taskLabels.map((label, i) => (
+                   <th key={label} style={{ minWidth: label === 'Business Profile Claiming' ? 140 : 100, fontSize: '0.85rem', padding: '8px 4px' }}>
+                   {label}
+                   <select
+                     value={
+                       i === 0 ? filterVSO :
+                       i === 1 ? filterRevision :
+                       i === 2 ? filterRA :
+                       i === 3 ? filterDistribution :
+                       i === 4 ? filterBusinessProfileClaiming :
+                       ''
+                     }
+                     onChange={e => {
+                       if (i === 0) setFilterVSO(e.target.value);
+                       else if (i === 1) setFilterRevision(e.target.value);
+                       else if (i === 2) setFilterRA(e.target.value);
+                       else if (i === 3) setFilterDistribution(e.target.value);
+                       else if (i === 4) setFilterBusinessProfileClaiming(e.target.value);
+                       setPage(1);
+                     }}
+                     style={{ marginTop: 2, width: '100%', borderRadius: 6, border: '1.5px solid #e0e0e0', fontSize: '0.8rem', background: '#faf9f6', color: '#232323', padding: '2px 4px' }}
+                   >
+                     <option value="">All</option>
+                     {label === 'Business Profile Claiming' ? (
+                       <>
+                         <option value="Pending">🔴 Pending</option>
+                         <option value="Completed">🟢 Completed</option>
+                         <option value="Ticket">🔴 Ticket</option>
+                       </>
+                     ) : (
+                       <>
+                         <option value="Pending">🔴 Pending</option>
+                         <option value="Completed">🟢 Completed</option>
+                       </>
+                     )}
+                   </select>
+                 </th>
+               ))}
+               <th className="package-search-th">
+                 <input
+                   name="companySearch"
+                   type="text"
+                   className="package-search-input"
+                   placeholder="Search company..."
+                   value={search}
+                   onChange={e => { setSearch(e.target.value); setPage(1); }}
+                 />
+               </th>
+               <th></th>
+             </tr>
+           </thead>
+           <tbody style={{ fontSize: '0.8em' }}>
+             {paginatedCompanies.length === 0 && (
+               <tr>
+                 <td className="no-companies" colSpan={6 + taskLabels.length + 2}>No companies found.</td>
+               </tr>
+             )}
+             {paginatedCompanies.map(c => (
+               <tr key={c.id} style={{ height: '32px' }}>
+                 <td className="company-name" style={{ padding: '4px 6px' }}>
+                   {editId === c.id ? (
+                     <input
+                       name="editCompanyName"
+                       value={editName}
+                       onChange={e => setEditName(e.target.value)}
+                       style={{ padding: '0.3em 0.8em', borderRadius: 6, border: '1.5px solid #b6b6d8', fontSize: '0.9rem', minWidth: 120 }}
+                     />
+                   ) : (
+                     c.name
+                   )}
+                 </td>
+                 <td style={{ padding: '4px 6px' }}>
+                   <span className={
+                     c.package === 'SEO - BASIC' ? 'package-basic' :
+                     c.package === 'SEO - PREMIUM' ? 'package-premium' :
+                     c.package === 'SEO - PRO' ? 'package-pro' :
+                     c.package === 'SEO - ULTIMATE' ? 'package-ultimate' : ''
+                   }>
+                     {c.package}
+                   </span>
+                 </td>
+                 <td style={{ padding: '4px 6px' }}>
+                   {editId === c.id ? (
+                     <DatePicker
+                       selected={editStart}
+                       onChange={date => setEditStart(date)}
+                       dateFormat="MMMM d, yyyy"
+                       className="react-datepicker__input"
+                       popperPlacement="bottom"
+                       placeholderText="Type: MM/DD/YYYY or click to pick"
+                       showYearDropdown
+                       showMonthDropdown
+                       dropdownMode="select"
+                       yearDropdownItemNumber={20}
+                       scrollableYearDropdown
+                     />
+                                        ) : (
+                       c.start ? formatDateToDisplay(c.start).replace(',', '').replace(' ', ' ') : '-'
+                     )}
+                   </td>
+                   <td style={{ padding: '4px 6px' }}>
+                     {editId === c.id ? (
+                       <DatePicker
+                         selected={editEOC}
+                         onChange={date => setEditEOC(date)}
+                         dateFormat="MMM d, yyyy"
+                         className="react-datepicker__input"
+                         popperPlacement="bottom"
+                         placeholderText="MM/DD/YYYY"
+                         showYearDropdown
+                         showMonthDropdown
+                         dropdownMode="select"
+                         yearDropdownItemNumber={20}
+                         scrollableYearDropdown
+                       />
+                     ) : (
+                       c.eoc ? formatDateToDisplay(c.eoc).replace(',', '').replace(' ', ' ') : '-'
+                     )}
+                 </td>
+                 <td style={{ padding: '4px 6px' }}>
+                   <select
+                     value={c.status}
+                     onChange={e => handleStatusChange(c.id, e.target.value)}
+                     style={{ fontSize: '0.8rem', padding: '2px 4px', borderRadius: 4, border: '1px solid #e0e0e0' }}
+                   >
+                     <option value="Active">🟢 Active</option>
+                     <option value="OnHold">🟣 OnHold</option>
+                   </select>
+                 </td>
+                 {taskKeys.map((key, i) => (
+                   <td key={key} style={{ minWidth: key === 'businessProfileClaiming' ? 180 : 140, padding: '4px 6px' }}>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                       <select
+                         value={c.tasks?.[key] || 'Pending'}
+                         onChange={e => handleTaskChange(c.id, key, e.target.value)}
+                         style={{ minWidth: 120, fontSize: '0.8rem', padding: '2px 4px', borderRadius: 4, border: '1px solid #e0e0e0' }}
+                       >
+                         {(key === 'businessProfileClaiming' ? businessProfileClaimingOptions : taskOptions).map(opt => (
+                           <option key={opt.value} value={opt.value}>{opt.label}</option>
+                         ))}
+                       </select>
+                                             {key === 'businessProfileClaiming' && (() => {
+                        const ticket = findTicketForCompany(c.id, 'Business Profile Claiming', selectedPackage);
+                        return ticket && (
+                          <button
+                            onClick={() => window.location.href = `/tickets?ticket=${ticket.id}`}
+                            title="View Ticket in Tickets Page"
+                            style={{
+                              padding: '2px 6px',
+                              background: '#007bff',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '3px',
+                              cursor: 'pointer',
+                              fontSize: '0.7rem',
+                              fontWeight: '500',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseOver={e => {
+                              e.currentTarget.style.background = '#0056b3';
+                              e.currentTarget.style.transform = 'scale(1.05)';
+                            }}
+                            onMouseOut={e => {
+                              e.currentTarget.style.background = '#007bff';
+                              e.currentTarget.style.transform = 'scale(1)';
+                            }}
+                          >
+                            🎫 View
+                          </button>
+                        );
+                      })()}
+                     </div>
+                   </td>
+                 ))}
+                 <td style={{ padding: '4px 6px' }}>
+                   <div className="action-btns">
+                     {editId === c.id ? (
+                       <>
+                         <button className="hero-cta save" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => handleEditSave(c)}>Save</button>
+                         <button className="delete-btn" style={{background:'#eee',color:'#232323', fontSize: '0.75rem', padding: '3px 8px'}} onClick={handleEditCancel}>Cancel</button>
+                       </>
+                     ) : (
+                       <>
+                         <button className="delete-btn edit-btn" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => handleEdit(c)}>Edit</button>
+                         <button className="remove-btn" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={() => handleRemove(c)}>X</button>
+                       </>
+                     )}
+                   </div>
+                 </td>
+               </tr>
+             ))}
+           </tbody>
+         </table>
+       </div>
+
+       {/* Pagination controls */}
+       {pageCount > 1 && (
+         <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', gap: 8 }}>
+           <button
+             onClick={() => setPage(p => Math.max(1, p - 1))}
+             disabled={page === 1}
+             style={{
+               background: page === 1 ? '#f0f0f0' : 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
+               color: page === 1 ? '#bbb' : '#fff',
+               border: page === 1 ? '1.5px solid #e0e0e0' : 'none',
+               borderRadius: 8,
+               fontWeight: 700,
+               fontSize: '1em',
+               padding: '0.5em 1.5em',
+               cursor: page === 1 ? 'not-allowed' : 'pointer',
+               opacity: page === 1 ? 0.7 : 1,
+               transition: 'background 0.18s, color 0.18s',
+             }}
+           >Prev</button>
+           <span>Page {page} of {pageCount}</span>
+           <button
+             onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+             disabled={page === pageCount}
+             style={{
+               background: page === pageCount ? '#f0f0f0' : 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
+               color: page === pageCount ? '#bbb' : '#fff',
+               border: page === pageCount ? '1.5px solid #e0e0e0' : 'none',
+               borderRadius: 8,
+               fontWeight: 700,
+               fontSize: '1em',
+               padding: '0.5em 1.5em',
+               cursor: page === pageCount ? 'not-allowed' : 'pointer',
+               opacity: page === pageCount ? 0.7 : 1,
+               transition: 'background 0.18s, color 0.18s',
+             }}
+           >Next</button>
+         </div>
+       )}
+
+       {/* Modals */}
+       {revertModal && (
+         <div style={{
+           position: 'fixed',
+           top: 0,
+           left: 0,
+           right: 0,
+           bottom: 0,
+           background: 'rgba(0,0,0,0.5)',
+           display: 'flex',
+           alignItems: 'center',
+           justifyContent: 'center',
+           zIndex: 1000
+         }}>
+           <div style={{
+             background: '#fff',
+             padding: '24px',
+             borderRadius: '12px',
+             maxWidth: '400px',
+             width: '90%'
+           }}>
+             <h3>Revert Change?</h3>
+             <p>Are you sure you want to revert this change?</p>
+             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+               <button
+                 onClick={() => setRevertModal(null)}
+                 style={{
+                   padding: '8px 16px',
+                   background: '#6c757d',
+                   color: '#fff',
+                   border: 'none',
+                   borderRadius: '6px',
+                   cursor: 'pointer'
+                 }}
+               >
+                 Cancel
+               </button>
+               <button
+                 onClick={() => {
+                   // Implement revert logic here
+                   setRevertModal(null);
+                 }}
+                 style={{
+                   padding: '8px 16px',
+                   background: '#dc3545',
+                   color: '#fff',
+                   border: 'none',
+                   borderRadius: '6px',
+                   cursor: 'pointer'
+                 }}
+               >
+                 Revert
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
+
+       {clearHistoryModal && (
+         <div style={{
+           position: 'fixed',
+           top: 0,
+           left: 0,
+           right: 0,
+           bottom: 0,
+           background: 'rgba(0,0,0,0.5)',
+           display: 'flex',
+           alignItems: 'center',
+           justifyContent: 'center',
+           zIndex: 1000
+         }}>
+           <div style={{
+             background: '#fff',
+             padding: '24px',
+             borderRadius: '12px',
+             maxWidth: '400px',
+             width: '90%'
+           }}>
+             <h3>Clear History?</h3>
+             <p>Are you sure you want to clear all history? This action cannot be undone.</p>
+             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+               <button
+                 onClick={() => setClearHistoryModal(false)}
+                 style={{
+                   padding: '8px 16px',
+                   background: '#6c757d',
+                   color: '#fff',
+                   border: 'none',
+                   borderRadius: '6px',
+                   cursor: 'pointer'
+                 }}
+               >
+                 Cancel
+               </button>
+               <button
+                 onClick={handleClearPackageHistory}
+                 style={{
+                   padding: '8px 16px',
+                   background: '#dc3545',
+                   color: '#fff',
+                   border: 'none',
+                   borderRadius: '6px',
+                   cursor: 'pointer'
+                 }}
+               >
+                 Clear
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
+
+       {/* Business Profile Claiming Ticket Modal */}
+       {showTicketModal && (
+         <div style={{
+           position: 'fixed',
+           top: 0,
+           left: 0,
+           right: 0,
+           bottom: 0,
+           background: 'rgba(0,0,0,0.5)',
+           display: 'flex',
+           alignItems: 'center',
+           justifyContent: 'center',
+           zIndex: 1000
+         }}>
+           <div style={{
+             background: '#fff',
+             padding: '24px',
+             borderRadius: '12px',
+             maxWidth: '500px',
+             width: '90%',
+             maxHeight: '80vh',
+             overflowY: 'auto'
+           }}>
+             <h3 style={{ margin: '0 0 20px 0', color: '#333' }}>
+               Create Business Profile Claiming Ticket
+             </h3>
+             
+             <div style={{ marginBottom: '16px' }}>
+               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555' }}>
+                 Subject *
+               </label>
+               <input
+                 type="text"
+                 value={ticketModalData.subject}
+                 onChange={(e) => setTicketModalData(prev => ({ ...prev, subject: e.target.value }))}
+                 style={{
+                   width: '100%',
+                   padding: '10px',
+                   border: '1px solid #ddd',
+                   borderRadius: '6px',
+                   fontSize: '14px'
+                 }}
+                 placeholder="Enter ticket subject"
+               />
+             </div>
+
+             <div style={{ marginBottom: '16px' }}>
+               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555' }}>
+                 Ticket ID Link
+               </label>
+               <input
+                 type="url"
+                 value={ticketModalData.ticketIdLink}
+                 onChange={(e) => setTicketModalData(prev => ({ ...prev, ticketIdLink: e.target.value }))}
+                 style={{
+                   width: '100%',
+                   padding: '10px',
+                   border: '1px solid #ddd',
+                   borderRadius: '6px',
+                   fontSize: '14px'
+                 }}
+                 placeholder="Enter ticket ID link (optional)"
+               />
+             </div>
+
+             <div style={{ marginBottom: '16px' }}>
+               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555' }}>
+                 Follow Up Date
+               </label>
+               <DatePicker
+                 selected={ticketModalData.followUpDate}
+                 onChange={(date) => setTicketModalData(prev => ({ ...prev, followUpDate: date }))}
+                 dateFormat="MMM dd, yyyy"
+                 placeholderText="Select follow up date (optional)"
+                 style={{
+                   width: '100%',
+                   padding: '10px',
+                   border: '1px solid #ddd',
+                   borderRadius: '6px',
+                   fontSize: '14px'
+                 }}
+               />
+             </div>
+
+             <div style={{ marginBottom: '20px' }}>
+               <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555' }}>
+                 Description (Optional)
+               </label>
+               <textarea
+                 value={ticketModalData.description}
+                 onChange={(e) => setTicketModalData(prev => ({ ...prev, description: e.target.value }))}
+                 style={{
+                   width: '100%',
+                   padding: '10px',
+                   border: '1px solid #ddd',
+                   borderRadius: '6px',
+                   fontSize: '14px',
+                   minHeight: '80px',
+                   resize: 'vertical'
+                 }}
+                 placeholder="Enter additional description (optional)"
+               />
+             </div>
+
+             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+               <button
+                 onClick={handleTicketModalCancel}
+                 style={{
+                   padding: '10px 20px',
+                   background: '#6c757d',
+                   color: '#fff',
+                   border: 'none',
+                   borderRadius: '6px',
+                   cursor: 'pointer',
+                   fontSize: '14px'
+                 }}
+               >
+                 Cancel
+               </button>
+               <button
+                 onClick={handleTicketModalSubmit}
+                 disabled={isUpdatingStatus}
+                 style={{
+                   padding: '10px 20px',
+                   background: isUpdatingStatus ? '#ccc' : '#007bff',
+                   color: '#fff',
+                   border: 'none',
+                   borderRadius: '6px',
+                   cursor: isUpdatingStatus ? 'not-allowed' : 'pointer',
+                   fontSize: '14px'
+                 }}
+               >
+                 {isUpdatingStatus ? 'Creating...' : 'Add Ticket'}
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
+     </section>
+   );
+ }
+
+// Keep the original PackagePage for backward compatibility
+function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, tickets, setTickets, saveTickets, user }) {
+  const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
   const [companies, setCompanies] = useState([]);
   const [editId, setEditId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -1165,13 +2601,67 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
   const [saveTimeout, setSaveTimeout] = useState(null);
   const [ticketModal, setTicketModal] = useState(null);
   const [recentChanges, setRecentChanges] = useState(new Set());
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  
+  // Business Profile Claiming Ticket Modal State
+  const [showTicketModal, setShowTicketModal] = useState(false);
+  const [ticketModalData, setTicketModalData] = useState({
+    subject: '',
+    ticketIdLink: '',
+    followUpDate: null,
+    description: ''
+  });
+  const [pendingTicketCompany, setPendingTicketCompany] = useState(null);
+
+  // Helper function to find ticket for a specific company and task type
+  const findTicketForCompany = (companyId, taskType, packageName) => {
+    return tickets.find(ticket => 
+      ticket.companyId === companyId && 
+      ticket.type === taskType &&
+      ticket.package === packageName
+    );
+  };
+
+  // Task labels for table headers
+  const taskLabels = ['VSO', 'Revision', 'RA', 'Distribution', 'Business Profile Claiming'];
+  
+  // Task keys for data access
+  const taskKeys = ['forVSO', 'forRevision', 'ra', 'distribution', 'businessProfileClaiming'];
+  
+  // Task options for dropdowns
+  const taskOptions = [
+    { value: 'Pending', label: '🔴 Pending' },
+    { value: 'Completed', label: '🟢 Completed' }
+  ];
+  
+  const businessProfileClaimingOptions = [
+    { value: 'Pending', label: '🔴 Pending' },
+    { value: 'Completed', label: '🟢 Completed' },
+    { value: 'Ticket', label: '🔴 Ticket' }
+  ];
+
+  // Filter companies based on search and filters
+  const filteredCompanies = companies.filter(c => {
+    const matchesSearch = !search || 
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.start && c.start.toLowerCase().includes(search.toLowerCase()));
+    
+    const matchesStatus = !filterStatus || c.status === filterStatus;
+    const matchesVSO = !filterVSO || c.tasks?.forVSO === filterVSO;
+    const matchesRevision = !filterRevision || c.tasks?.forRevision === filterRevision;
+    const matchesRA = !filterRA || c.tasks?.ra === filterRA;
+    const matchesDistribution = !filterDistribution || c.tasks?.distribution === filterDistribution;
+    const matchesBusinessProfileClaiming = !filterBusinessProfileClaiming || c.tasks?.businessProfileClaiming === filterBusinessProfileClaiming;
+    
+    return matchesSearch && matchesStatus && matchesVSO && matchesRevision && matchesRA && matchesDistribution && matchesBusinessProfileClaiming;
+  });
 
   // Sync companies state with packages prop for real-time updates and ensure tasks are initialized
   useEffect(() => {
     if (packages && packages[pkg]) {
       let pkgCompanies = (packages[pkg] || []).map(c => {
         const companyWithTasks = {
-          ...c,
+              ...c,
           tasks: {
             forVSO: c.tasks?.forVSO || 'Pending',
             forRevision: c.tasks?.forRevision || 'Pending',
@@ -1184,8 +2674,8 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
       });
       
       // Always update companies state to reflect the latest packages data
-      setCompanies(pkgCompanies);
-      
+        setCompanies(pkgCompanies);
+        
       // Only save back if tasks were completely missing (not if they were just updated)
       const hasMissingTasks = pkgCompanies.some((c, i) => {
         const originalCompany = packages[pkg][i] || {};
@@ -1206,19 +2696,19 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
   }, [packages, pkg]);
 
   // History entry structure
-  const createHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
+  const createPackageHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
     id: Date.now() + Math.random(),
     timestamp: new Date().toISOString(),
-    companyId,
+          companyId,
     companyName,
     packageName,
     field,
-    oldValue,
+          oldValue,
     newValue,
     action
   });
 
-  const formatTimestamp = (timestamp) => {
+  const formatPackageTimestamp = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleString('en-US', {
       month: 'short',
@@ -1229,9 +2719,11 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
     });
   };
 
-  const addToHistory = (entry) => {
-    setHistory(prev => [entry, ...prev.slice(0, 49)]);
+  const addToPackageHistory = (entry) => {
+    setHistory(prev => [entry, ...prev.slice(0, 49)]); // Keep last 50 entries
+    // Mark as recently changed
     setRecentChanges(prev => new Set([...prev, entry.companyId]));
+    // Remove from recent changes after 5 seconds
     setTimeout(() => {
       setRecentChanges(prev => {
         const newSet = new Set(prev);
@@ -1239,86 +2731,29 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
         return newSet;
       });
     }, 5000);
-    
-    // Debounced save to reduce database writes
-    setPendingHistorySave(true);
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-    }
-    const newTimeout = setTimeout(() => {
-      setHistory(currentHistory => {
-        if (currentHistory && currentHistory.length > 0) {
-          saveHistoryLog(`seo-${pkg.toLowerCase().replace('seo - ', '')}`, currentHistory).catch(err => {
-            console.error('Error saving history:', err);
-          });
-        }
-        return currentHistory;
-      });
-      setPendingHistorySave(false);
-    }, 2000); // 2 second delay
-    setSaveTimeout(newTimeout);
   };
 
-  const revertChange = async (historyEntry) => {
+  const revertPackageChange = async (historyEntry) => {
     setRevertModal(historyEntry);
   };
 
-  const confirmRevert = async () => {
+  const confirmPackageRevert = async () => {
     const historyEntry = revertModal;
     try {
-      const field = historyEntry.field;
+      setIsUpdatingStatus(true);
+      const field = historyEntry.field === 'Report I' ? 'reportI' : 'reportII';
       const value = historyEntry.oldValue;
       
-      if (field === 'Status') {
-        // Update company status
-        const updatedPackages = { ...packages };
-        updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
-          c.id === historyEntry.companyId ? { ...c, status: value } : c
-        );
-        setPackages(updatedPackages);
-        await savePackages(updatedPackages);
-      } else if (field === 'Company Name' || field === 'Start Date' || field === 'EOC Date') {
-        // Handle company info changes
-        const updatedPackages = { ...packages };
-        updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
-          c.id === historyEntry.companyId ? { 
-            ...c, 
-            name: field === 'Company Name' ? value : c.name,
-            start: field === 'Start Date' ? value : c.start,
-            eoc: field === 'EOC Date' ? value : c.eoc
-          } : c
-        );
-        setPackages(updatedPackages);
-        await savePackages(updatedPackages);
-      } else {
-        // Handle task changes
-        const updatedPackages = { ...packages };
-        updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
-          c.id === historyEntry.companyId ? {
-            ...c,
-            tasks: { ...c.tasks, [field.toLowerCase().replace(/ /g, '')]: value }
-          } : c
-        );
-        setPackages(updatedPackages);
-        await savePackages(updatedPackages);
-      }
-      
-      // Reload companies to reflect changes
-      const updatedPackages = await getPackages();
-      let pkgCompanies = (updatedPackages[pkg] || []).map(c => ({
-        ...c,
-        tasks: {
-          forVSO: c.tasks?.forVSO || 'Pending',
-          forRevision: c.tasks?.forRevision || 'Pending',
-          ra: c.tasks?.ra || 'Pending',
-          distribution: c.tasks?.distribution || 'Pending',
-          businessProfileClaiming: c.tasks?.businessProfileClaiming || 'Pending',
-        },
-      }));
-      setCompanies(pkgCompanies);
+      // Update in packages
+      const updatedPackages = { ...packages };
+      updatedPackages[historyEntry.packageName] = (updatedPackages[historyEntry.packageName] || []).map(c =>
+        c.id === historyEntry.companyId ? { ...c, [field]: value } : c
+      );
+      setPackages(updatedPackages);
+          await savePackages(updatedPackages);
       
       // Add revert entry to history
-      const revertEntry = createHistoryEntry(
+      const revertEntry = createPackageHistoryEntry(
         historyEntry.companyId,
         historyEntry.companyName,
         historyEntry.packageName,
@@ -1327,508 +2762,384 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
         historyEntry.oldValue,
         'reverted'
       );
-      addToHistory(revertEntry);
+      addToPackageHistory(revertEntry);
       
       setRevertModal(null);
+      toast.success('Change reverted successfully');
       
     } catch (err) {
       console.error('Error reverting change:', err);
-      alert('Failed to revert change. Please try again.');
+      toast.error('Failed to revert change. Please try again.');
+        } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
-  const handleClearHistory = async () => {
-    // Clear any pending save
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-      setSaveTimeout(null);
-    }
-    setPendingHistorySave(false);
-    
-    setHistory([]);
-    await clearHistoryLog(`seo-${pkg.toLowerCase().replace('seo - ', '')}`);
-    setClearHistoryModal(false);
-  };
-
-  const handleTicketModalSave = async (updatedTicket) => {
+  const handleClearPackageHistory = async () => {
     try {
-      console.log('🎫 Starting ticket save process...');
-      console.log('🎫 Original ticket data:', updatedTicket);
-      
-      // Validate required fields
-      if (!updatedTicket.id) {
-        throw new Error('Ticket ID is missing');
-      }
-      if (!updatedTicket.company) {
-        throw new Error('Company name is missing');
-      }
-      if (!updatedTicket.taskType) {
-        throw new Error('Task type is missing');
-      }
-      
-      // Ensure createdAt is set for proper ordering
-      const ticketToSave = {
-        ...updatedTicket,
-        createdAt: updatedTicket.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      console.log('🎫 Final ticket to save:', ticketToSave);
-      console.log('🎫 Calling saveTicket function...');
-      
-      await saveTicket(ticketToSave);
-      
-      console.log('🎫 Ticket saved successfully to Firestore');
-      setTicketModal(null);
-      toast.success(`✅ Ticket created successfully for ${updatedTicket.company}`);
-
-    } catch (error) {
-      console.error('❌ Error creating ticket:', error);
-      console.error('❌ Error details:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack
-      });
-      toast.error(`Failed to save ticket: ${error.message}`);
+      setHistory([]);
+      await clearHistoryLog('report');
+      setClearHistoryModal(false);
+      toast.success('History cleared successfully');
+      } catch (error) {
+      console.error('Failed to clear history:', error);
+      toast.error('Failed to clear history');
     }
   };
 
-  const handleTicketModalCancel = async () => {
-    // Rollback the Business Profile Claiming status to its previous value
-    if (ticketModal && ticketModal.company && ticketModal.package) {
-      const companyId = ticketModal.company.id;
-      const oldValue = ticketModal.oldValue || 'Pending';
+  // Handle status changes
+  const handleStatusChange = async (companyId, newStatus) => {
+    try {
+      setIsUpdatingStatus(true);
       
-      try {
-        // Update packages to rollback the status
-        const updatedPackages = { ...packages };
-        let pkgCompanies = (updatedPackages[ticketModal.package] || []).map(c => {
-          if (c.id === companyId) {
-            const updatedCompany = {
-              ...c,
-              tasks: { ...c.tasks, businessProfileClaiming: oldValue }
-            };
-            
-            // Remove the temporary ticketId if it was set, but don't set it to undefined
-            if (c.ticketId === ticketModal.ticket.id) {
-              // Use delete operator to remove the property entirely
-              delete updatedCompany.ticketId;
-            }
-            
-            return updatedCompany;
-          }
-          return c;
-        });
-        updatedPackages[ticketModal.package] = pkgCompanies;
-        setPackages(updatedPackages);
-        await savePackages(updatedPackages);
-        setCompanies(pkgCompanies);
-        
-        // Add to history for the rollback
-        const historyEntry = createHistoryEntry(
-          companyId,
-          ticketModal.company.name,
-          ticketModal.package,
-          'Business Profile Claiming',
-          'Ticket',
-          oldValue,
-          'cancelled'
-        );
-        addToHistory(historyEntry);
-        
-        
-              } catch (error) {
-          console.error('Error rolling back ticket creation:', error);
-          toast.error('Error cancelling ticket creation. Please try again.');
-        
+      // Find the company
+      const company = companies.find(c => c.id === companyId);
+      if (!company) {
+        toast.error('Company not found');
+        return;
       }
-    }
-    
-    setTicketModal(null);
-  };
 
-  // Task columns
-  const taskKeys = [
-    'forVSO',
-    'forRevision',
-    'ra',
-    'distribution',
-    'businessProfileClaiming',
-  ];
-  const taskLabels = [
-    'FOR VSO',
-    'FOR REVISION',
-    'R/A',
-    'Distribution',
-    'Business Profile Claiming',
-  ];
-  const taskOptions = [
-    { value: 'Pending', label: '🔴 Pending' },
-    { value: 'Completed', label: '🟢 Completed' },
-  ];
-  const businessProfileClaimingOptions = [
-    { value: 'Pending', label: '🟡 Pending' },
-    { value: 'Ticket', label: '🔴 Ticket' },
-    { value: 'Completed', label: '🟢 Completed' },
-  ];
+      const oldStatus = company.status;
+      
+      // Create history entry
+      const historyEntry = createPackageHistoryEntry(
+        companyId,
+        company.name,
+        pkg,
+        'status',
+        oldStatus,
+        newStatus,
+        'changed'
+      );
+      addToPackageHistory(historyEntry);
 
-  // Load history from Firestore on mount
-  useEffect(() => {
-    (async () => {
-      const loaded = await loadHistoryLog(`seo-${pkg.toLowerCase().replace('seo - ', '')}`);
-      const historyArray = loaded?.log || loaded || [];
-      setHistory(Array.isArray(historyArray) ? historyArray : []);
-    })();
-  }, [pkg]);
+      // Update companies state optimistically
+      const updatedCompanies = companies.map(c =>
+        c.id === companyId ? { ...c, status: newStatus } : c
+      );
+      setCompanies(updatedCompanies);
 
-  // Save history to Firestore on every change (now handled by debounced addToHistory)
-  // Removed to prevent double saves and reduce database usage
+      // Update packages state
+      const updatedPackages = { ...packages };
+      updatedPackages[pkg] = updatedCompanies;
+      setPackages(updatedPackages);
 
-
-
-  // Handle dropdown change
-  const handleTaskChange = async (companyId, taskKey, value) => {
-    const company = companies.find(c => c.id === companyId);
-    const oldValue = company?.tasks?.[taskKey] || 'Pending';
-    
-    // Special handling for Business Profile Claiming
-    if (taskKey === 'businessProfileClaiming' && value === 'Ticket') {
-      // Check if a ticket already exists for this company
-      let existingTicket = null;
-      if (company.ticketId) {
+      // Background operation - save to Firestore
+      addBackgroundOperation(async () => {
         try {
-          // Verify the ticket actually exists in the database
-          const { getTickets } = await import('./firestoreHelpers');
-          const tickets = await getTickets();
-          existingTicket = tickets.find(t => t.id === company.ticketId);
+          await savePackages(updatedPackages);
+          await saveHistoryLog('package', history);
         } catch (error) {
-          console.error('Error checking existing ticket:', error);
+          console.error('Failed to save status change:', error);
+          toast.error('Failed to save changes - will retry');
         }
-      }
+      });
+
+      toast.success('Status updated successfully');
+        } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Failed to update status');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Handle task changes
+  const handleTaskChange = async (companyId, taskKey, newValue) => {
+    try {
+      setIsUpdatingStatus(true);
       
-      if (existingTicket) {
-        // Ticket already exists, update the status and reopen the ticket if it's closed
-        const updatedPackages = { ...packages };
-        let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
-          if (c.id === companyId) {
-            return {
-              ...c,
-              tasks: { ...c.tasks, [taskKey]: value }
-              // Keep existing ticketId
-            };
-          }
-          return c;
-        });
-        updatedPackages[pkg] = pkgCompanies;
-        setPackages(updatedPackages);
-        await savePackages(updatedPackages);
-        setCompanies(pkgCompanies);
-        
-        // Reopen the ticket if it's currently closed (optimized - no additional read)
-        if (existingTicket.status === 'closed') {
+      // Find the company
+      const company = companies.find(c => c.id === companyId);
+      if (!company) {
+        toast.error('Company not found');
+        return;
+      }
+
+      const oldValue = company.tasks?.[taskKey] || 'Pending';
+      
+      // Handle Business Profile Claiming "Ticket" status
+      if (taskKey === 'businessProfileClaiming' && newValue === 'Ticket') {
+        // Check if a ticket already exists for this company and task type
+        const existingTicket = tickets.find(ticket => 
+          ticket.companyId === companyId && 
+          ticket.type === 'Business Profile Claiming' &&
+          ticket.package === pkg
+        );
+
+        if (existingTicket) {
+          // Reopen existing ticket instead of creating a new one
           try {
-            const { saveTicket } = await import('./firestoreHelpers');
-            const updatedTicket = { ...existingTicket, status: 'open' };
-            await saveTicket(updatedTicket);
-            toast.success(`✅ Ticket for ${company.name} reopened`);
+            const updatedTicket = {
+              ...existingTicket,
+              status: 'open',
+              updatedAt: new Date().toISOString()
+            };
+            
+            // Update ticket in state
+            setTickets(prevTickets => 
+              prevTickets.map(t => t.id === existingTicket.id ? updatedTicket : t)
+            );
+            
+            // Update the company's Business Profile Claiming status to "Ticket"
+            const updatedCompanies = companies.map(c =>
+              c.id === companyId 
+                ? { 
+                    ...c,
+                    tasks: {
+                      ...c.tasks, 
+                      businessProfileClaiming: 'Ticket'
+                    } 
+                  } 
+                : c
+            );
+            setCompanies(updatedCompanies);
+
+            const updatedPackages = { ...packages };
+            updatedPackages[pkg] = updatedCompanies;
+            setPackages(updatedPackages);
+
+            // Save ticket and packages to Firestore
+            addBackgroundOperation(async () => {
+              try {
+                await saveTicket(updatedTicket);
+                await savePackages(updatedPackages);
+                toast.success(`Reopened existing ticket for ${company.name}`);
+              } catch (error) {
+                console.error('Failed to reopen ticket:', error);
+                toast.error('Failed to reopen ticket');
+              }
+            });
           } catch (error) {
             console.error('Error reopening ticket:', error);
             toast.error('Failed to reopen ticket');
+            return;
           }
         } else {
-          toast.success(`✅ Existing ticket reactivated for ${company.name}`);
+          // Create new ticket modal
+          setPendingTicketCompany(company);
+          setTicketModalData({
+            subject: `Business Profile Claiming - ${company.name}`,
+            ticketIdLink: '',
+            followUpDate: null,
+            description: ''
+          });
+          setShowTicketModal(true);
+          return; // Don't update the task yet, wait for modal submission
         }
-        
-        // Add to history
-        const historyEntry = createHistoryEntry(
-          companyId,
-          company?.name || 'Unknown Company',
-          pkg,
-          'Business Profile Claiming',
-          oldValue,
-          value
-        );
-        addToHistory(historyEntry);
-        
-        return;
-      } else if (company.ticketId) {
-        // Clean up orphaned ticketId reference
-        const updatedPackages = { ...packages };
-        let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
-          if (c.id === companyId) {
-            const updatedCompany = { ...c };
-            // Use delete operator to remove the property entirely
-            delete updatedCompany.ticketId;
-            return updatedCompany;
-          }
-          return c;
-        });
-        updatedPackages[pkg] = pkgCompanies;
-        setPackages(updatedPackages);
-        await savePackages(updatedPackages);
-        setCompanies(pkgCompanies);
       }
       
-      // No existing ticket, create a new one
-      const timestamp = Date.now();
-      const ticketData = {
-        id: timestamp.toString(),
-        company: company.name,
-        subject: `Business Profile Claiming - ${company.name}`,
-        ticketId: `BPC-${timestamp}`, // Default ticket ID
-        description: `Business Profile Claiming task for ${company.name} in ${pkg} package.`,
-        status: 'open',
-        priority: 'medium',
-        category: 'Business Profile',
-        createdAt: new Date().toISOString(), // Changed from createdDate to createdAt
-        followUpDate: new Date(timestamp + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-        package: pkg,
-        companyId: companyId,
-        taskType: 'businessProfileClaiming'
-      };
-      
-              // Update company with ticket reference and save ticket to database
-        const updatedPackages = { ...packages };
-        let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
-          if (c.id === companyId) {
-            return {
-              ...c,
-              tasks: { ...c.tasks, [taskKey]: value },
-              ticketId: ticketData.id // Store ticket reference
-            };
-          }
-          return c;
-        });
-        updatedPackages[pkg] = pkgCompanies;
-        setPackages(updatedPackages);
-        setCompanies(pkgCompanies);
-        
-        // Save both ticket and packages to Firestore
-        try {
-          setIsUpdatingPackages(true); // Prevent listener from interfering
-          
-          console.log('🎫 Saving ticket to Firestore:', ticketData.id);
-          await saveTicket(ticketData);
-          console.log('🎫 Ticket saved successfully');
-          
-          console.log('🎫 Saving packages to Firestore with updated company data');
-          console.log('🎫 Updated packages data:', updatedPackages);
-          await savePackages(updatedPackages);
-          console.log('🎫 Packages updated successfully');
-          
-          // Verify the save by reading back the packages
-          const { getPackages } = await import('./firestoreHelpers');
-          const savedPackages = await getPackages();
-          console.log('🎫 Verification - saved packages data:', savedPackages);
-          
-          toast.success(`✅ Ticket created and saved successfully for ${company.name}`);
-        } catch (error) {
-          console.error('❌ Error saving ticket or packages:', error);
-          toast.error('Failed to save ticket. Please try again.');
-        } finally {
-          // Allow listener to update after a delay
-          setTimeout(() => setIsUpdatingPackages(false), 2000);
-        }
-      
-      // Add to history
-      const historyEntry = createHistoryEntry(
+      // Create history entry
+      const historyEntry = createPackageHistoryEntry(
         companyId,
-        company?.name || 'Unknown Company',
+        company.name,
         pkg,
-        'Business Profile Claiming',
+        taskKey,
         oldValue,
-        value
+        newValue,
+        'changed'
       );
-      addToHistory(historyEntry);
-      
-      // Open ticket modal for finalization
-      setTicketModal({
-        ticket: ticketData,
-        company: company,
-        package: pkg,
-        oldValue: oldValue // Store the old value for rollback
-      });
-      
-      return;
-    }
-    
-    // Handle Completed status - check if there's a related ticket
-    if (taskKey === 'businessProfileClaiming' && value === 'Completed') {
-      const companyWithTicket = companies.find(c => c.id === companyId);
-      if (companyWithTicket?.ticketId) {
-        try {
-          // Optimistic UI update - update ticket status immediately
-          const { getTickets, saveTicket } = await import('./firestoreHelpers');
-          const tickets = await getTickets();
-          const relatedTicket = tickets.find(t => t.id === companyWithTicket.ticketId);
-          if (relatedTicket && relatedTicket.status !== 'closed') {
-            const updatedTicket = { ...relatedTicket, status: 'closed' };
-            await saveTicket(updatedTicket);
-            toast.success(`✅ Ticket for ${company.name} marked as closed`);
-          }
-        } catch (error) {
-          console.error('Error updating ticket status:', error);
-          toast.error('Failed to update ticket status');
-        }
-      }
-    }
-    
-    // Handle Ticket status - ensure ticket exists and is open
-    if (taskKey === 'businessProfileClaiming' && value === 'Ticket') {
-      const companyWithTicket = companies.find(c => c.id === companyId);
-      if (companyWithTicket?.ticketId) {
-        try {
-          // Optimistic UI update - update ticket status immediately
-          const { getTickets, saveTicket } = await import('./firestoreHelpers');
-          const tickets = await getTickets();
-          const relatedTicket = tickets.find(t => t.id === companyWithTicket.ticketId);
-          if (relatedTicket && relatedTicket.status === 'closed') {
-            const updatedTicket = { ...relatedTicket, status: 'open' };
-            await saveTicket(updatedTicket);
-            toast.success(`✅ Ticket for ${company.name} reopened`);
-          }
-        } catch (error) {
-          console.error('Error updating ticket status:', error);
-          toast.error('Failed to update ticket status');
-        }
-      }
-    }
-    
-    // Handle Pending status - keep existing ticket but hide the button
-    if (taskKey === 'businessProfileClaiming' && value === 'Pending') {
-          // The ticket remains in the database but the button won't show
-    // This allows for easy reactivation later
-    toast.success(`Ticket for ${company.name} is now pending`);
-      
-    }
-    
-    // Regular task update - Optimistic UI
-    const updatedPackages = { ...packages };
-    let pkgCompanies = (updatedPackages[pkg] || []).map(c => {
-      if (c.id === companyId) {
-        return {
+      addToPackageHistory(historyEntry);
+
+      // Update companies state optimistically
+      const updatedCompanies = companies.map(c =>
+        c.id === companyId 
+          ? { 
           ...c,
-          tasks: { ...c.tasks, [taskKey]: value },
-        };
-      }
-      return c;
-    });
-    updatedPackages[pkg] = pkgCompanies;
-    
-    // Apply optimistic updates immediately
+              tasks: { 
+                ...c.tasks, 
+                [taskKey]: newValue 
+              } 
+            } 
+          : c
+      );
+      setCompanies(updatedCompanies);
+
+      // Update packages state
+      const updatedPackages = { ...packages };
+      updatedPackages[pkg] = updatedCompanies;
     setPackages(updatedPackages);
-    setCompanies(pkgCompanies);
-    
-    // Update alerts immediately
-    if (window.fetchAlerts) {
-      window.fetchAlerts();
-    }
     
     // Background operation - save to Firestore
     addBackgroundOperation(async () => {
       try {
-        const { savePackagesOptimistic } = await import('./firestoreHelpers');
-        await savePackagesOptimistic(updatedPackages);
+          await savePackages(updatedPackages);
+          await saveHistoryLog('package', history);
       } catch (error) {
         console.error('Failed to save task change:', error);
         toast.error('Failed to save changes - will retry');
       }
     });
     
-    // Add to history
-    const fieldName = taskLabels[taskKeys.indexOf(taskKey)] || taskKey;
-    const historyEntry = createHistoryEntry(
-      companyId,
-      company?.name || 'Unknown Company',
-      pkg,
-      fieldName,
-      oldValue,
-      value
-    );
-    addToHistory(historyEntry);
+      toast.success('Task updated successfully');
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast.error('Failed to update task');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
+  // Business Profile Claiming Ticket Modal Handlers
+  const handleTicketModalSubmit = async () => {
+    if (!pendingTicketCompany || !ticketModalData.subject.trim()) {
+      toast.error('Please fill in the subject field');
+      return;
+    }
+
+    try {
+      setIsUpdatingStatus(true);
+      
+      const ticketData = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        companyId: pendingTicketCompany.id,
+        companyName: pendingTicketCompany.name,
+        package: pkg,
+        type: 'Business Profile Claiming',
+        status: 'open',
+        priority: 'High',
+        subject: ticketModalData.subject,
+        ticketIdLink: ticketModalData.ticketIdLink,
+        followUpDate: ticketModalData.followUpDate?.toISOString(),
+        description: ticketModalData.description || `Business Profile Claiming issue for ${pendingTicketCompany.name} in ${pkg} package`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: user?.email || 'System',
+        assignedTo: '',
+        notes: '',
+        isBusinessProfileClaiming: true
+      };
+
+      // Add ticket to tickets state
+      setTickets(prevTickets => [...prevTickets, ticketData]);
+      
+      // Update the company's Business Profile Claiming status to "Ticket"
+      const updatedCompanies = companies.map(c =>
+        c.id === pendingTicketCompany.id 
+          ? { 
+              ...c,
+              tasks: {
+                ...c.tasks, 
+                businessProfileClaiming: 'Ticket'
+              } 
+            } 
+          : c
+      );
+      setCompanies(updatedCompanies);
+
+      const updatedPackages = { ...packages };
+      updatedPackages[pkg] = updatedCompanies;
+      setPackages(updatedPackages);
+
+      // Save ticket to Firestore
+      addBackgroundOperation(async () => {
+        try {
+          await saveTickets([...tickets, ticketData]);
+          await savePackages(updatedPackages);
+          toast.success(`Ticket created for ${pendingTicketCompany.name}`);
+        } catch (error) {
+          console.error('Failed to create ticket:', error);
+          toast.error('Failed to create ticket');
+        }
+      });
+
+      // Close modal and reset
+      setShowTicketModal(false);
+      setPendingTicketCompany(null);
+      setTicketModalData({
+        subject: '',
+        ticketIdLink: '',
+        followUpDate: null,
+        description: ''
+      });
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+      toast.error('Failed to create ticket');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleTicketModalCancel = () => {
+    setShowTicketModal(false);
+    setPendingTicketCompany(null);
+    setTicketModalData({
+      subject: '',
+      ticketIdLink: '',
+      followUpDate: null,
+      description: ''
+    });
+  };
+
+  // Handle edit functions
   const handleEdit = (company) => {
     setEditId(company.id);
     setEditName(company.name);
-    setEditStart(parseDisplayDateToInput(company.start));
-    setEditEOC(parseDisplayDateToInput(company.eocDate || company.eoc || getEOC(company.start)));
+    setEditStart(company.start ? new Date(company.start) : null);
+    setEditEOC(company.eoc ? new Date(company.eoc) : null);
   };
-  const handleEditSave = async (company) => {
-    const updatedCompany = {
-      ...company,
-      name: editName,
-      start: formatDateToDisplay(editStart),
-      eocDate: formatDateToDisplay(editEOC),
-    };
 
-    // Optimistic UI update - apply changes immediately
+  const handleEditSave = async (company) => {
+    try {
+      setIsUpdatingStatus(true);
+      
+      const oldName = company.name;
+      const oldStart = company.start;
+      const oldEOC = company.eoc;
+      
+      // Create history entry
+      const historyEntry = createPackageHistoryEntry(
+        company.id,
+        oldName,
+        pkg,
+        'company_details',
+        `${oldName}|${oldStart}|${oldEOC}`,
+        `${editName}|${editStart?.toISOString()}|${editEOC?.toISOString()}`,
+        'edited'
+      );
+      addToPackageHistory(historyEntry);
+
+      // Update companies state optimistically
+      const updatedCompanies = companies.map(c =>
+        c.id === company.id 
+          ? { 
+              ...c, 
+      name: editName,
+              start: editStart?.toISOString(),
+              eoc: editEOC?.toISOString()
+            } 
+          : c
+      );
+      setCompanies(updatedCompanies);
+
+      // Update packages state
     const updatedPackages = { ...packages };
-    const updatedCompanies = (updatedPackages[pkg] || []).map(c =>
-      c.id === company.id ? updatedCompany : c
-    );
     updatedPackages[pkg] = updatedCompanies;
     setPackages(updatedPackages);
-    setCompanies(updatedCompanies);
-    
-    // Show success message immediately
-    toast.success('Company updated successfully');
-    
-    // Reset edit state immediately
-    setEditId(null);
-    setEditName('');
-    setEditStart(null);
-    setEditEOC(null);
     
     // Background operation - save to Firestore
     addBackgroundOperation(async () => {
       try {
         await savePackages(updatedPackages);
-        console.log('Company update saved to Firestore');
+          await saveHistoryLog('package', history);
       } catch (error) {
-        console.error('Failed to save company update:', error);
+          console.error('Failed to save company edit:', error);
         toast.error('Failed to save changes - will retry');
       }
     });
     
-    // Add to history for each changed field (background operation)
-    addBackgroundOperation(async () => {
-      if (editName !== company.name) {
-        const historyEntry = createHistoryEntry(
-          company.id,
-          company.name,
-          pkg,
-          'Company Name',
-          company.name,
-          editName
-        );
-        addToHistory(historyEntry);
-      }
+      setEditId(null);
+      setEditName('');
+      setEditStart(null);
+      setEditEOC(null);
       
-      if (formatDateToDisplay(editStart) !== company.start) {
-        const historyEntry = createHistoryEntry(
-          company.id,
-          company.name,
-          pkg,
-          'Start Date',
-          company.start,
-          formatDateToDisplay(editStart)
-        );
-        addToHistory(historyEntry);
-      }
-      
-      if (formatDateToDisplay(editEOC) !== (company.eocDate || company.eoc)) {
-        const historyEntry = createHistoryEntry(
-          company.id,
-          company.name,
-          pkg,
-          'EOC Date',
-          company.eocDate || company.eoc,
-          formatDateToDisplay(editEOC)
-        );
-        addToHistory(historyEntry);
-      }
-    });
+      toast.success('Company updated successfully');
+    } catch (error) {
+      console.error('Error updating company:', error);
+      toast.error('Failed to update company');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
   const handleEditCancel = () => {
@@ -1838,139 +3149,58 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
     setEditEOC(null);
   };
 
-  const handleRemove = (company) => {
-    setConfirmRemoveId(company.id);
-  };
-  const handleRemoveConfirm = async () => {
-    // Use confirmRemoveId to find the company to remove
-    const companyToRemove = (companies || []).find(c => c.id === confirmRemoveId);
-    
-    // Optimistic UI update - remove immediately
-    const updatedPackages = { ...packages };
-    const updatedCompanies = (updatedPackages[pkg] || []).filter(c => c.id !== confirmRemoveId);
-    updatedPackages[pkg] = updatedCompanies;
-    setPackages(updatedPackages);
-    setCompanies(updatedCompanies);
-    
-    // Show success message immediately
-    toast.success('Company removed successfully');
-    
-    // Reset confirm state immediately
-    setConfirmRemoveId(null);
-    
-    // Background operation - save to Firestore
-    addBackgroundOperation(async () => {
-      try {
-        await savePackages(updatedPackages);
-        console.log('Company removal saved to Firestore');
-      } catch (error) {
-        console.error('Failed to save company removal:', error);
-        toast.error('Failed to save removal - will retry');
-      }
-    });
-    
-    // Add to history (background operation)
-    if (companyToRemove) {
-      addBackgroundOperation(async () => {
-        const historyEntry = createHistoryEntry(
-          companyToRemove.id,
-          companyToRemove.name,
-          pkg,
-          'Company',
-          'In Package',
-          'Removed',
+  const handleRemove = async (company) => {
+    try {
+      setIsUpdatingStatus(true);
+      
+      // Create history entry
+      const historyEntry = createPackageHistoryEntry(
+        company.id,
+        company.name,
+        pkg,
+        'removed',
+        'active',
+        'removed',
           'removed'
         );
-        addToHistory(historyEntry);
-        
-        // Add to trash
-        const trash = await getTrash();
-        trash.push({ ...companyToRemove, originalPackage: pkg, type: 'company' });
-        await saveTrash(trash);
-      });
-    }
-  };
-  const handleRemoveCancel = () => {
-    setConfirmRemoveId(null);
-  };
+      addToPackageHistory(historyEntry);
 
-  // Handle status change
-  const handleStatusChange = async (companyId, newStatus) => {
-    const company = companies.find(c => c.id === companyId);
-    const oldStatus = company?.status || 'Active';
-    const today = new Date();
-    
-    // Optimistic UI update - apply status change immediately
+      // Update companies state optimistically
+      const updatedCompanies = companies.filter(c => c.id !== company.id);
+      setCompanies(updatedCompanies);
+
+      // Update packages state
     const updatedPackages = { ...packages };
-    updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c => {
-      if (c.id === companyId) {
-        const updatedCompany = { ...c, status: newStatus };
-        
-        // Track OnHold periods
-        if (newStatus === 'OnHold' && c.status !== 'OnHold') {
-          // Starting OnHold period
-          updatedCompany.onholdStartDate = today.toISOString();
-          updatedCompany.onholdEndDate = null;
-        } else if (c.status === 'OnHold' && newStatus !== 'OnHold') {
-          // Ending OnHold period
-          if (c.onholdStartDate) {
-            const startDate = new Date(c.onholdStartDate);
-            const onholdDays = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
-            updatedCompany.totalOnholdDays = (c.totalOnholdDays || 0) + onholdDays;
-            updatedCompany.onholdEndDate = today.toISOString();
-          }
-        }
-        
-        return updatedCompany;
-      }
-      return c;
-    });
-    
+      updatedPackages[pkg] = updatedCompanies;
     setPackages(updatedPackages);
-    setCompanies(updatedPackages[pkg]);
-    
-    // Update alerts immediately
-    if (window.fetchAlerts) {
-      window.fetchAlerts();
-    }
-    
-    // Show success message immediately
-    toast.success(`Status changed to ${newStatus}`);
     
     // Background operation - save to Firestore
     addBackgroundOperation(async () => {
       try {
-        const { savePackagesOptimistic } = await import('./firestoreHelpers');
-        await savePackagesOptimistic(updatedPackages);
-        console.log('Status change saved to Firestore');
+          await savePackages(updatedPackages);
+          await saveHistoryLog('package', history);
       } catch (error) {
-        console.error('Failed to save status change:', error);
-        toast.error('Failed to save status change - will retry');
-      }
-    });
-    
-    // Add to history (background operation)
-    addBackgroundOperation(async () => {
-      const historyEntry = createHistoryEntry(
-        companyId,
-        company?.name || 'Unknown Company',
-        pkg,
-        'Status',
-        oldStatus,
-        newStatus
-      );
-      addToHistory(historyEntry);
-    });
+          console.error('Failed to remove company:', error);
+          toast.error('Failed to remove company - will retry');
+        }
+      });
+
+      toast.success('Company removed successfully');
+    } catch (error) {
+      console.error('Error removing company:', error);
+      toast.error('Failed to remove company');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
-  // Filtered companies for this package
-  const filteredCompanies = (companies || [])
-    .filter(c => c.name && c.name.toLowerCase().includes(search.toLowerCase()))
-    .filter(c => !filterStatus || c.status === filterStatus)
-    .filter(c => !filterVSO || (c.tasks?.forVSO || 'Pending') === filterVSO)
-    .filter(c => !filterRevision || (c.tasks?.forRevision || 'Pending') === filterRevision)
-    .filter(c => !filterRA || (c.tasks?.ra || 'Pending') === filterRA)
-    .filter(c => !filterDistribution || (c.tasks?.distribution || 'Pending') === filterDistribution)
-    .filter(c => !filterBusinessProfileClaiming || (c.tasks?.businessProfileClaiming || 'Pending') === filterBusinessProfileClaiming);
+
+  const [selectedPackage, setSelectedPackage] = useState(packageNames[0]);
+  const packageColors = {
+    'SEO - BASIC': '#4A3C31',
+    'SEO - PREMIUM': '#00bcd4',
+    'SEO - PRO': '#8E24AA',
+    'SEO - ULTIMATE': '#1A237E',
+  };
 
   const pageCount = Math.ceil(filteredCompanies.length / PAGE_SIZE);
   const paginatedCompanies = filteredCompanies.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -2173,12 +3403,12 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
                         gap: '4px'
                       }}>
                         <span style={{ fontSize: '0.9em' }}>🕒</span>
-                        {formatTimestamp(entry.timestamp)}
+                        {formatPackageTimestamp(entry.timestamp)}
                       </div>
                     </div>
                     {entry.action !== 'reverted' && (
                       <button
-                        onClick={() => revertChange(entry)}
+                        onClick={() => revertPackageChange(entry)}
                         style={{
                           padding: '6px 12px',
                           background: '#f8f9fa',
@@ -2263,8 +3493,9 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
                     <option value="">All</option>
                     {label === 'Business Profile Claiming' ? (
                       <>
-                        <option value="Ticket">🔴 Ticket</option>
+                        <option value="Pending">🔴 Pending</option>
                         <option value="Completed">🟢 Completed</option>
+                        <option value="Ticket">🔴 Ticket</option>
                       </>
                     ) : (
                       <>
@@ -2838,36 +4069,39 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
                         ))}
                       </select>
-                      {key === 'businessProfileClaiming' && c.tasks?.[key] === 'Ticket' && c.ticketId && (
-                        <button
-                          onClick={() => window.location.href = `/tickets?ticket=${c.ticketId}`}
-                          title="View Ticket in Tickets Page"
-                          style={{
-                            padding: '4px 8px',
-                            background: '#007bff',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                            fontWeight: '500',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseOver={e => {
-                            e.currentTarget.style.background = '#0056b3';
-                            e.currentTarget.style.transform = 'scale(1.05)';
-                          }}
-                          onMouseOut={e => {
-                            e.currentTarget.style.background = '#007bff';
-                            e.currentTarget.style.transform = 'scale(1)';
-                          }}
-                        >
-                          🎫 View
-                        </button>
-                      )}
+                      {key === 'businessProfileClaiming' && (() => {
+                        const ticket = findTicketForCompany(c.id, 'Business Profile Claiming', pkg);
+                        return ticket && (
+                          <button
+                            onClick={() => window.location.href = `/tickets?ticket=${ticket.id}`}
+                            title="View Ticket in Tickets Page"
+                            style={{
+                              padding: '4px 8px',
+                              background: '#007bff',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.75rem',
+                              fontWeight: '500',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseOver={e => {
+                              e.currentTarget.style.background = '#0056b3';
+                              e.currentTarget.style.transform = 'scale(1.05)';
+                            }}
+                            onMouseOut={e => {
+                              e.currentTarget.style.background = '#007bff';
+                              e.currentTarget.style.transform = 'scale(1)';
+                            }}
+                          >
+                            🎫 View
+                          </button>
+                        );
+                      })()}
                     </div>
                   </td>
                 ))}
@@ -2996,11 +4230,150 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages }) {
             />
           </div>
         </div>
+            )}
+
+      {/* Business Profile Claiming Ticket Modal */}
+      {showTicketModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: '#fff',
+            padding: '24px',
+            borderRadius: '12px',
+            maxWidth: '500px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflowY: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 20px 0', color: '#333' }}>
+              Create Business Profile Claiming Ticket
+            </h3>
+            
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555' }}>
+                Subject *
+              </label>
+              <input
+                type="text"
+                value={ticketModalData.subject}
+                onChange={(e) => setTicketModalData(prev => ({ ...prev, subject: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+                placeholder="Enter ticket subject"
+              />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555' }}>
+                Ticket ID Link
+              </label>
+              <input
+                type="url"
+                value={ticketModalData.ticketIdLink}
+                onChange={(e) => setTicketModalData(prev => ({ ...prev, ticketIdLink: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+                placeholder="Enter ticket ID link (optional)"
+              />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555' }}>
+                Follow Up Date
+              </label>
+              <DatePicker
+                selected={ticketModalData.followUpDate}
+                onChange={(date) => setTicketModalData(prev => ({ ...prev, followUpDate: date }))}
+                dateFormat="MMM dd, yyyy"
+                placeholderText="Select follow up date (optional)"
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555' }}>
+                Description (Optional)
+              </label>
+              <textarea
+                value={ticketModalData.description}
+                onChange={(e) => setTicketModalData(prev => ({ ...prev, description: e.target.value }))}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  minHeight: '80px',
+                  resize: 'vertical'
+                }}
+                placeholder="Enter additional description (optional)"
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={handleTicketModalCancel}
+                style={{
+                  padding: '10px 20px',
+                  background: '#6c757d',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTicketModalSubmit}
+                disabled={isUpdatingStatus}
+                style={{
+                  padding: '10px 20px',
+                  background: isUpdatingStatus ? '#ccc' : '#007bff',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: isUpdatingStatus ? 'not-allowed' : 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                {isUpdatingStatus ? 'Creating...' : 'Add Ticket'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </section>
   );
-}
+ }
 function Report({ packages, setPackages }) {
   // Store filters for each package in an object
   const [filterI, setFilterI] = useState({});
@@ -3019,6 +4392,9 @@ function Report({ packages, setPackages }) {
   const [confirmModal, setConfirmModal] = useState(null); // For confirmation modal
   const [revertModal, setRevertModal] = useState(null); // For revert confirmation modal
   const [clearHistoryModal, setClearHistoryModal] = useState(false);
+  // Add loading states
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -3026,20 +4402,31 @@ function Report({ packages, setPackages }) {
   ];
   const currentMonth = monthNames[new Date().getMonth()];
 
-  // Load history from Firestore on mount
+  // Load history from Firestore on mount with proper error handling
   useEffect(() => {
     (async () => {
+      try {
+        setIsLoadingHistory(true);
       const loaded = await loadHistoryLog('report');
       // Ensure we're getting the array from the log field
       const historyArray = loaded?.log || loaded || [];
       setHistory(Array.isArray(historyArray) ? historyArray : []);
+      } catch (error) {
+        console.error('Failed to load history:', error);
+        toast.error('Failed to load history - will retry');
+        setHistory([]);
+      } finally {
+        setIsLoadingHistory(false);
+      }
     })();
   }, []);
 
-  // Save history to Firestore on every change
+  // Save history to Firestore on every change with error handling
   useEffect(() => {
     if (history && history.length > 0) {
       saveHistoryLog('report', history).catch(err => {
+        console.error('Failed to save history:', err);
+        toast.error('Failed to save history - will retry');
       });
     }
   }, [history]);
@@ -3059,6 +4446,9 @@ function Report({ packages, setPackages }) {
         savePackages(pkgs);
         setPackages(pkgs);
         localStorage.setItem('report-last-reset', thisMonth);
+      }).catch(error => {
+        console.error('Failed to reset monthly reports:', error);
+        toast.error('Failed to reset monthly reports');
       });
     }
   }, []);
@@ -3073,7 +4463,7 @@ function Report({ packages, setPackages }) {
   const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
 
   // History entry structure
-  const createHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
+  const createReportHistoryEntry = (companyId, companyName, packageName, field, oldValue, newValue, action = 'changed') => ({
     id: Date.now() + Math.random(),
     timestamp: new Date().toISOString(),
     companyId,
@@ -3085,7 +4475,7 @@ function Report({ packages, setPackages }) {
     action
   });
 
-  const formatTimestamp = (timestamp) => {
+  const formatReportTimestamp = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleString('en-US', {
       month: 'short',
@@ -3096,7 +4486,7 @@ function Report({ packages, setPackages }) {
     });
   };
 
-  const addToHistory = (entry) => {
+  const addToReportHistory = (entry) => {
     setHistory(prev => [entry, ...prev.slice(0, 49)]); // Keep last 50 entries
     // Mark as recently changed
     setRecentChanges(prev => new Set([...prev, entry.companyId]));
@@ -3110,13 +4500,14 @@ function Report({ packages, setPackages }) {
     }, 5000);
   };
 
-  const revertChange = async (historyEntry) => {
+  const revertReportChange = async (historyEntry) => {
     setRevertModal(historyEntry);
   };
 
-  const confirmRevert = async () => {
+  const confirmReportRevert = async () => {
     const historyEntry = revertModal;
     try {
+      setIsUpdatingStatus(true);
       const field = historyEntry.field === 'Report I' ? 'reportI' : 'reportII';
       const value = historyEntry.oldValue;
       
@@ -3129,7 +4520,7 @@ function Report({ packages, setPackages }) {
       await savePackages(updatedPackages);
       
       // Add revert entry to history
-      const revertEntry = createHistoryEntry(
+      const revertEntry = createReportHistoryEntry(
         historyEntry.companyId,
         historyEntry.companyName,
         historyEntry.packageName,
@@ -3138,19 +4529,45 @@ function Report({ packages, setPackages }) {
         historyEntry.oldValue,
         'reverted'
       );
-      addToHistory(revertEntry);
+      addToReportHistory(revertEntry);
       
       setRevertModal(null);
+      toast.success('Change reverted successfully');
       
     } catch (err) {
-      alert('Failed to revert change. Please try again.');
+      console.error('Error reverting change:', err);
+      toast.error('Failed to revert change. Please try again.');
+        } finally {
+      setIsUpdatingStatus(false);
     }
   };
 
-  // Helper to update report status in shared state
+  // Helper to update report status in shared state with validation
   const handleReportStatusChange = async (pkg, companyId, reportKey, value) => {
+    // Validate inputs
+    if (!pkg || !companyId || !reportKey || !value) {
+      toast.error('Invalid input for report status change');
+      return;
+    }
+
+    // Validate value is valid
+    if (!['Pending', 'Completed'].includes(value)) {
+      toast.error('Invalid report status value');
+      return;
+    }
+
     const oldValue = packages[pkg]?.find(c => c.id === companyId)?.[reportKey] || 'Pending';
     const company = packages[pkg]?.find(c => c.id === companyId);
+    
+    if (!company) {
+      toast.error('Company not found');
+      return;
+    }
+
+    // Prevent duplicate status changes
+    if (oldValue === value) {
+      return;
+    }
     
     if (value === 'Completed' && reportKey === 'reportII') {
       // Show confirmation modal only for Report II completion
@@ -3170,6 +4587,9 @@ function Report({ packages, setPackages }) {
   };
 
   const performStatusUpdate = async (pkg, companyId, reportKey, value, company, oldValue) => {
+    try {
+      setIsUpdatingStatus(true);
+      
     const updatedPackages = { ...packages };
     updatedPackages[pkg] = (updatedPackages[pkg] || []).map(c =>
       c.id === companyId ? { ...c, [reportKey]: value } : c
@@ -3178,8 +4598,8 @@ function Report({ packages, setPackages }) {
     // Apply optimistic updates immediately
     setPackages(updatedPackages);
     
-    // Update alerts immediately
-    if (window.fetchAlerts) {
+    // Smart alert update - only if not throttled
+    if (window.fetchAlerts && !isThrottled('ALERT_UPDATE')) {
       window.fetchAlerts();
     }
     
@@ -3195,7 +4615,7 @@ function Report({ packages, setPackages }) {
     });
     
     // Add to history
-    const historyEntry = createHistoryEntry(
+    const historyEntry = createReportHistoryEntry(
       companyId,
       company?.name || 'Unknown Company',
       pkg,
@@ -3203,7 +4623,16 @@ function Report({ packages, setPackages }) {
       oldValue,
       value
     );
-    addToHistory(historyEntry);
+    addToReportHistory(historyEntry);
+      
+      toast.success(`Report status updated to ${value}`);
+      
+    } catch (error) {
+      console.error('Error updating report status:', error);
+      toast.error('Failed to update report status');
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
   const confirmStatusChange = async () => {
@@ -3243,12 +4672,16 @@ function Report({ packages, setPackages }) {
     setPage(p => ({ ...p, [pkg]: 1 }));
   };
 
-  // Remove the remove functions since we're removing X buttons
-
   const handleClearHistory = async () => {
+    try {
     setHistory([]);
     await clearHistoryLog('report');
     setClearHistoryModal(false);
+      toast.success('History cleared successfully');
+    } catch (error) {
+      console.error('Failed to clear history:', error);
+      toast.error('Failed to clear history');
+    }
   };
 
   const [selectedPackage, setSelectedPackage] = useState(packageNames[0]);
@@ -3258,8 +4691,9 @@ function Report({ packages, setPackages }) {
     'SEO - PRO': '#8E24AA',
     'SEO - ULTIMATE': '#1A237E',
   };
+
   return (
-    <section className="company-tracker-page" style={{paddingTop: 12}}>
+    <section className="company-tracker-page" style={{paddingTop: 12, marginTop: 0}}>
       {/* Header with History Button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
         <h1 className="fancy-title">Reports for {currentMonth}</h1>
@@ -3474,7 +4908,7 @@ function Report({ packages, setPackages }) {
                     </div>
                     {entry.action !== 'reverted' && (
                       <button
-                        onClick={() => revertChange(entry)}
+                        onClick={() => revertPackageChange(entry)}
                         style={{
                           padding: '6px 12px',
                           background: '#f8f9fa',
@@ -3547,7 +4981,7 @@ function Report({ packages, setPackages }) {
             </p>
             <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
               <button
-                onClick={handleClearHistory}
+                onClick={handleClearPackageHistory}
                 style={{
                   padding: '10px 25px',
                   background: '#dc3545',
@@ -3598,31 +5032,54 @@ function Report({ packages, setPackages }) {
         const currentPage = page[pkg] || 1;
         const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
         const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-        const pendingCount = companies.filter(c => (c.reportI || 'Pending') !== 'Completed' || (c.reportII || 'Pending') !== 'Completed').length;
+        const pendingReportICount = companies.filter(c => (c.reportI || 'Pending') !== 'Completed').length;
+        const pendingReportIICount = companies.filter(c => (c.reportII || 'Pending') !== 'Completed').length;
 
                   return (
             <div key={`${pkg}-${renderKey}-${JSON.stringify(packages[pkg]?.map(c => `${c.id}-${c.reportI}-${c.reportII}`))}`} style={{ marginBottom: 32, width: '100%' }}>
-            {/* Alert banner for pending reports */}
-            {pendingCount > 0 && (
+            {/* Alert banners for pending reports */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: 18, flexWrap: 'wrap' }}>
+              {/* Report I Alert Banner */}
+              {pendingReportICount > 0 && (
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                background: '#ffeaea',
-                color: '#c00',
+                  background: '#e3f2fd',
+                  color: '#1976d2',
                 borderRadius: 999,
                 padding: '0.5em 1.5em',
                 fontWeight: 700,
                 fontSize: '1.08em',
-                border: '1.5px solid #ffd6d6',
-                boxShadow: '0 1px 4px #ffeaea',
-                marginBottom: 18,
+                  border: '1.5px solid #bbdefb',
+                  boxShadow: '0 1px 4px #e3f2fd',
                 marginLeft: 2,
                 letterSpacing: '0.03em',
               }}>
-                <span style={{fontSize:'1.2em',marginRight:8}}>📄</span>
-                {pendingCount} compan{pendingCount === 1 ? 'y' : 'ies'} under the {pkg.replace('SEO - ', '').toUpperCase()} SEO package still need reports this month.
+                  <span style={{fontSize:'1.2em',marginRight:8}}>📊</span>
+                  {pendingReportICount} compan{pendingReportICount === 1 ? 'y' : 'ies'} need Report I completion.
               </div>
             )}
+              {/* Report II Alert Banner */}
+              {pendingReportIICount > 0 && (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  background: '#ffebee',
+                  color: '#d32f2f',
+                  borderRadius: 999,
+                  padding: '0.5em 1.5em',
+                  fontWeight: 700,
+                  fontSize: '1.08em',
+                  border: '1.5px solid #ffcdd2',
+                  boxShadow: '0 1px 4px #ffebee',
+                  marginLeft: 2,
+                  letterSpacing: '0.03em',
+                }}>
+                  <span style={{fontSize:'1.2em',marginRight:8}}>📋</span>
+                  {pendingReportIICount} compan{pendingReportIICount === 1 ? 'y' : 'ies'} need Report II completion.
+                </div>
+              )}
+            </div>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 0}}>
               <div className="company-total-badge"><span className="total-icon" role="img" aria-label="Total">👥</span>Total: {filtered.length}</div>
               <h2 className="fancy-subtitle">{pkg}</h2>
@@ -3848,7 +5305,7 @@ function Report({ packages, setPackages }) {
             boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
             animation: 'scaleIn 0.3s ease-out'
           }}>
-            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm Report Completion</h3>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm {confirmModal.field === 'reportII' ? 'Report II' : 'BM Creation'} Completion</h3>
             <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
               Are you sure you want to mark "{confirmModal.company?.name} - {confirmModal.packageName}" {confirmModal.field} as "{confirmModal.newValue}"?
               This action cannot be undone.
@@ -4037,11 +5494,11 @@ function Bookmarking({ packages, setPackages }) {
     }, 5000);
   };
 
-  const revertChange = async (historyEntry) => {
+  const revertBMChange = async (historyEntry) => {
     setRevertModal(historyEntry);
   };
 
-  const confirmRevert = async () => {
+  const confirmBMRevert = async () => {
     const historyEntry = revertModal;
     try {
       const field = historyEntry.field === 'BM Creation' ? 'bmCreation' : 'bmSubmission';
@@ -4105,8 +5562,8 @@ function Bookmarking({ packages, setPackages }) {
     // Apply optimistic updates immediately
     setPackages(updatedPackages);
     
-    // Update alerts immediately
-    if (window.fetchAlerts) {
+    // Smart alert update - only if not throttled
+    if (window.fetchAlerts && !isThrottled('ALERT_UPDATE')) {
       window.fetchAlerts();
     }
     
@@ -4203,7 +5660,7 @@ function Bookmarking({ packages, setPackages }) {
   };
   const [selectedPackage, setSelectedPackage] = useState(packageNames[0]);
   return (
-    <section className="company-tracker-page" style={{paddingTop: 12}}>
+    <section className="company-tracker-page" style={{paddingTop: 12, marginTop: 0}}>
       {/* Header with History Button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
         <h1 className="fancy-title">Bookmarking for {currentMonth}</h1>
@@ -4418,7 +5875,7 @@ function Bookmarking({ packages, setPackages }) {
                     </div>
                     {entry.action !== 'reverted' && (
                       <button
-                        onClick={() => revertChange(entry)}
+                        onClick={() => revertBMChange(entry)}
                         style={{
                           padding: '6px 12px',
                           background: '#f8f9fa',
@@ -4472,31 +5929,53 @@ function Bookmarking({ packages, setPackages }) {
         const currentPage = page[pkg] || 1;
         const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
         const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-        const pendingCount = companies.filter(c => (c.bmCreation || 'Pending') !== 'Completed' || (c.bmSubmission || 'Pending') !== 'Completed').length;
+        const pendingBMCreationCount = companies.filter(c => (c.bmCreation || 'Pending') !== 'Completed').length;
+        const pendingBMSubmissionCount = companies.filter(c => (c.bmSubmission || 'Pending') !== 'Completed').length;
 
                   return (
             <div key={`${pkg}-${renderKey}-${JSON.stringify(packages[pkg]?.map(c => `${c.id}-${c.bmCreation}-${c.bmSubmission}`))}`} style={{ marginBottom: 32, width: '100%' }}>
-            {/* Alert banner for pending bookmarking */}
-            {pendingCount > 0 && (
+            <div style={{ display: 'flex', gap: '12px', marginBottom: 18, flexWrap: 'wrap' }}>
+                {/* BM Submission Alert Banner */}
+                {pendingBMSubmissionCount > 0 && (
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                background: '#ffeaea',
-                color: '#c00',
+                    background: '#ffebee',
+                    color: '#d32f2f',
                 borderRadius: 999,
                 padding: '0.5em 1.5em',
                 fontWeight: 700,
                 fontSize: '1.08em',
-                border: '1.5px solid #ffd6d6',
-                boxShadow: '0 1px 4px #ffeaea',
-                marginBottom: 18,
+                    border: '1.5px solid #ffcdd2',
+                    boxShadow: '0 1px 4px #ffebee',
                 marginLeft: 2,
                 letterSpacing: '0.03em',
               }}>
                 <span style={{fontSize:'1.2em',marginRight:8}}>🔖</span>
-                {pendingCount} compan{pendingCount === 1 ? 'y' : 'ies'} under the {pkg.replace('SEO - ', '').toUpperCase()} SEO package still need bookmarking this month.
+                    {pendingBMSubmissionCount} compan{pendingBMSubmissionCount === 1 ? 'y' : 'ies'} need BM Submission completion.
               </div>
             )}
+                {/* BM Creation Alert Banner */}
+                {pendingBMCreationCount > 0 && (
+                <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    background: '#e3f2fd',
+                    color: '#1976d2',
+                    borderRadius: 999,
+                    padding: '0.5em 1.5em',
+                    fontWeight: 700,
+                    fontSize: '1.08em',
+                    border: '1.5px solid #bbdefb',
+                    boxShadow: '0 1px 4px #e3f2fd',
+                    marginLeft: 2,
+                    letterSpacing: '0.03em',
+                }}>
+                    <span style={{fontSize:'1.2em',marginRight:8}}>📝</span>
+                    {pendingBMCreationCount} compan{pendingBMCreationCount === 1 ? 'y' : 'ies'} need BM Creation completion.
+                </div>
+                )}
+            </div>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 0}}>
               <div className="company-total-badge"><span className="total-icon" role="img" aria-label="Total">👥</span>Total: {filtered.length}</div>
               <h2 className="fancy-subtitle">{pkg}</h2>
@@ -4689,7 +6168,7 @@ function Bookmarking({ packages, setPackages }) {
             boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
             animation: 'scaleIn 0.3s ease-out'
           }}>
-            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm Bookmarking Creation</h3>
+            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm {confirmModal.field === 'reportII' ? 'Report II' : 'BM Creation'} Completion</h3>
             <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
               Are you sure you want to mark "{confirmModal.company?.name} - {confirmModal.packageName}" {confirmModal.field} as "{confirmModal.newValue}"?
               This action cannot be undone.
@@ -5092,7 +6571,7 @@ const GLOBAL_CACHE = {
 const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes - doubled
 
 const THROTTLE_INTERVALS = {
-  ALERT_UPDATE: 30000, // 30 seconds - doubled
+  ALERT_UPDATE: 5000, // 5 seconds - reduced for better responsiveness
   PACKAGE_UPDATE: 20000, // 20 seconds - doubled
   TICKET_UPDATE: 25000, // 25 seconds - doubled
   USER_UPDATE: 40000, // 40 seconds - doubled
@@ -5169,6 +6648,9 @@ const clearCache = (pattern) => {
     return false; // Not throttled
   };
 
+  // Make isThrottled available globally for other components
+  window.isThrottled = isThrottled;
+
 function App() {
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -5179,6 +6661,20 @@ function App() {
   const [editData, setEditData] = useState(null);
   // Shared packages state
   const [packages, setPackages] = useState({ 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] });
+  const [tickets, setTickets] = useState([]);
+  
+  // Save tickets function
+  const saveTickets = async (ticketsToSave) => {
+    try {
+      for (const ticket of ticketsToSave) {
+        await saveTicket(ticket);
+      }
+    } catch (error) {
+      console.error('Failed to save tickets:', error);
+      throw error;
+    }
+  };
+  
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState([]);
   const [showAlerts, setShowAlerts] = useState(false);
@@ -5197,6 +6693,8 @@ function App() {
   // Update alerts when packages change
   useEffect(() => {
     if (packages && Object.keys(packages).length > 0 && window.fetchAlerts) {
+      // Clear alerts cache when packages change to ensure fresh data
+      clearCache('alerts');
       window.fetchAlerts();
     }
   }, [packages]);
@@ -5362,12 +6860,16 @@ function App() {
   useEffect(() => {
     setFetchAlertsImpl(async () => {
       try {
-        // Check cache first
+        // Check cache first - but only if we're not forcing a refresh
         const cachedAlerts = getCachedData('alerts');
         if (cachedAlerts && !isThrottled('ALERT_UPDATE')) {
+          // Only use cache if it's recent (within 30 seconds)
+          const cacheAge = Date.now() - (GLOBAL_CACHE.cacheTimestamps['alerts'] || 0);
+          if (cacheAge < 30000) { // 30 seconds
           setAlertsRef.current(cachedAlerts);
           handleAlertChanges(cachedAlerts);
           return;
+          }
         }
         
         let allAlerts = [];
@@ -5442,81 +6944,88 @@ function App() {
         }
         // Summarize Report, Bookmarking, Link Building alerts by type
         const summary = {
-          report: {},
-          bm: {},
+          reportI: {},
+          reportII: {},
+          bmSubmission: {},
+          bmCreation: {},
           linkbuilding: {},
         };
         if (!packagesRef.current) return;
         Object.entries(packagesRef.current).forEach(([pkg, companies]) => {
-          // Report
-          const pendingReport = (companies || []).filter(c => c.status !== 'OnHold' && c.reportI !== 'Completed').length;
-          if (pendingReport > 0) summary.report[pkg] = pendingReport;
-          // Bookmarking
-          const pendingBM = (companies || []).filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length;
-          if (pendingBM > 0) summary.bm[pkg] = pendingBM;
+          // Report I
+          const pendingReportI = (companies || []).filter(c => c.status !== 'OnHold' && c.reportI !== 'Completed').length;
+          if (pendingReportI > 0) summary.reportI[pkg] = pendingReportI;
+          // Report II
+          const pendingReportII = (companies || []).filter(c => c.status !== 'OnHold' && c.reportII !== 'Completed').length;
+          if (pendingReportII > 0) summary.reportII[pkg] = pendingReportII;
+          // BM Submission
+          const pendingBMSubmission = (companies || []).filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length;
+          if (pendingBMSubmission > 0) summary.bmSubmission[pkg] = pendingBMSubmission;
+          // BM Creation
+          const pendingBMCreation = (companies || []).filter(c => c.status !== 'OnHold' && c.bmCreation !== 'Completed').length;
+          if (pendingBMCreation > 0) summary.bmCreation[pkg] = pendingBMCreation;
           // Link Building
           const pendingLB = (companies || []).filter(c => c.status !== 'OnHold' && c.linkBuildingStatus !== 'Completed').length;
           if (pendingLB > 0) summary.linkbuilding[pkg] = pendingLB;
         });
-        // Add summarized alerts
-        if (Object.keys(summary.report).length > 0) {
-          const total = Object.values(summary.report).reduce((a, b) => a + b, 0);
+        // Add summarized alerts for Report I
+        if (Object.keys(summary.reportI).length > 0) {
+          const total = Object.values(summary.reportI).reduce((a, b) => a + b, 0);
           allAlerts.push({
-            id: 'report-summary',
-            type: 'report',
-            message: `Report I: ${total} pending (${Object.entries(summary.report).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
+            id: 'reportI-summary',
+            type: 'reportI',
+            message: `Report I: ${total} pending (${Object.entries(summary.reportI).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
             link: '/report',
             color: '#1976d2',
             icon: '📊',
             timestamp: Date.now(),
             // Add dynamic content that changes when data changes
-            dynamicContent: `${total}-${Object.entries(summary.report).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
+            dynamicContent: `${total}-${Object.entries(summary.reportI).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
           });
         }
-        if (Object.keys(summary.bm).length > 0) {
-          const total = Object.values(summary.bm).reduce((a, b) => a + b, 0);
+        // Add summarized alerts for Report II
+        if (Object.keys(summary.reportII).length > 0) {
+          const total = Object.values(summary.reportII).reduce((a, b) => a + b, 0);
           allAlerts.push({
-            id: 'bm-summary',
-            type: 'bm',
-            message: `BM Submission: ${total} pending (${Object.entries(summary.bm).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
-            link: '/social-bookmarking',
-            color: '#388e3c',
-            icon: '🔖',
+            id: 'reportII-summary',
+            type: 'reportII',
+            message: `Report II: ${total} pending (${Object.entries(summary.reportII).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
+            link: '/report',
+            color: '#d32f2f',
+            icon: '📋',
             timestamp: Date.now(),
             // Add dynamic content that changes when data changes
-            dynamicContent: `${total}-${Object.entries(summary.bm).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
+            dynamicContent: `${total}-${Object.entries(summary.reportII).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
           });
         }
         // --- BM Creation Alert ---
-        // Count all companies needing BM Creation (not Completed, not OnHold)
-        const bmCreationCount = packagesRef.current ? Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmCreation !== 'Completed').length : 0;
-        if (bmCreationCount > 0) {
+        if (Object.keys(summary.bmCreation).length > 0) {
+          const total = Object.values(summary.bmCreation).reduce((a, b) => a + b, 0);
           allAlerts.push({
             id: 'bm-creation',
             type: 'bmcreation',
-            message: `BM Creation: <b>${bmCreationCount}</b> compan${bmCreationCount === 1 ? 'y' : 'ies'} need creation`,
+            message: `BM Creation: ${total} pending (${Object.entries(summary.bmCreation).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
             link: '/social-bookmarking',
             color: '#c00',
             icon: '📝',
             timestamp: Date.now(),
             // Add dynamic content that changes when data changes
-            dynamicContent: `${bmCreationCount}`
+            dynamicContent: `${total}-${Object.entries(summary.bmCreation).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
           });
         }
         // --- BM Submission Alert ---
-        // Count all companies needing BM Submission (not Completed, not OnHold)
-        const bmSubmissionCount = packagesRef.current ? Object.values(packagesRef.current).flat().filter(c => c.status !== 'OnHold' && c.bmSubmission !== 'Completed').length : 0;
-        if (bmSubmissionCount > 0) {
+        if (Object.keys(summary.bmSubmission).length > 0) {
+          const total = Object.values(summary.bmSubmission).reduce((a, b) => a + b, 0);
           allAlerts.push({
             id: 'bm-submission',
             type: 'bmsubmission',
-            message: `BM Submission: <b>${bmSubmissionCount}</b> compan${bmSubmissionCount === 1 ? 'y' : 'ies'} need submission`,
+            message: `BM Submission: ${total} pending (${Object.entries(summary.bmSubmission).map(([pkg, n]) => `${n} ${pkg.replace('SEO - ', '')}`).join(', ')})`,
             link: '/social-bookmarking',
             color: '#b26a00',
             icon: '🔖',
             timestamp: Date.now(),
             // Add dynamic content that changes when data changes
-            dynamicContent: `${bmSubmissionCount}`
+            dynamicContent: `${total}-${Object.entries(summary.bmSubmission).map(([pkg, n]) => `${pkg}-${n}`).join(',')}`
           });
         }
         // --- Link Building Alert ---
@@ -5777,7 +7286,31 @@ function App() {
         setPackages({ 'SEO - BASIC': [], 'SEO - PREMIUM': [], 'SEO - PRO': [], 'SEO - ULTIMATE': [] });
       }
     };
+
+    const fetchTickets = async () => {
+      try {
+        if (auth.currentUser) {
+          // Check cache first
+          const cachedTickets = getCachedData('tickets');
+          if (cachedTickets) {
+            setTickets(cachedTickets);
+            return;
+          }
+          
+          // Track this read operation
+          updateDailyUsage('reads', 1);
+          
+          const fetchedTickets = await getTickets();
+          setTickets(fetchedTickets);
+          setCachedData('tickets', fetchedTickets);
+        }
+      } catch (e) {
+        setTickets([]);
+      }
+    };
+
     fetchPackages();
+    fetchTickets();
   }, []);
   // Real-time listener for packages - with improved throttling and coordination
   useEffect(() => {
@@ -5822,12 +7355,36 @@ function App() {
     return () => unsubscribe();
   }, [user]);
 
+  // Real-time listener for tickets
+  useEffect(() => {
+    if (!user) return;
+    
+    const ticketsCollectionRef = collection(db, 'users', user.uid, 'tickets');
+    const unsubscribe = onSnapshot(ticketsCollectionRef, (snapshot) => {
+      const updatedTickets = [];
+      snapshot.forEach((doc) => {
+        updatedTickets.push({ id: doc.id, ...doc.data() });
+      });
+      setTickets(updatedTickets);
+      setCachedData('tickets', updatedTickets);
+    }, (error) => {
+      // Don't break the app on permission errors during logout
+      if (error.code === 'permission-denied' && !user) {
+        return;
+      }
+      if (error.code === 'resource-exhausted') {
+        handleQuotaError();
+      }
+    });
+    return () => unsubscribe();
+  }, [user]);
+
   // Debounced alert generation to prevent excessive Firestore reads
   const [alertDebounceTimer, setAlertDebounceTimer] = useState(null);
   
   // Helper function to sync ticket status with package task status (efficient)
   const syncTicketWithPackage = async (ticket, newStatus) => {
-    if (!ticket || ticket.taskType !== 'businessProfileClaiming' || !ticket.companyId) {
+    if (!ticket || (!ticket.isBusinessProfileClaiming && ticket.taskType !== 'businessProfileClaiming') || !ticket.companyId) {
       return;
     }
     
@@ -5839,25 +7396,39 @@ function App() {
       
       // Find the company in packages and update task status
       for (const [pkgName, pkgCompanies] of Object.entries(packages)) {
-        const companyIndex = pkgCompanies.findIndex(c => c.ticketId === ticket.id);
+        const companyIndex = pkgCompanies.findIndex(c => c.id === ticket.companyId);
         
         if (companyIndex !== -1) {
           const currentTaskStatus = pkgCompanies[companyIndex].tasks?.businessProfileClaiming;
           
-          if (newStatus === 'closed' && currentTaskStatus !== 'Completed') {
+          console.log(`🔄 Syncing ticket for company ${ticket.companyName}:`, {
+            ticketStatus: newStatus,
+            currentTaskStatus: currentTaskStatus,
+            companyId: ticket.companyId
+          });
+          
+          if (newStatus === 'closed' && currentTaskStatus === 'Ticket') {
+            console.log(`✅ Setting Business Profile Claiming to 'Completed' for ${ticket.companyName}`);
             packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Completed';
             updated = true;
             updatedPackages = packages;
           } else if (newStatus === 'open' && currentTaskStatus === 'Completed') {
+            console.log(`🔄 Setting Business Profile Claiming back to 'Ticket' for ${ticket.companyName}`);
             packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Ticket';
             updated = true;
             updatedPackages = packages;
+          } else {
+            console.log(`⏭️ No sync needed for ${ticket.companyName}:`, {
+              ticketStatus: newStatus,
+              currentTaskStatus: currentTaskStatus
+            });
           }
           break;
         }
       }
       
       if (updated && updatedPackages) {
+        console.log(`💾 Saving updated packages for ${ticket.companyName}`);
         // Set flag to prevent packages listener from interfering
         setIsUpdatingPackages(true);
         
@@ -5873,6 +7444,7 @@ function App() {
         return true;
       }
     } catch (error) {
+      console.error('Error syncing ticket with package:', error);
     }
     return false;
   };
@@ -5904,7 +7476,7 @@ function App() {
       const hasBusinessProfileClaimingChanges = snapshot.docChanges().some(change => {
         if (change.type === 'modified') {
           const ticket = change.doc.data();
-          return ticket.taskType === 'businessProfileClaiming' && ticket.companyId;
+          return (ticket.isBusinessProfileClaiming || ticket.taskType === 'businessProfileClaiming') && ticket.companyId;
         }
         return false;
       });
@@ -5922,7 +7494,7 @@ function App() {
         if (change.type === 'modified') {
           const ticket = change.doc.data();
           
-          if (ticket.taskType === 'businessProfileClaiming' && ticket.companyId) {
+          if ((ticket.isBusinessProfileClaiming || ticket.taskType === 'businessProfileClaiming') && ticket.companyId) {
             // For Business Profile Claiming tickets, sync immediately without debouncing
             syncTicketWithPackage(ticket, ticket.status);
           }
@@ -6674,17 +8246,19 @@ function App() {
                   </div>
                   
                 </header>
-                <div className="minimalist-divider" />
                 <main className="main-seo-content">
                   <Routes>
                     <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
                     <Route path="/" element={user ? <HomeHero userEmail={user && user.email ? user.email.split('@')[0] : undefined} /> : <Navigate to="/login" replace />} />
                     <Route path="/da-pa-checker" element={user ? <DApaChecker darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
                     <Route path="/company-tracker" element={user ? <CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
-                    <Route path="/seo-basic" element={user ? <PackagePage pkg="SEO - BASIC" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} /> : <Navigate to="/login" replace />} />
-                    <Route path="/seo-premium" element={user ? <PackagePage pkg="SEO - PREMIUM" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} /> : <Navigate to="/login" replace />} />
-                    <Route path="/seo-pro" element={user ? <PackagePage pkg="SEO - PRO" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} /> : <Navigate to="/login" replace />} />
-                    <Route path="/seo-ultimate" element={user ? <PackagePage pkg="SEO - ULTIMATE" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} /> : <Navigate to="/login" replace />} />
+                            <Route path="/packages" element={user ? <UnifiedPackages packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} /> : <Navigate to="/login" replace />} />
+        {/* Keep old routes for backward compatibility */}
+                                          <Route path="/seo-basic" element={user ? <PackagePage pkg="SEO - BASIC" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} /> : <Navigate to="/login" replace />} />
+                      <Route path="/seo-premium" element={user ? <PackagePage pkg="SEO - PREMIUM" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} /> : <Navigate to="/login" replace />} />
+                      <Route path="/seo-pro" element={user ? <PackagePage pkg="SEO - PRO" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} /> : <Navigate to="/login" replace />} />
+                      <Route path="/seo-ultimate" element={user ? <PackagePage pkg="SEO - ULTIMATE" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} /> : <Navigate to="/login" replace />} />
+                    <Route path="/monthly-tasks" element={user ? <MonthlyTasksPage packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
                     <Route path="/report" element={user ? <Report packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
                     <Route path="/link-buildings" element={user ? <LinkBuildings darkMode={darkMode} setDarkMode={setDarkMode} packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
                     <Route path="/templates" element={user ? <TemplateManager darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />

@@ -634,6 +634,11 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
       );
       addToHistory(historyEntry);
       
+      // Update alerts immediately
+      if (window.fetchAlerts && !window.isThrottled?.('ALERT_UPDATE')) {
+        window.fetchAlerts();
+      }
+      
       // Background operation - save to Firestore
       addBackgroundOperation(async () => {
         try {
@@ -675,6 +680,11 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
         value
       );
       addToHistory(historyEntry);
+      
+      // Update alerts immediately
+      if (window.fetchAlerts && !window.isThrottled?.('ALERT_UPDATE')) {
+        window.fetchAlerts();
+      }
       
       // Background operation - save to Firestore
       addBackgroundOperation(async () => {

@@ -285,6 +285,11 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
       setPackages(updatedPackages);
     }
     
+    // Smart alert update - only if not throttled
+    if (window.fetchAlerts && !window.isThrottled?.('ALERT_UPDATE')) {
+      window.fetchAlerts();
+    }
+    
     // Background operation - save to Firestore
     addBackgroundOperation(async () => {
       try {
@@ -341,7 +346,7 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
   };
 
   return (
-    <section className="company-tracker-page" style={{ width: '100%', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '2.5rem', paddingBottom: '3.5rem', background: darkMode ? '#181a1b' : '#f7f6f2' }}>
+    <section className="company-tracker-page" style={{ width: '100%', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '2.5rem', paddingBottom: '3.5rem', marginTop: 0, background: darkMode ? '#181a1b' : '#f7f6f2' }}>
       {/* Alerts */}
       {showAuditBAlert && (
         <div style={{

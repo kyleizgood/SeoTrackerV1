@@ -5,13 +5,8 @@ import { Link } from 'react-router-dom';
 // You can use emoji or replace with SVG/icon components
 const navLinks = [
   { icon: '🏢', text: 'Company Overview', href: '/company-overview', aria: 'Company Overview' },
-  { icon: '📦', text: 'SEO - BASIC', href: '/seo-basic', aria: 'SEO - BASIC' },
-  { icon: '\u2b50', text: 'SEO - PREMIUM', href: '/seo-premium', aria: 'SEO - PREMIUM' },
-  { icon: '🚀', text: 'SEO - PRO', href: '/seo-pro', aria: 'SEO - PRO' },
-  { icon: '💎', text: 'SEO - ULTIMATE', href: '/seo-ultimate', aria: 'SEO - ULTIMATE' },
-  { icon: '📊', text: 'Report', href: '/report', aria: 'Report' },
-  { icon: '🔗', text: 'Link Buildings', href: '/link-buildings', aria: 'Link Buildings' },
-  { icon: '🔖', text: 'Bookmarking', href: '/social-bookmarking', aria: 'Bookmarking' },
+  { icon: '📦', text: 'Packages', href: '/packages', aria: 'Packages' },
+  { icon: '📅', text: 'Monthly Tasks', href: '/monthly-tasks', aria: 'Monthly Tasks' },
   { icon: '📝', text: 'Site Audits', href: '/site-audits', aria: 'Site Audits' },
   { icon: '📄', text: 'Templates', href: '/templates', aria: 'Templates' },
   { icon: '🎫', text: 'Tickets', href: '/tickets', aria: 'Tickets' },

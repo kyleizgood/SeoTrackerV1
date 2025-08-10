@@ -122,6 +122,13 @@ function Tickets({ darkMode, setDarkMode }) {
         const ticketParam = urlParams.get('ticket');
         if (ticketParam && fetched.find(t => t.id === ticketParam)) {
           setSelectedId(ticketParam);
+          // Auto-switch to appropriate tab based on ticket status
+          const targetTicket = fetched.find(t => t.id === ticketParam);
+          if (targetTicket && (targetTicket.status || 'open') === 'closed') {
+            setActiveTab('closed');
+          } else {
+            setActiveTab('open');
+          }
         } else if (!selectedId && fetched.length > 0) {
           setSelectedId(fetched[0].id);
         }
@@ -150,6 +157,13 @@ function Tickets({ darkMode, setDarkMode }) {
         // Select specific ticket if provided in URL, otherwise first ticket
         if (ticketParam && cachedTickets.find(t => t.id === ticketParam)) {
           setSelectedId(ticketParam);
+          // Auto-switch to appropriate tab based on ticket status
+          const targetTicket = cachedTickets.find(t => t.id === ticketParam);
+          if (targetTicket && (targetTicket.status || 'open') === 'closed') {
+            setActiveTab('closed');
+          } else {
+            setActiveTab('open');
+          }
         } else {
           setSelectedId(cachedTickets[0]?.id || null);
         }

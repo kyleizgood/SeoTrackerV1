@@ -93,7 +93,7 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
   ) : [];
 
   return (
-    <section className="company-tracker-page" style={{ background: darkMode ? '#181a1b' : '#f7f6f2', minHeight: '100vh' }}>
+    <section className="company-tracker-page" style={{ background: darkMode ? '#181a1b' : '#f7f6f2', minHeight: '100vh', marginTop: 0 }}>
       <h1 className="trash-header">Template Trash</h1>
       {(!Array.isArray(trash) || trash.length === 0) && (
         <div style={{ color: '#b00', margin: '1em 0', fontWeight: 600 }}>

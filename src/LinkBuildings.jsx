@@ -154,8 +154,8 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
     // Apply optimistic updates immediately
     setPackages(updatedPackages);
     
-    // Update alerts immediately
-    if (window.fetchAlerts) {
+    // Smart alert update - only if not throttled
+    if (window.fetchAlerts && !window.isThrottled?.('ALERT_UPDATE')) {
       window.fetchAlerts();
     }
     
@@ -206,7 +206,7 @@ export default function LinkBuildings({ packages, setPackages, darkMode, setDark
   const [selectedPackage, setSelectedPackage] = useState(packageNames[0]);
 
   return (
-    <section className="company-tracker-page" style={{paddingTop: 12, background: darkMode ? '#181a1b' : '#f7f6f2'}}>
+    <section className="company-tracker-page" style={{paddingTop: 12, marginTop: 0, background: darkMode ? '#181a1b' : '#f7f6f2'}}>
       {/* Header with History Button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
         <h1 className="fancy-title">Link Building for {currentMonth}</h1>
