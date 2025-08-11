@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, query, where, orderBy, onSnapshot, addDoc, updateDoc, arrayUnion, limit as fsLimit, startAfter as fsStartAfter, enableIndexedDbPersistence } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, query, where, orderBy, onSnapshot, addDoc, updateDoc, arrayUnion, limit as fsLimit, startAfter as fsStartAfter, enableIndexedDbPersistence, writeBatch } from 'firebase/firestore';
 import { auth } from './firebase';
 import { addOptimisticUpdate, completeOptimisticUpdate, failOptimisticUpdate, addBackgroundOperation } from './optimisticUI.js';
 
@@ -34,7 +34,7 @@ const clearCache = (pattern) => {
 
 // Enhanced write throttling with optimistic updates
 const writeThrottle = new Map();
-const MIN_WRITE_INTERVAL = 5000; // 5 seconds
+const MIN_WRITE_INTERVAL = 1000; // 1 second - reduced for better user experience
 
 const throttleWrite = (key) => {
   const now = Date.now();
@@ -370,6 +370,26 @@ export async function saveCompany(company) {
   // console.log('Company saved to Firestore (throttled)');
 }
 
+// Bulk save companies without throttling for better user experience
+export async function saveCompaniesBulk(companies) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  console.log(`Saving ${companies.length} companies in bulk...`);
+  
+  // Use batch writes for better performance and atomicity
+  const batch = writeBatch(db);
+  
+  companies.forEach(company => {
+    const docRef = doc(db, 'users', user.uid, 'companies', company.id.toString());
+    batch.set(docRef, company);
+  });
+  
+  await batch.commit();
+  clearCache(`companies_${user.uid}`);
+  console.log(`Successfully saved ${companies.length} companies to Firestore`);
+}
+
 // Get all companies for the current user (with enhanced caching)
 export async function getCompanies() {
   const user = auth.currentUser;
@@ -448,18 +468,28 @@ export async function savePackages(packages) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
   
-  // Throttle writes to prevent excessive operations
-  const throttleKey = `savePackages_${user.uid}`;
-  if (!throttleWrite(throttleKey)) {
-    console.log('Save packages throttled, skipping write');
-    return;
+  // Check if this is a critical operation (Business Profile Claiming update)
+  const isCriticalOperation = Object.values(packages).some(pkgCompanies => 
+    pkgCompanies.some(company => 
+      company.tasks?.businessProfileClaiming === 'Ticket' || 
+      company.tasks?.businessProfileClaiming === 'Completed'
+    )
+  );
+  
+  // Skip throttling for critical operations
+  if (!isCriticalOperation) {
+    const throttleKey = `savePackages_${user.uid}`;
+    if (!throttleWrite(throttleKey)) {
+      console.log('Save packages throttled, skipping write');
+      return;
+    }
   }
   
   await setDoc(doc(db, 'users', user.uid, 'meta', 'packages'), { packages });
   
   // Clear cache when packages are updated
   clearCache('packages');
-  console.log('Packages saved to Firestore (throttled)');
+  console.log(`Packages saved to Firestore ${isCriticalOperation ? '(critical operation)' : '(throttled)'}`);
 }
 
 export async function getPackages() {

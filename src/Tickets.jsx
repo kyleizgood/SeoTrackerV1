@@ -292,35 +292,14 @@ function Tickets({ darkMode, setDarkMode }) {
         if (oldTicket.status !== ticketWithDefaults.status) addToHistory(createHistoryEntry(ticketWithDefaults.id, oldTicket.company, oldTicket.subject, 'status', oldTicket.status, ticketWithDefaults.status));
         
         // Sync with packages if this is a Business Profile Claiming ticket
-        if (oldTicket.taskType === 'businessProfileClaiming' && oldTicket.status !== ticketWithDefaults.status) {
+        if ((oldTicket.isBusinessProfileClaiming || oldTicket.taskType === 'businessProfileClaiming' || oldTicket.type === 'Business Profile Claiming') && 
+            oldTicket.status !== ticketWithDefaults.status) {
           try {
-            const { getPackages, savePackages } = await import('./firestoreHelpers');
-            const packages = await getPackages();
-            let updated = false;
-            
-            // Find and update the company in the correct package
-            for (const [pkgName, pkgCompanies] of Object.entries(packages)) {
-              const companyIndex = pkgCompanies.findIndex(c => c.ticketId === ticketWithDefaults.id);
-              if (companyIndex !== -1) {
-                if (ticketWithDefaults.status === 'closed') {
-                  // Mark Business Profile Claiming as Completed
-                  packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Completed';
-                  updated = true;
-                } else if (ticketWithDefaults.status === 'open' && oldTicket.status === 'closed') {
-                  // Mark Business Profile Claiming as Ticket if reopened
-                  packages[pkgName][companyIndex].tasks.businessProfileClaiming = 'Ticket';
-                  updated = true;
-                }
-                break;
-              }
-            }
-            
-            if (updated) {
-              await savePackages(packages);
-              toast.success(`✅ Package task updated for ${ticketWithDefaults.company}`);
-            }
+            // Use the centralized sync function from App.jsx
+            const { syncTicketWithPackage } = await import('./App');
+            await syncTicketWithPackage(ticketWithDefaults, ticketWithDefaults.status);
           } catch (error) {
-            // console.error('Error syncing with packages:', error);
+            console.error('Error syncing with packages:', error);
             toast.error('Failed to sync with package task');
           }
         }
