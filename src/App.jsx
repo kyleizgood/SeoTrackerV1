@@ -424,7 +424,62 @@ const months = [
 
 ];
 
+// Helper function to get styles for disabled dropdowns
+const getDisabledStyles = (isDisabled) => ({
+  opacity: isDisabled ? 0.7 : 1,
+  cursor: isDisabled ? 'not-allowed' : 'pointer',
+  background: isDisabled ? '#f5f5f5' : '#fff',
+  pointerEvents: isDisabled ? 'none' : 'auto'
+});
 
+// Helper function to check if a company is editable
+const isCompanyEditable = (company) => {
+  if (!company) return false;
+  return company.status !== 'OnHold';
+};
+
+// Format date in standard format: "Month DD, YYYY"
+const formatDateString = (date) => {
+  if (!date || isNaN(date.getTime())) return '';
+  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+};
+
+// Parse date string in "Month DD, YYYY" format
+const parseDateString = (dateStr) => {
+  if (!dateStr) return null;
+  const match = dateStr.match(/^(\w+) (\d{1,2}), (\d{4})$/);
+  if (!match) return null;
+  const [_, month, day, year] = match;
+  return new Date(`${month} ${day}, ${year}`);
+};
+
+
+
+// Validate and format company dates
+const validateAndFormatDates = (editStart, editEOC) => {
+  // Validate dates
+  if (editStart && isNaN(editStart.getTime())) {
+    throw new Error('Invalid start date');
+  }
+  if (editEOC && isNaN(editEOC.getTime())) {
+    throw new Error('Invalid EOC date');
+  }
+
+  // Format dates
+  const formattedStart = formatDateString(editStart);
+  const formattedEOC = editEOC ? formatDateString(editEOC) : (formattedStart ? getEOC(formattedStart) : '');
+
+  // Validate EOC date is after start date
+  if (formattedStart && formattedEOC) {
+    const startDate = parseDateString(formattedStart);
+    const eocDate = parseDateString(formattedEOC);
+    if (startDate && eocDate && startDate >= eocDate) {
+      throw new Error('EOC date must be after start date');
+    }
+  }
+
+  return { formattedStart, formattedEOC };
+};
 
 export function getEOC(start) {
 
@@ -2646,11 +2701,15 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
     try {
 
-      setIsUpdatingStatus(true);
-
-      
-
       const company = companies.find(c => c.id === companyId);
+
+      // Prevent changes if company is OnHold
+      if (!isCompanyEditable(company)) {
+        toast.error('Cannot modify tasks while company is On Hold');
+        return;
+      }
+
+      setIsUpdatingStatus(true);
 
       if (!company) {
 
@@ -2750,11 +2809,15 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
     try {
 
-      setIsUpdatingStatus(true);
-
-      
-
       const company = companies.find(c => c.id === companyId);
+
+      // Prevent changes if company is OnHold
+      if (!isCompanyEditable(company)) {
+        toast.error('Cannot modify tasks while company is On Hold');
+        return;
+      }
+
+      setIsUpdatingStatus(true);
 
       if (!company) {
 
@@ -3442,7 +3505,7 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
     setEditStart(company.start ? new Date(company.start) : null);
 
-    setEditEOC(company.eoc ? new Date(company.eoc) : null);
+    setEditEOC(company.eocDate ? new Date(company.eocDate) : null);
 
   };
 
@@ -3454,32 +3517,26 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
       setIsUpdatingStatus(true);
 
-      
+      // Validate and format dates
+      const { formattedStart, formattedEOC } = validateAndFormatDates(editStart, editEOC);
 
-      const oldName = company.name;
+      // Create updated company object
+      const updatedCompany = {
+        ...company,
+        name: editName,
+        start: formattedStart,
+        eocDate: formattedEOC
+      };
 
-      const oldStart = company.start;
-
-      const oldEOC = company.eoc;
-
-      
-
+      // Create history entry
       const historyEntry = createPackageHistoryEntry(
-
         company.id,
-
-        oldName,
-
+        company.name,
         selectedPackage,
-
         'company_details',
-
-        `${oldName}|${oldStart}|${oldEOC}`,
-
-        `${editName}|${editStart?.toISOString()}|${editEOC?.toISOString()}`,
-
+        `${company.name}|${company.start}|${company.eocDate}`,
+        `${editName}|${formattedStart}|${formattedEOC}`,
         'edited'
-
       );
 
       addToPackageHistory(historyEntry);
@@ -3496,9 +3553,9 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
               name: editName,
 
-              start: editStart?.toISOString(),
+              start: formattedStart,
 
-              eoc: editEOC?.toISOString()
+              eocDate: formattedEOC
 
             } 
 
@@ -3551,15 +3608,16 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
       toast.success('Company updated successfully');
 
     } catch (error) {
-
       console.error('Error updating company:', error);
+      toast.error(error.message || 'Failed to update company');
 
-      toast.error('Failed to update company');
-
+      // Reset edit state on error
+      setEditId(null);
+      setEditName('');
+      setEditStart(null);
+      setEditEOC(null);
     } finally {
-
       setIsUpdatingStatus(false);
-
     }
 
   };
@@ -4426,7 +4484,18 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
                                                  <th style={{ minWidth: '50px', fontSize: '0.85rem', padding: '8px 4px' }}>EOC Date</th>
 
-                                  <th style={{ minWidth: '50px', fontSize: '0.85rem', padding: '8px 4px' }}>Status</th>
+                                  <th style={{ minWidth: '50px', fontSize: '0.85rem', padding: '8px 4px' }}>
+                Status
+                <select
+                  value={filterStatus}
+                  onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+                  style={{ marginTop: 2, width: '100%', borderRadius: 6, border: '1.5px solid #e0e0e0', fontSize: '0.8rem', background: '#faf9f6', color: '#232323', padding: '2px 4px' }}
+                >
+                  <option value="">All</option>
+                  <option value="Active">🟢 Active</option>
+                  <option value="OnHold">🟣 OnHold</option>
+                </select>
+              </th>
 
                  {taskLabels.map((label, i) => (
 
@@ -4658,7 +4727,7 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
                      ) : (
 
-                       c.eoc ? formatDateToDisplay(c.eoc).replace(',', '').replace(' ', ' ') : '-'
+                       c.eocDate ? formatDateToDisplay(c.eocDate).replace(',', '').replace(' ', ' ') : (c.start ? getEOC(c.start) : '-')
 
                      )}
 
@@ -6626,7 +6695,7 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, ticket
 
     setEditStart(company.start ? new Date(company.start) : null);
 
-    setEditEOC(company.eoc ? new Date(company.eoc) : null);
+    setEditEOC(company.eocDate ? new Date(company.eocDate) : null);
 
   };
 
@@ -6684,9 +6753,9 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, ticket
 
       name: editName,
 
-              start: editStart?.toISOString(),
+              start: formattedStart,
 
-              eoc: editEOC?.toISOString()
+              eocDate: formattedEOC
 
             } 
 
@@ -6743,15 +6812,16 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, ticket
       toast.success('Company updated successfully');
 
     } catch (error) {
-
       console.error('Error updating company:', error);
+      toast.error(error.message || 'Failed to update company');
 
-      toast.error('Failed to update company');
-
+      // Reset edit state on error
+      setEditId(null);
+      setEditName('');
+      setEditStart(null);
+      setEditEOC(null);
     } finally {
-
       setIsUpdatingStatus(false);
-
     }
 
   };
@@ -8560,7 +8630,7 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, ticket
 
                   ) : (
 
-                    c.eocDate || c.eoc || getEOC(c.start)
+                    c.eocDate || (c.start ? getEOC(c.start) : '')
 
                   )}
 
