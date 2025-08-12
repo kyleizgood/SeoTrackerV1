@@ -771,83 +771,246 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
   };
 
   return (
-    <div style={{ padding: 24, background: darkMode ? '#181a1b' : '#f7f6f2', minHeight: '100vh' }}>
-      {/* Header with History Button */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-        <h2>Company Task Overview</h2>
-        <button
-          onClick={() => setShowHistory(!showHistory)}
-          style={{
-            padding: '8px 16px',
-            background: showHistory ? '#1976d2' : '#f8f9fa',
-            color: showHistory ? '#ffffff' : '#495057',
-            border: '1px solid #dee2e6',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: '600',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
-        </button>
-      </div>
-      <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button onClick={() => exportToCSV(filteredRows)} style={{ padding: '6px 16px', borderRadius: 6, background: '#1976d2', color: '#fff', fontWeight: 600, border: 'none', cursor: 'pointer' }}>Export to CSV</button>
-        <button onClick={() => exportToExcel(filteredRows)} style={{ padding: '6px 16px', borderRadius: 6, background: '#43a047', color: '#fff', fontWeight: 600, border: 'none', cursor: 'pointer' }}>Export to Excel</button>
-        
-        {/* Add new status filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <label>Company Status:</label>
-          {statusOptions}
-        </div>
+    <div style={{ 
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      minHeight: '100vh',
+      height: '100vh',
+      padding: '2rem 1rem',
+      position: 'relative',
+      overflow: 'hidden'
+    }}>
+      {/* Background Pattern */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%)',
+        pointerEvents: 'none'
+      }} />
 
-        <label>Task Status:</label>
-        <select value={filter} onChange={e => { setFilter(e.target.value); setPage(1); }}>
-          <option value="all">All Tasks</option>
-          <option value="completed">Completed</option>
-          <option value="pending">Pending</option>
-          <option value="not_started">Not Started</option>
-        </select>
+      <div style={{
+        position: 'relative',
+        zIndex: 2,
+        maxWidth: '1400px',
+        margin: '0 auto',
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '24px',
+        padding: '2.5rem',
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        height: 'calc(100vh - 4rem)',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
 
-        <label>Package:</label>
-        <select value={packageFilter} onChange={e => { setPackageFilter(e.target.value); setPage(1); }}>
-          <option value="all">All Packages</option>
-          {PACKAGE_LIST.map(pkg => (
-            <option key={pkg} value={pkg}>{pkg}</option>
-          ))}
-        </select>
-
-        <div className="search-filter-wrapper">
-          <span className="search-filter-icon" role="img" aria-label="Search">🔍</span>
-          <input
-            type="text"
-            className="search-filter-input"
-            placeholder="Search company..."
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            style={{ minWidth: 180 }}
-          />
-        </div>
-      </div>
-      
-      {/* History Panel */}
-      {showHistory && (
+        {/* Top Section - Header and Action Buttons */}
         <div style={{
-          background: '#ffffff',
-          border: '1px solid #e0e7ef',
-          borderRadius: '16px',
-          padding: '32px',
-          marginBottom: '30px',
-          position: 'relative',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-          width: '100%',
-          maxWidth: '1200px',
-          margin: '0 auto 30px'
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: '2rem',
+          paddingBottom: '1.5rem',
+          borderBottom: '2px solid rgba(102, 126, 234, 0.1)',
+          flexShrink: 0
         }}>
+          <div>
+            <h1 style={{
+              fontSize: '2.2rem',
+              fontWeight: '800',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              marginBottom: '0.5rem',
+              letterSpacing: '0.02em'
+            }}>
+              Company Task Overview
+            </h1>
+            <p style={{
+              fontSize: '1rem',
+              color: '#6c757d',
+              fontWeight: '500',
+              margin: '0'
+            }}>
+              Comprehensive view of all company tasks and progress
+            </p>
+          </div>
+          
+          <div style={{
+            display: 'flex',
+            gap: '0.75rem',
+            alignItems: 'center'
+          }}>
+            <button 
+              onClick={() => exportToCSV(filteredRows)} 
+              style={{ 
+                padding: '8px 16px', 
+                borderRadius: '8px', 
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+                color: '#fff', 
+                fontWeight: '600', 
+                border: 'none', 
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              📊 Export to CSV
+            </button>
+            <button 
+              onClick={() => exportToExcel(filteredRows)} 
+              style={{ 
+                padding: '8px 16px', 
+                borderRadius: '8px', 
+                background: 'linear-gradient(135deg, #43a047 0%, #2e7d32 100%)', 
+                color: '#fff', 
+                fontWeight: '600', 
+                border: 'none', 
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              ✅ Export to Excel
+            </button>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              style={{
+                padding: '8px 16px',
+                background: showHistory ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'rgba(255, 255, 255, 0.9)',
+                color: showHistory ? '#ffffff' : '#495057',
+                border: '1px solid rgba(102, 126, 234, 0.2)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              📋 Show History ({history.length})
+            </button>
+          </div>
+        </div>
+
+        {/* Middle Section - Filter and Search Controls */}
+        <div style={{
+          display: 'flex',
+          gap: '1rem',
+          alignItems: 'center',
+          marginBottom: '2rem',
+          flexWrap: 'wrap',
+          flexShrink: 0
+        }}>
+          {/* Company Status Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontWeight: '600', color: '#495057', fontSize: '0.9rem' }}>Company Status:</label>
+            {statusOptions}
+          </div>
+
+          {/* Task Status Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontWeight: '600', color: '#495057', fontSize: '0.9rem' }}>Task Status:</label>
+            <select 
+              value={filter} 
+              onChange={e => { setFilter(e.target.value); setPage(1); }}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid rgba(102, 126, 234, 0.2)',
+                background: 'rgba(255, 255, 255, 0.9)',
+                fontSize: '0.85rem',
+                fontWeight: '500'
+              }}
+            >
+              <option value="all">All Tasks</option>
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="not_started">Not Started</option>
+            </select>
+          </div>
+
+          {/* Package Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontWeight: '600', color: '#495057', fontSize: '0.9rem' }}>Package:</label>
+            <select 
+              value={packageFilter} 
+              onChange={e => { setPackageFilter(e.target.value); setPage(1); }}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid rgba(102, 126, 234, 0.2)',
+                background: 'rgba(255, 255, 255, 0.9)',
+                fontSize: '0.85rem',
+                fontWeight: '500'
+              }}
+            >
+              <option value="all">All Packages</option>
+              {PACKAGE_LIST.map(pkg => (
+                <option key={pkg} value={pkg}>{pkg}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Search Input */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px',
+            background: 'rgba(255, 255, 255, 0.9)',
+            borderRadius: '6px',
+            padding: '4px 10px',
+            border: '1px solid rgba(102, 126, 234, 0.2)'
+          }}>
+            <span style={{ fontSize: '0.9rem' }}>🔍</span>
+            <input
+              type="text"
+              placeholder="Search company..."
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              style={{ 
+                minWidth: 160,
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                fontSize: '0.85rem',
+                fontWeight: '500'
+              }}
+            />
+          </div>
+        </div>
+      
+        {/* History Panel */}
+        {showHistory && (
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.9)',
+            borderRadius: '16px',
+            padding: '2rem',
+            marginBottom: '2rem',
+            position: 'relative',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            backdropFilter: 'blur(10px)',
+            flexShrink: 0
+          }}>
+            <h3 style={{
+              fontSize: '1.3rem',
+              fontWeight: '700',
+              color: '#495057',
+              marginBottom: '1.5rem',
+              textAlign: 'center'
+            }}>
+              📋 Activity History
+            </h3>
           {/* Icon-only Clear History button in upper right */}
           <button
             onClick={() => setClearHistoryModal(true)}
@@ -1279,17 +1442,51 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
   color: #fff;
 }
 `}</style>
-      <div className="responsive-table-wrapper">
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
+        {/* Table Section */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.8)',
+          borderRadius: '16px',
+          padding: '2rem',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.3)',
+          flex: 1,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0
+        }}>
+          <h3 style={{
+            fontSize: '1.3rem',
+            fontWeight: '700',
+            color: '#495057',
+            marginBottom: '1.5rem',
+            textAlign: 'center',
+            flexShrink: 0
+          }}>
+            📊 Company Data Table
+          </h3>
+          <div className="responsive-table-wrapper" style={{
+            flex: 1,
+            overflow: 'auto',
+            minHeight: 0
+          }}>
+            <table style={{ 
+              width: '100%', 
+              borderCollapse: 'collapse',
+              background: 'rgba(255, 255, 255, 0.9)',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+            }}>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(255, 255, 255, 0.95)' }}>
             <tr>
-              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Company Name</th>
-              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Package</th>
-              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>Start Date</th>
-              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0' }}>EOC Date</th>
-              <th style={{ padding: 12, textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>Status</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.95)' }}>Company Name</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.95)' }}>Package</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.95)' }}>Start Date</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.95)' }}>EOC Date</th>
+              <th style={{ padding: 12, textAlign: 'center', borderBottom: '2px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.95)' }}>Status</th>
               {TASK_GROUPS.map(group => (
-                <th key={group.key} style={{ border: '1px solid #ccc', padding: 8 }}>
+                <th key={group.key} style={{ border: '1px solid #ccc', padding: 8, background: 'rgba(255, 255, 255, 0.95)' }}>
                   {group.label}
                   {group.fields.length > 1 && (
                     <div style={{ fontSize: '0.8em', color: '#888' }}>
@@ -1303,8 +1500,27 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
           <tbody>
             {paginatedRows.map(row => {
               return (
-                <tr key={row.id + row.package} style={{ cursor: 'pointer' }} onClick={() => setSelectedRow(row)}>
-                  <td style={{ padding: 12 }}>{row.name}</td>
+                <tr key={row.id + row.package} style={{ 
+                  cursor: 'pointer',
+                  background: row.status === 'OnHold' ? '#f8f9fa' : 'transparent',
+                  opacity: row.status === 'OnHold' ? 0.8 : 1,
+                  borderLeft: row.status === 'OnHold' ? '4px solid #ba68c8' : 'none'
+                }} onClick={() => setSelectedRow(row)}>
+                  <td style={{ 
+                    padding: 12,
+                    background: row.status === 'Active' ? '#e8f5e9' : 
+                                row.status === 'OnHold' ? '#f3e5f5' : 'transparent',
+                    borderRadius: '8px',
+                    border: row.status === 'Active' ? '1px solid #c8e6c9' : 
+                           row.status === 'OnHold' ? '1px solid #e1bee7' : 'none'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>{row.name}</span>
+                      {row.status === 'OnHold' && (
+                        <span style={{ fontSize: '0.8rem', color: '#ba68c8' }} title="Company is on hold">⏸️</span>
+                      )}
+                    </div>
+                  </td>
                   <td style={{ padding: 12 }}>
                     <span className="package-badge" style={{
                       background: PACKAGE_COLORS[row.package] || '#eee',
@@ -1347,10 +1563,12 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
               );
             })}
           </tbody>
-        </table>
-      </div>
-      {/* Pagination controls */}
-      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8 }}>
+            </table>
+          </div>
+        </div>
+        
+        {/* Pagination controls */}
+        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8, flexShrink: 0 }}>
         <button
           onClick={() => setPage(p => Math.max(1, p - 1))}
           disabled={page === 1}
@@ -1390,30 +1608,44 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
           <div className="company-details-modal">
             <div className="company-details-card">
               <div className="company-details-title">Details for {selectedRow.name}</div>
-              <ul className="company-details-list">
-                <li><span className="company-details-label">Package:</span> <span className="package-badge" style={{
-                  background: PACKAGE_COLORS[selectedRow.package] || '#eee',
-                  color: '#fff',
-                  padding: '2px 18px',
-                  borderRadius: 20,
-                  fontWeight: 700,
-                  fontSize: '1em',
-                  border: PACKAGE_BORDERS[selectedRow.package] || 'none',
-                  marginRight: 2,
-                  letterSpacing: '0.03em',
-                  boxShadow: '0 1px 4px #ececec',
-                  display: 'inline-block',
-                }}>{selectedRow.package}</span></li>
-                <li><span className="company-details-label">Start Date:</span> {selectedRow.start || 'N/A'}</li>
-                <li>
-                  <span className="company-details-label">EOC Date:</span>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                gap: '12px', 
+                marginBottom: '20px',
+                padding: '16px',
+                background: 'rgba(255, 255, 255, 0.8)',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.2)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="company-details-label" style={{ minWidth: '80px', fontWeight: '600' }}>Package:</span>
+                  <span className="package-badge" style={{
+                    background: PACKAGE_COLORS[selectedRow.package] || '#eee',
+                    color: '#fff',
+                    padding: '2px 12px',
+                    borderRadius: 16,
+                    fontWeight: 600,
+                    fontSize: '0.85em',
+                    border: PACKAGE_BORDERS[selectedRow.package] || 'none',
+                    letterSpacing: '0.02em',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                    display: 'inline-block',
+                  }}>{selectedRow.package}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="company-details-label" style={{ minWidth: '80px', fontWeight: '600' }}>Start Date:</span>
+                  <span style={{ fontSize: '0.9em' }}>{selectedRow.start || 'N/A'}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="company-details-label" style={{ minWidth: '80px', fontWeight: '600' }}>EOC Date:</span>
                   {editingEOCDate ? (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                       <DatePicker
                         selected={selectedDate}
                         onChange={date => setSelectedDate(date)}
-                        dateFormat="MMMM d, yyyy"
-                        placeholderText="Select date or type: MM/DD/YYYY"
+                        dateFormat="MMM d, yyyy"
+                        placeholderText="MM/DD/YYYY"
                         className="react-datepicker__input"
                         popperPlacement="bottom-start"
                         showYearDropdown
@@ -1424,14 +1656,14 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                         customInput={
                           <input
                             style={{
-                              width: '100%',
-                              padding: '8px 12px',
+                              width: '120px',
+                              padding: '6px 8px',
                               border: '1px solid #ccc',
                               borderRadius: '4px',
-                              fontSize: '14px',
+                              fontSize: '0.85em',
                               outline: 'none'
                             }}
-                            placeholder="Type: MM/DD/YYYY or click to pick"
+                            placeholder="MM/DD/YYYY"
                           />
                         }
                         renderCustomHeader={({ date, changeYear, changeMonth }) => (
@@ -1633,13 +1865,13 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                       <button
                         onClick={() => handleEOCDateUpdate(selectedRow)}
                         style={{
-                          padding: '6px 12px',
+                          padding: '4px 8px',
                           background: '#4caf50',
                           color: '#fff',
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
-                          fontSize: '0.9em'
+                          fontSize: '0.8em'
                         }}
                       >
                         Save
@@ -1650,28 +1882,28 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                           setSelectedDate(null);
                         }}
                         style={{
-                          padding: '6px 12px',
+                          padding: '4px 8px',
                           background: '#ef5350',
                           color: '#fff',
                           border: 'none',
                           borderRadius: '4px',
                           cursor: 'pointer',
-                          fontSize: '0.9em'
+                          fontSize: '0.8em'
                         }}
                       >
                         Cancel
                       </button>
                     </div>
                   ) : (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
-                      <span>{selectedRow.eocDate ? selectedRow.eocDate : (selectedRow.start ? getEOC(selectedRow.start) : 'N/A')}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '0.9em' }}>{selectedRow.eocDate ? selectedRow.eocDate : (selectedRow.start ? getEOC(selectedRow.start) : 'N/A')}</span>
                       <button
                         onClick={() => {
                           setEditingEOCDate(true);
                           setSelectedDate(parseDate(selectedRow.eocDate || (selectedRow.start ? getEOC(selectedRow.start) : null)));
                         }}
                         style={{
-                          padding: '4px',
+                          padding: '3px',
                           background: 'transparent',
                           border: 'none',
                           cursor: 'pointer',
@@ -1679,9 +1911,8 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          borderRadius: '4px',
-                          transition: 'all 0.2s ease',
-                          marginLeft: '4px'
+                          borderRadius: '3px',
+                          transition: 'all 0.2s ease'
                         }}
                         title="Edit EOC Date"
                       >
@@ -1689,16 +1920,19 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                       </button>
                     </span>
                   )}
-                </li>
-                <li>
-                  <span className="company-details-label">Status:</span>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="company-details-label" style={{ minWidth: '80px', fontWeight: '600' }}>Status:</span>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                     {statusSelect}
                     {renderStatusPill(selectedRow.status)}
                   </div>
-                </li>
-                <li><span className="company-details-label">ID:</span> {selectedRow.id || 'N/A'}</li>
-              </ul>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="company-details-label" style={{ minWidth: '80px', fontWeight: '600' }}>ID:</span>
+                  <span style={{ fontSize: '0.9em' }}>{selectedRow.id || 'N/A'}</span>
+                </div>
+              </div>
               <div className="company-details-section-grid">
                 <div className="company-details-grid-label">Report:</div>
                 {TASK_GROUPS[0].fields.map((field, idx) => {
@@ -1710,6 +1944,12 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                         className="company-details-select"
                         value={selectedRow[field.key] || ''}
                         onChange={e => handleStatusChange(selectedRow, field.key, e.target.value)}
+                        disabled={selectedRow.status === 'OnHold'}
+                        style={{
+                          opacity: selectedRow.status === 'OnHold' ? 0.5 : 1,
+                          cursor: selectedRow.status === 'OnHold' ? 'not-allowed' : 'pointer',
+                          background: selectedRow.status === 'OnHold' ? '#f5f5f5' : 'white'
+                        }}
                       >
                         <option value="">Not set</option>
                         <option value="Pending">Pending</option>
@@ -1739,6 +1979,12 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                         className="company-details-select"
                         value={selectedRow[field.key] || ''}
                         onChange={e => handleStatusChange(selectedRow, field.key, e.target.value)}
+                        disabled={selectedRow.status === 'OnHold'}
+                        style={{
+                          opacity: selectedRow.status === 'OnHold' ? 0.5 : 1,
+                          cursor: selectedRow.status === 'OnHold' ? 'not-allowed' : 'pointer',
+                          background: selectedRow.status === 'OnHold' ? '#f5f5f5' : 'white'
+                        }}
                       >
                         <option value="">Not set</option>
                         <option value="Pending">Pending</option>
@@ -1765,6 +2011,12 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                         className="company-details-select"
                         value={selectedRow[field.key] || ''}
                         onChange={e => handleStatusChange(selectedRow, field.key, e.target.value)}
+                        disabled={selectedRow.status === 'OnHold'}
+                        style={{
+                          opacity: selectedRow.status === 'OnHold' ? 0.5 : 1,
+                          cursor: selectedRow.status === 'OnHold' ? 'not-allowed' : 'pointer',
+                          background: selectedRow.status === 'OnHold' ? '#f5f5f5' : 'white'
+                        }}
                       >
                         <option value="">Not set</option>
                         <option value="Pending">Pending</option>
@@ -1791,6 +2043,12 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                         className="company-details-select"
                         value={selectedRow[field.key] || ''}
                         onChange={e => handleStatusChange(selectedRow, field.key, e.target.value)}
+                        disabled={selectedRow.status === 'OnHold'}
+                        style={{
+                          opacity: selectedRow.status === 'OnHold' ? 0.5 : 1,
+                          cursor: selectedRow.status === 'OnHold' ? 'not-allowed' : 'pointer',
+                          background: selectedRow.status === 'OnHold' ? '#f5f5f5' : 'white'
+                        }}
                       >
                         <option value="">Not set</option>
                         <option value="Pending">Pending</option>
@@ -2018,6 +2276,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
           }
         `}
       </style>
+      </div>
     </div>
   );
 } 

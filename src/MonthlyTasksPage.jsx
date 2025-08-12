@@ -296,12 +296,12 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
   const formatStartDate = (company) => {
     if (!company.start) return 'Not set';
     
-    // Parse the date and format it with full month name
+    // Parse the date and format it with abbreviated month name
     const startDate = parseDisplayDateToInput(company.start);
     if (!startDate) return company.start;
     
-    // Format as "Month DD, YYYY" (e.g., "January 1, 2025")
-    const month = startDate.toLocaleDateString('en-US', { month: 'long' });
+    // Format as "MMM DD, YYYY" (e.g., "Jan 1, 2025") for better fit
+    const month = startDate.toLocaleDateString('en-US', { month: 'short' });
     const day = startDate.getDate();
     const year = startDate.getFullYear();
     
@@ -748,120 +748,185 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
       </div>
 
       {/* Task Type Tabs */}
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '32px', justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button
-          onClick={() => setSelectedTaskType('reports')}
-          style={{
-            padding: '16px 24px',
-            borderRadius: '16px',
-            border: selectedTaskType === 'reports' ? '2.5px solid #007bff' : '1.5px solid #dee2e6',
-            background: selectedTaskType === 'reports' ? 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)' : '#fff',
-            color: selectedTaskType === 'reports' ? '#fff' : '#495057',
-            fontWeight: selectedTaskType === 'reports' ? 700 : 500,
-            fontSize: '1.1rem',
-            cursor: 'pointer',
-            boxShadow: selectedTaskType === 'reports' ? '0 4px 16px rgba(0,123,255,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
-            transition: 'all 0.3s ease',
-            minWidth: '160px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transform: selectedTaskType === 'reports' ? 'translateY(-2px)' : 'none'
-          }}
-        >
-          <span style={{ fontSize: '1.5rem' }}>📊</span> Reports
-        </button>
-        <button
-          onClick={() => setSelectedTaskType('linkBuildings')}
-          style={{
-            padding: '16px 24px',
-            borderRadius: '16px',
-            border: selectedTaskType === 'linkBuildings' ? '2.5px solid #ffc107' : '1.5px solid #dee2e6',
-            background: selectedTaskType === 'linkBuildings' ? 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)' : '#fff',
-            color: selectedTaskType === 'linkBuildings' ? '#fff' : '#495057',
-            fontWeight: selectedTaskType === 'linkBuildings' ? 700 : 500,
-            fontSize: '1.1rem',
-            cursor: 'pointer',
-            boxShadow: selectedTaskType === 'linkBuildings' ? '0 4px 16px rgba(255,193,7,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
-            transition: 'all 0.3s ease',
-            minWidth: '160px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transform: selectedTaskType === 'linkBuildings' ? 'translateY(-2px)' : 'none'
-          }}
-        >
-          <span style={{ fontSize: '1.5rem' }}>🔗</span> Link Buildings
-        </button>
-        <button
-          onClick={() => setSelectedTaskType('bookmarkings')}
-          style={{
-            padding: '16px 24px',
-            borderRadius: '16px',
-            border: selectedTaskType === 'bookmarkings' ? '2.5px solid #6f42c1' : '1.5px solid #dee2e6',
-            background: selectedTaskType === 'bookmarkings' ? 'linear-gradient(135deg, #6f42c1 0%, #5a2d91 100%)' : '#fff',
-            color: selectedTaskType === 'bookmarkings' ? '#fff' : '#495057',
-            fontWeight: selectedTaskType === 'bookmarkings' ? 700 : 500,
-            fontSize: '1.1rem',
-            cursor: 'pointer',
-            boxShadow: selectedTaskType === 'bookmarkings' ? '0 4px 16px rgba(111,66,193,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
-            transition: 'all 0.3s ease',
-            minWidth: '160px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transform: selectedTaskType === 'bookmarkings' ? 'translateY(-2px)' : 'none'
-          }}
-        >
-          <span style={{ fontSize: '1.5rem' }}>🔖</span> Bookmarkings
-        </button>
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '20px',
+        padding: '24px',
+        marginBottom: '32px',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+        border: '1px solid rgba(255, 255, 255, 0.3)'
+      }}>
+        <h3 style={{
+          margin: '0 0 20px 0',
+          fontSize: '1.3rem',
+          fontWeight: '700',
+          color: '#495057',
+          textAlign: 'center'
+        }}>
+          📋 Task Categories
+        </h3>
+        <div style={{ 
+          display: 'flex', 
+          gap: '16px', 
+          justifyContent: 'center', 
+          flexWrap: 'wrap' 
+        }}>
+          <button
+            onClick={() => setSelectedTaskType('reports')}
+            style={{
+              padding: '16px 24px',
+              borderRadius: '16px',
+              border: selectedTaskType === 'reports' ? '2.5px solid #007bff' : '1.5px solid #dee2e6',
+              background: selectedTaskType === 'reports' ? 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)' : '#fff',
+              color: selectedTaskType === 'reports' ? '#fff' : '#495057',
+              fontWeight: selectedTaskType === 'reports' ? 700 : 500,
+              fontSize: '1.1rem',
+              cursor: 'pointer',
+              boxShadow: selectedTaskType === 'reports' ? '0 4px 16px rgba(0,123,255,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'all 0.3s ease',
+              minWidth: '160px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transform: selectedTaskType === 'reports' ? 'translateY(-2px)' : 'none'
+            }}
+          >
+            <span style={{ fontSize: '1.5rem' }}>📊</span> Reports
+          </button>
+          <button
+            onClick={() => setSelectedTaskType('linkBuildings')}
+            style={{
+              padding: '16px 24px',
+              borderRadius: '16px',
+              border: selectedTaskType === 'linkBuildings' ? '2.5px solid #ffc107' : '1.5px solid #dee2e6',
+              background: selectedTaskType === 'linkBuildings' ? 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)' : '#fff',
+              color: selectedTaskType === 'linkBuildings' ? '#fff' : '#495057',
+              fontWeight: selectedTaskType === 'linkBuildings' ? 700 : 500,
+              fontSize: '1.1rem',
+              cursor: 'pointer',
+              boxShadow: selectedTaskType === 'linkBuildings' ? '0 4px 16px rgba(255,193,7,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'all 0.3s ease',
+              minWidth: '160px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transform: selectedTaskType === 'linkBuildings' ? 'translateY(-2px)' : 'none'
+            }}
+          >
+            <span style={{ fontSize: '1.5rem' }}>🔗</span> Link Buildings
+          </button>
+          <button
+            onClick={() => setSelectedTaskType('bookmarkings')}
+            style={{
+              padding: '16px 24px',
+              borderRadius: '16px',
+              border: selectedTaskType === 'bookmarkings' ? '2.5px solid #6f42c1' : '1.5px solid #dee2e6',
+              background: selectedTaskType === 'bookmarkings' ? 'linear-gradient(135deg, #6f42c1 0%, #5a2d91 100%)' : '#fff',
+              color: selectedTaskType === 'bookmarkings' ? '#fff' : '#495057',
+              fontWeight: selectedTaskType === 'bookmarkings' ? 700 : 500,
+              fontSize: '1.1rem',
+              cursor: 'pointer',
+              boxShadow: selectedTaskType === 'bookmarkings' ? '0 4px 16px rgba(111,66,193,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'all 0.3s ease',
+              minWidth: '160px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transform: selectedTaskType === 'bookmarkings' ? 'translateY(-2px)' : 'none'
+            }}
+          >
+            <span style={{ fontSize: '1.5rem' }}>🔖</span> Bookmarkings
+          </button>
+        </div>
       </div>
 
       {/* Package Selection */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24, justifyContent: 'center', flexWrap: 'wrap' }}>
-        {packageNames.map(pkg => (
-          <button
-            key={pkg}
-            onClick={() => setSelectedPackage(pkg)}
-            style={{
-              padding: '12px 20px',
-              borderRadius: 12,
-              border: selectedPackage === pkg
-                ? `3px solid ${packageColors[pkg]}`
-                : `2px solid ${packageColors[pkg]}`,
-              background: selectedPackage === pkg
-                ? `linear-gradient(135deg, ${packageColors[pkg]} 0%, ${packageColors[pkg]}dd 100%)`
-                : '#fff',
-              color: selectedPackage === pkg ? '#fff' : packageColors[pkg],
-              fontWeight: selectedPackage === pkg ? 700 : 600,
-              fontSize: '1rem',
-              cursor: 'pointer',
-              boxShadow: selectedPackage === pkg ? `0 4px 12px ${packageColors[pkg]}40` : '0 2px 8px rgba(0,0,0,0.1)',
-              transition: 'all 0.3s ease',
-              outline: 'none',
-              minWidth: 120,
-              transform: selectedPackage === pkg ? 'translateY(-1px)' : 'none'
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-              <span>{pkg.replace('SEO - ', '')}</span>
-              {selectedTaskType === 'linkBuildings' && (
-                <span style={{ 
-                  fontSize: '0.7rem', 
-                  opacity: selectedPackage === pkg ? '0.9' : '0.7',
-                  fontWeight: '500'
-                }}>
-                  {linkRequirements[pkg]} links
-                </span>
-              )}
-            </div>
-          </button>
-        ))}
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '20px',
+        padding: '24px',
+        marginBottom: '24px',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+        border: '1px solid rgba(255, 255, 255, 0.3)'
+      }}>
+        <h3 style={{
+          margin: '0 0 20px 0',
+          fontSize: '1.3rem',
+          fontWeight: '700',
+          color: '#495057',
+          textAlign: 'center'
+        }}>
+          📦 Package Selection
+        </h3>
+        <div style={{ 
+          display: 'flex', 
+          gap: 12, 
+          justifyContent: 'center', 
+          flexWrap: 'wrap' 
+        }}>
+          {packageNames.map(pkg => (
+            <button
+              key={pkg}
+              onClick={() => setSelectedPackage(pkg)}
+              style={{
+                padding: '12px 20px',
+                borderRadius: 12,
+                border: selectedPackage === pkg
+                  ? `3px solid ${packageColors[pkg]}`
+                  : `2px solid ${packageColors[pkg]}`,
+                background: selectedPackage === pkg
+                  ? `linear-gradient(135deg, ${packageColors[pkg]} 0%, ${packageColors[pkg]}dd 100%)`
+                  : '#fff',
+                color: selectedPackage === pkg ? '#fff' : packageColors[pkg],
+                fontWeight: selectedPackage === pkg ? 700 : 600,
+                fontSize: '1rem',
+                cursor: 'pointer',
+                boxShadow: selectedPackage === pkg ? `0 4px 12px ${packageColors[pkg]}40` : '0 2px 8px rgba(0,0,0,0.1)',
+                transition: 'all 0.3s ease',
+                outline: 'none',
+                minWidth: 120,
+                transform: selectedPackage === pkg ? 'translateY(-1px)' : 'none'
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                <span>{pkg.replace('SEO - ', '')}</span>
+                {selectedTaskType === 'linkBuildings' && (
+                  <span style={{ 
+                    fontSize: '0.7rem', 
+                    opacity: selectedPackage === pkg ? '0.9' : '0.7',
+                    fontWeight: '500'
+                  }}>
+                    {linkRequirements[pkg]} links
+                  </span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Links Used Toggle Button */}
       {selectedTaskType === 'linkBuildings' && (
-        <div style={{ marginBottom: '16px', textAlign: 'center' }}>
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '20px',
+          padding: '24px',
+          marginBottom: '16px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.3)',
+          textAlign: 'center'
+        }}>
+          <h3 style={{
+            margin: '0 0 16px 0',
+            fontSize: '1.3rem',
+            fontWeight: '700',
+            color: '#495057'
+          }}>
+            🔗 Link Management
+          </h3>
           <button
             onClick={() => {
               if (showMonthlyLinks) {
@@ -2169,8 +2234,8 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                     textAlign: 'center',
                     fontWeight: '700',
                     fontSize: '0.9rem',
-                    width: '140px',
-                    maxWidth: '140px',
+                    width: '160px',
+                    maxWidth: '160px',
                     position: 'relative'
                   }}>
                     <div style={{ 
@@ -2227,9 +2292,11 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                   key={company.id}
                   style={{
                     borderBottom: '1px solid #e0e7ef',
-                    background: index % 2 === 0 ? 'white' : '#f8f9fa',
+                    background: company.status === 'OnHold' ? '#f8f9fa' : (index % 2 === 0 ? 'white' : '#f8f9fa'),
                     transition: 'all 0.3s ease',
-                    position: 'relative'
+                    position: 'relative',
+                    opacity: company.status === 'OnHold' ? 0.8 : 1,
+                    borderLeft: company.status === 'OnHold' ? '4px solid #ba68c8' : 'none'
                   }}
                 >
                   <td style={{
@@ -2237,10 +2304,19 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                     fontWeight: '600',
                     fontSize: '1rem',
                     color: '#495057',
-                    position: 'relative'
+                    position: 'relative',
+                    background: company.status === 'Active' ? '#e8f5e9' : 
+                                company.status === 'OnHold' ? '#f3e5f5' : 'transparent',
+                    borderRadius: '8px',
+                    border: company.status === 'Active' ? '1px solid #c8e6c9' : 
+                           company.status === 'OnHold' ? '1px solid #e1bee7' : 'none'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span>{company.name}</span>
+                      {/* On Hold indicator */}
+                      {company.status === 'OnHold' && (
+                        <span style={{ fontSize: '0.8rem', color: '#ba68c8' }} title="Company is on hold">⏸️</span>
+                      )}
                       {/* Overall completion indicator */}
                       {(() => {
                         const taskFields = getTaskFields();
@@ -2260,8 +2336,8 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                   {selectedTaskType === 'reports' && (
                     <td style={{ 
                       padding: '20px 8px',
-                      width: '140px',
-                      maxWidth: '140px'
+                      width: '160px',
+                      maxWidth: '160px'
                     }}>
                       <div style={{ position: 'relative' }}>
                         <input
@@ -2273,7 +2349,7 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                             padding: '8px 12px 8px 36px',
                             borderRadius: '8px',
                             border: '2px solid #e0e7ef',
-                            fontSize: '0.8rem',
+                            fontSize: '0.75rem',
                             background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
                             color: '#495057',
                             fontWeight: '600',
@@ -2336,23 +2412,23 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                       <select
                         value={company[field.key] || 'Pending'}
                         onChange={(e) => handleStatusChange(selectedPackage, company.id, field.key, e.target.value)}
-                        disabled={(field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed'}
+                        disabled={(field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' || company.status === 'OnHold'}
                         style={{
                           width: '100%',
                           padding: '12px 16px',
                           borderRadius: '12px',
                           border: `2px solid ${getStatusColor(company[field.key] || 'Pending')}`,
                           fontSize: '0.9rem',
-                          background: (field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' 
+                          background: (field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' || company.status === 'OnHold'
                             ? '#f8f9fa' 
                             : `linear-gradient(135deg, ${getStatusColor(company[field.key] || 'Pending')}10 0%, ${getStatusColor(company[field.key] || 'Pending')}05 100%)`,
-                          cursor: (field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' ? 'not-allowed' : 'pointer',
+                          cursor: (field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' || company.status === 'OnHold' ? 'not-allowed' : 'pointer',
                           outline: 'none',
                           transition: 'all 0.3s ease',
                           color: getStatusColor(company[field.key] || 'Pending'),
                           fontWeight: '600',
                           boxShadow: `0 4px 12px ${getStatusColor(company[field.key] || 'Pending')}20`,
-                          opacity: (field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' ? 0.7 : 1,
+                          opacity: (field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' || company.status === 'OnHold' ? 0.7 : 1,
                           appearance: 'none',
                           backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${getStatusColor(company[field.key] || 'Pending').replace('#', '%23')}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
                           backgroundRepeat: 'no-repeat',

@@ -1,10 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 import './App.css'
 
 import { Toaster, toast } from 'sonner';
 
 import Sidebar from './Sidebar';
+
+import { loadFull } from 'tsparticles';
+
+import Particles from '@tsparticles/react';
 
 import TemplateManager from './TemplateManager';
 
@@ -71,6 +75,93 @@ import MonthlyTasksPage from './MonthlyTasksPage';
 function HomeHero({ userEmail }) {
 
   const navigate = useNavigate();
+
+  // Particles initialization
+  const particlesInit = useCallback(async (engine) => {
+    await loadFull(engine);
+  }, []);
+
+  const particlesLoaded = useCallback(async (container) => {
+    console.log('Particles loaded:', container);
+  }, []);
+
+  // Particles configuration
+  const particlesConfig = {
+    fullScreen: {
+      enable: true,
+      zIndex: 0
+    },
+    background: {
+      color: {
+        value: "transparent"
+      }
+    },
+    fpsLimit: 120,
+    interactivity: {
+      events: {
+        onClick: {
+          enable: true,
+          mode: "push"
+        },
+        onHover: {
+          enable: true,
+          mode: "repulse"
+        },
+        resize: true
+      },
+      modes: {
+        push: {
+          quantity: 4
+        },
+        repulse: {
+          distance: 200,
+          duration: 0.4
+        }
+      }
+    },
+          particles: {
+        color: {
+          value: ["#ffffff", "#e3f2fd", "#f3e5f5", "#e8f5e8", "#fff3e0", "#ffd700", "#ff69b4"]
+        },
+        links: {
+          color: "#ffffff",
+          distance: 150,
+          enable: true,
+          opacity: 0.5,
+          width: 1.5
+        },
+      collisions: {
+        enable: true
+      },
+      move: {
+        direction: "none",
+        enable: true,
+        outModes: {
+          default: "bounce"
+        },
+        random: false,
+        speed: 2,
+        straight: false
+      },
+      number: {
+        density: {
+          enable: true,
+          area: 800
+        },
+        value: 80
+      },
+      opacity: {
+        value: 0.5
+      },
+      shape: {
+        type: "circle"
+      },
+      size: {
+        value: { min: 1, max: 5 }
+      }
+    },
+    detectRetina: true
+  };
 
   // Motivational quotes for daily rotation
 
@@ -270,21 +361,58 @@ function HomeHero({ userEmail }) {
 
       justifyContent: 'center',
 
-      background: 'linear-gradient(135deg, #e0e7ef 0%, #f5f7fa 100%)',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
 
       fontFamily: 'Inter, Nunito, Poppins, Arial, sans-serif',
 
       padding: '0',
 
+      position: 'relative',
+
+      overflow: 'hidden',
+
     }}>
+
+      {/* Particles Background */}
+      <Particles
+
+        id="tsparticles"
+
+        init={particlesInit}
+
+        loaded={particlesLoaded}
+
+        options={particlesConfig}
+
+        style={{
+
+          position: 'absolute',
+
+          top: 0,
+
+          left: 0,
+
+          width: '100%',
+
+          height: '100%',
+
+          zIndex: 1,
+
+        }}
+
+      />
 
       <div style={{
 
-        background: '#fff',
+        background: 'rgba(255, 255, 255, 0.95)',
+
+        backdropFilter: 'blur(10px)',
 
         borderRadius: '2.2rem',
 
-        boxShadow: '0 4px 32px #e0e7ef',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+
+        border: '1px solid rgba(255, 255, 255, 0.2)',
 
         padding: '3.2rem 2.5rem 2.5rem 2.5rem',
 
@@ -296,7 +424,7 @@ function HomeHero({ userEmail }) {
 
         position: 'relative',
 
-        zIndex: 2,
+        zIndex: 10,
 
         margin: '2rem auto',
 
@@ -590,6 +718,8 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
   const [editId, setEditId] = useState(null);
 
   const [showAddToPackage, setShowAddToPackage] = useState(null); // company id
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
 
 
@@ -1093,13 +1223,102 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
 
   return (
 
-    <section className="company-tracker-page">
+    <div style={{
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      minHeight: '100vh',
+      position: 'relative',
+      overflow: 'visible'
+    }}>
+      <section className="company-tracker-page" style={{
+        padding: '1rem',
+        position: 'relative',
+        overflow: 'visible'
+      }}>
 
-      <h1 className="fancy-title">Company Tracker</h1>
+        {/* Background Pattern */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%)',
+          pointerEvents: 'none'
+        }} />
 
-      <p className="hero-desc">Add and manage your company names here.</p>
+      <div style={{
+        position: 'relative',
+        zIndex: 2,
+        maxWidth: '1400px',
+        margin: '0 auto',
+        height: 'calc(100vh - 2rem)',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '24px',
+        padding: '1.5rem',
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
+        border: '1px solid rgba(255, 255, 255, 0.2)'
+      }}>
 
-      <form className="company-form" onSubmit={handleAddOrEdit}>
+        {/* Header Section */}
+        <div style={{
+          textAlign: 'center',
+          marginBottom: '1.5rem',
+          paddingBottom: '1rem',
+          borderBottom: '2px solid rgba(102, 126, 234, 0.1)',
+          flexShrink: 0
+        }}>
+          <h1 style={{
+            fontSize: '2rem',
+            fontWeight: '800',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            marginBottom: '0.3rem',
+            letterSpacing: '0.02em'
+          }}>
+            🏢 Company Tracker
+          </h1>
+          <p style={{
+            fontSize: '1rem',
+            color: '#6c757d',
+            fontWeight: '500',
+            margin: 0
+          }}>
+            Manage and track your SEO companies with precision
+          </p>
+        </div>
+
+        {/* Form Section */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.8)',
+          borderRadius: '16px',
+          padding: '1.5rem',
+          marginBottom: '1.5rem',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.3)',
+          flexShrink: 0
+        }}>
+          <h3 style={{
+            fontSize: '1.1rem',
+            fontWeight: '700',
+            color: '#495057',
+            marginBottom: '1rem',
+            textAlign: 'center'
+          }}>
+            ✨ Add New Company
+          </h3>
+          <form className="company-form" onSubmit={handleAddOrEdit} style={{
+            display: 'flex',
+            gap: '1rem',
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+            flexWrap: 'wrap'
+          }}>
 
         <input
 
@@ -1813,23 +2032,52 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
 
       </form>
 
-      <div className="table-scroll-container table-responsive">
+        </div>
+
+        {/* Table Section */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.8)',
+          borderRadius: '16px',
+          padding: '1.5rem',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.3)',
+          flex: 1,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0
+        }}>
+          <h3 style={{
+            fontSize: '1.1rem',
+            fontWeight: '700',
+            color: '#495057',
+            marginBottom: '1rem',
+            textAlign: 'center',
+            flexShrink: 0
+          }}>
+            📊 Company List
+          </h3>
+          <div className="table-scroll-container table-responsive" style={{
+            flex: 1,
+            overflow: 'auto',
+            minHeight: 0
+          }}>
 
         <table className="company-table">
 
-          <thead>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(255, 255, 255, 0.95)' }}>
 
             <tr>
 
-              <th>Company Name</th>
+              <th style={{ background: 'rgba(255, 255, 255, 0.95)' }}>Company Name</th>
 
-              <th>Start Date</th>
+              <th style={{ background: 'rgba(255, 255, 255, 0.95)' }}>Start Date</th>
 
-              <th>EOC</th>
+              <th style={{ background: 'rgba(255, 255, 255, 0.95)' }}>EOC</th>
 
-              <th>Status</th>
+              <th style={{ background: 'rgba(255, 255, 255, 0.95)' }}>Status</th>
 
-              <th></th>
+              <th style={{ background: 'rgba(255, 255, 255, 0.95)' }}></th>
 
             </tr>
 
@@ -1837,13 +2085,19 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
 
           <tbody>
 
-            {companies.filter(c => c.name && c.name.trim() !== '').length === 0 && (
-
+            {/* Pagination logic */}
+            {(() => {
+              const filteredCompanies = companies.filter(c => c.name && c.name.trim() !== '');
+              const pageCount = Math.ceil(filteredCompanies.length / PAGE_SIZE);
+              const paginatedCompanies = filteredCompanies.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+              
+              return (
+                <>
+                  {filteredCompanies.length === 0 && (
               <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies yet.</td></tr>
-
             )}
 
-            {companies.filter(c => c.name && c.name.trim() !== '').map(c => (
+                  {paginatedCompanies.map(c => (
 
               <tr key={c.id} style={{ position: 'relative' }}>
 
@@ -1978,14 +2232,67 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
               </tr>
 
             ))}
+                </>
+              );
+            })()}
 
           </tbody>
 
         </table>
 
+          </div>
+          
+          {/* Pagination controls */}
+          {(() => {
+            const filteredCompanies = companies.filter(c => c.name && c.name.trim() !== '');
+            const pageCount = Math.ceil(filteredCompanies.length / PAGE_SIZE);
+            
+            return filteredCompanies.length > PAGE_SIZE ? (
+              <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8, flexShrink: 0 }}>
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  style={{
+                    background: page === 1 ? '#f0f0f0' : 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
+                    color: page === 1 ? '#bbb' : '#fff',
+                    border: page === 1 ? '1.5px solid #e0e0e0' : 'none',
+                    borderRadius: 8,
+                    fontWeight: 700,
+                    fontSize: '1em',
+                    padding: '0.5em 1.5em',
+                    cursor: page === 1 ? 'not-allowed' : 'pointer',
+                    opacity: page === 1 ? 0.7 : 1,
+                    transition: 'background 0.18s, color 0.18s',
+                  }}
+                >Prev</button>
+                <span>Page {page} of {pageCount || 1}</span>
+                <button
+                  onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+                  disabled={page === pageCount || pageCount === 0}
+                  style={{
+                    background: (page === pageCount || pageCount === 0) ? '#f0f0f0' : 'linear-gradient(90deg, #1976d2 60%, #81c784 100%)',
+                    color: (page === pageCount || pageCount === 0) ? '#bbb' : '#fff',
+                    border: (page === pageCount || pageCount === 0) ? '1.5px solid #e0e0e0' : 'none',
+                    borderRadius: 8,
+                    fontWeight: 700,
+                    fontSize: '1em',
+                    padding: '0.5em 1.5em',
+                    cursor: (page === pageCount || pageCount === 0) ? 'not-allowed' : 'pointer',
+                    opacity: (page === pageCount || pageCount === 0) ? 0.7 : 1,
+                    transition: 'background 0.18s, color 0.18s',
+                  }}
+                >Next</button>
+              </div>
+            ) : null;
+          })()}
+
+        </div>
+
       </div>
 
     </section>
+
+    </div>
 
   );
 
@@ -4611,9 +4918,21 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
              {paginatedCompanies.map(c => (
 
-               <tr key={c.id} style={{ height: '32px' }}>
+               <tr key={c.id} style={{ 
+                 height: '32px',
+                 background: c.status === 'OnHold' ? '#f8f9fa' : 'transparent',
+                 opacity: c.status === 'OnHold' ? 0.8 : 1,
+                 borderLeft: c.status === 'OnHold' ? '4px solid #ba68c8' : 'none'
+               }}>
 
-                 <td className="company-name" style={{ padding: '4px 6px' }}>
+                 <td className="company-name" style={{ 
+                   padding: '4px 6px',
+                   background: c.status === 'Active' ? '#e8f5e9' : 
+                               c.status === 'OnHold' ? '#f3e5f5' : 'transparent',
+                   borderRadius: '6px',
+                   border: c.status === 'Active' ? '1px solid #c8e6c9' : 
+                          c.status === 'OnHold' ? '1px solid #e1bee7' : 'none'
+                 }}>
 
                    {editId === c.id ? (
 
@@ -4631,7 +4950,12 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
                    ) : (
 
-                     c.name
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                       <span>{c.name}</span>
+                       {c.status === 'OnHold' && (
+                         <span style={{ fontSize: '0.8rem', color: '#ba68c8' }} title="Company is on hold">⏸️</span>
+                       )}
+                     </div>
 
                    )}
 
@@ -4765,7 +5089,18 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
                          onChange={e => handleTaskChange(c.id, key, e.target.value)}
 
-                                                         style={{ minWidth: 90, fontSize: '0.8rem', padding: '2px 4px', borderRadius: 4, border: '1px solid #e0e0e0' }}
+                         disabled={c.status === 'OnHold'}
+
+                                                         style={{ 
+                           minWidth: 90, 
+                           fontSize: '0.8rem', 
+                           padding: '2px 4px', 
+                           borderRadius: 4, 
+                           border: '1px solid #e0e0e0',
+                           opacity: c.status === 'OnHold' ? 0.5 : 1,
+                           cursor: c.status === 'OnHold' ? 'not-allowed' : 'pointer',
+                           background: c.status === 'OnHold' ? '#f5f5f5' : 'white'
+                         }}
 
                        >
 
@@ -17039,8 +17374,6 @@ function App() {
                     <span className="header-title">SEO TRACKER</span>
 
                     <nav>
-
-                      <a href="#projects">Projects</a>
 
                       <Link to="/resources">Resources</Link>
 
