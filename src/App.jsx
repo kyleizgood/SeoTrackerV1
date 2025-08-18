@@ -36,7 +36,7 @@ import Register from './Register';
 
 import { getCompanies, saveCompany, deleteCompany, getConversations } from './firestoreHelpers';
 
-import { getPackages, savePackages, getTrash, saveTrash, getTickets, saveTicket, loadHistoryLog, saveHistoryLog, clearHistoryLog, saveTemplate } from './firestoreHelpers';
+import { getPackages, savePackages, getTrash, saveTrash, getTickets, saveTicket, loadHistoryLog, saveHistoryLog, clearHistoryLog, saveTemplate, getNotesPaginated } from './firestoreHelpers';
 
 import { addBackgroundOperation } from './optimisticUI.js';
 
@@ -2101,7 +2101,7 @@ function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
 
               <tr key={c.id} style={{ position: 'relative' }}>
 
-                <td className="company-name">{c.name}</td>
+                <td className="company-name" style={{ color: darkMode ? '#f3f4f6' : 'inherit' }}>{c.name}</td>
 
                 <td>{c.start}</td>
 
@@ -2650,7 +2650,7 @@ function TicketModalForm({ ticket, onSave, onCancel }) {
 
 // New Unified Packages Component
 
-function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets, setTickets, saveTickets, user }) {
+function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets, setTickets, saveTickets, user, darkMode, setDarkMode }) {
 
   const [selectedPackage, setSelectedPackage] = useState('SEO - BASIC');
 
@@ -2766,7 +2766,7 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
   const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
 
-  const taskLabels = ['VSO', 'Revision', 'RA', 'Distribution', 'Business Profile Claiming'];
+  const taskLabels = ['VSO', 'Revision', 'Keyword Research', 'Distribution', 'Business Profile Claiming'];
 
   const taskKeys = ['forVSO', 'forRevision', 'ra', 'distribution', 'businessProfileClaiming'];
 
@@ -4890,6 +4890,12 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
                    className="package-search-input"
 
+                   style={{
+                     background: darkMode ? '#374151 !important' : '#fff !important',
+                     color: darkMode ? '#f3f4f6 !important' : '#232323 !important',
+                     border: darkMode ? '1.5px solid #4b5563 !important' : '1.5px solid #e0e0e0 !important'
+                   }}
+
                    placeholder="Search company..."
 
                    value={search}
@@ -4910,7 +4916,7 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
                <tr>
 
-                 <td className="no-companies" colSpan={6 + taskLabels.length + 1}>No companies found.</td>
+                 <td className="no-companies" colSpan={6 + taskLabels.length + 1} style={{ color: darkMode ? '#9ca3af' : 'inherit' }}>No companies found.</td>
 
                </tr>
 
@@ -4927,11 +4933,12 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
                  <td className="company-name" style={{ 
                    padding: '4px 6px',
-                   background: c.status === 'Active' ? '#e8f5e9' : 
-                               c.status === 'OnHold' ? '#f3e5f5' : 'transparent',
+                   background: c.status === 'Active' ? (darkMode ? '#065f46' : '#e8f5e9') : 
+                               c.status === 'OnHold' ? (darkMode ? '#581c87' : '#f3e5f5') : 'transparent',
                    borderRadius: '6px',
-                   border: c.status === 'Active' ? '1px solid #c8e6c9' : 
-                          c.status === 'OnHold' ? '1px solid #e1bee7' : 'none'
+                   border: c.status === 'Active' ? (darkMode ? '1px solid #059669' : '1px solid #c8e6c9') : 
+                          c.status === 'OnHold' ? (darkMode ? '1px solid #7c3aed' : '1px solid #e1bee7') : 'none',
+                   color: darkMode ? '#f3f4f6' : '#232323'
                  }}>
 
                    {editId === c.id ? (
@@ -5270,7 +5277,7 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
            >Prev</button>
 
-           <span>Page {page} of {pageCount}</span>
+           <span style={{ color: darkMode ? '#f3f4f6' : '#374151' }}>Page {page} of {pageCount}</span>
 
            <button
 
@@ -5820,7 +5827,7 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
 // Keep the original PackagePage for backward compatibility
 
-function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, tickets, setTickets, saveTickets, user }) {
+function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, tickets, setTickets, saveTickets, user, darkMode, setDarkMode }) {
 
   const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
 
@@ -5932,7 +5939,7 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, ticket
 
   // Task labels for table headers
 
-  const taskLabels = ['VSO', 'Revision', 'RA', 'Distribution', 'Business Profile Claiming'];
+  const taskLabels = ['VSO', 'Revision', 'Keyword Research', 'Distribution', 'Business Profile Claiming'];
 
   
 
@@ -7901,6 +7908,12 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, ticket
 
                   className="package-search-input"
 
+                  style={{
+                    background: darkMode ? '#374151 !important' : '#fff !important',
+                    color: darkMode ? '#f3f4f6 !important' : '#232323 !important',
+                    border: darkMode ? '1.5px solid #4b5563 !important' : '1.5px solid #e0e0e0 !important'
+                  }}
+
                   placeholder="Search company..."
 
                   value={search}
@@ -7931,7 +7944,7 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, ticket
 
               <tr key={c.id}>
 
-                <td className="company-name">
+                <td className="company-name" style={{ color: darkMode ? '#f3f4f6' : 'inherit' }}>
 
                   {editId === c.id ? (
 
@@ -9163,7 +9176,7 @@ function PackagePage({ pkg, packages, setPackages, setIsUpdatingPackages, ticket
 
             >Prev</button>
 
-            <span>Page {page} of {pageCount}</span>
+            <span style={{ color: darkMode ? '#f3f4f6' : '#374151' }}>Page {page} of {pageCount}</span>
 
             <button
 
@@ -11051,7 +11064,15 @@ function Report({ packages, setPackages }) {
 
                 className="package-search-input"
 
-                style={{ minWidth: 180, marginLeft: 16, marginBottom: 0, fontSize: '1em' }}
+                style={{ 
+                  minWidth: 180, 
+                  marginLeft: 16, 
+                  marginBottom: 0, 
+                  fontSize: '1em',
+                  background: darkMode ? '#374151 !important' : '#fff !important',
+                  color: darkMode ? '#f3f4f6 !important' : '#232323 !important',
+                  border: darkMode ? '1.5px solid #4b5563 !important' : '1.5px solid #e0e0e0 !important'
+                }}
 
                 placeholder={`Search company...`}
 
@@ -11245,7 +11266,7 @@ function Report({ packages, setPackages }) {
 
                       }}>
 
-                        <td className="company-name company-col">
+                        <td className="company-name company-col" style={{ color: darkMode ? '#f3f4f6' : 'inherit' }}>
 
                           {c.name}
 
@@ -12843,7 +12864,15 @@ function Bookmarking({ packages, setPackages }) {
 
                 className="package-search-input"
 
-                style={{ minWidth: 180, marginLeft: 16, marginBottom: 0, fontSize: '1em' }}
+                style={{ 
+                  minWidth: 180, 
+                  marginLeft: 16, 
+                  marginBottom: 0, 
+                  fontSize: '1em',
+                  background: darkMode ? '#374151 !important' : '#fff !important',
+                  color: darkMode ? '#f3f4f6 !important' : '#232323 !important',
+                  border: darkMode ? '1.5px solid #4b5563 !important' : '1.5px solid #e0e0e0 !important'
+                }}
 
                 placeholder={`Search company...`}
 
@@ -13003,7 +13032,7 @@ function Bookmarking({ packages, setPackages }) {
 
                       }}>
 
-                        <td className="company-name company-col">
+                        <td className="company-name company-col" style={{ color: darkMode ? '#f3f4f6' : 'inherit' }}>
 
                           {c.name}
 
@@ -15053,6 +15082,38 @@ function App() {
 
           });
 
+        }
+
+        // Check for overdue notes/reminders
+        try {
+          const { notes } = await getNotesPaginated(50); // Get recent notes to check for overdue
+          const overdueNotes = notes.filter(note => {
+            if (note.type === 'reminder' && note.reminderDate) {
+              const reminderDate = new Date(note.reminderDate);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0); // Start of today
+              return reminderDate < today;
+            }
+            return false;
+          });
+
+          if (overdueNotes.length > 0) {
+            allAlerts.push({
+              id: 'overdue-notes',
+              type: 'notes',
+              message: `${overdueNotes.length} overdue reminder${overdueNotes.length === 1 ? '' : 's'}`,
+              link: '/notes',
+              color: '#dc2626',
+              icon: '🚨',
+              dynamicContent: overdueNotes.map(note => ({
+                id: note.id,
+                title: note.title,
+                reminderDate: note.reminderDate
+              }))
+            });
+          }
+        } catch (error) {
+          console.error('Error checking overdue notes:', error);
         }
 
         
@@ -17401,17 +17462,17 @@ function App() {
 
                     <Route path="/company-tracker" element={user ? <CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
 
-                            <Route path="/packages" element={user ? <UnifiedPackages packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} /> : <Navigate to="/login" replace />} />
+                            <Route path="/packages" element={user ? <UnifiedPackages packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
 
         {/* Keep old routes for backward compatibility */}
 
-                                          <Route path="/seo-basic" element={user ? <PackagePage pkg="SEO - BASIC" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} /> : <Navigate to="/login" replace />} />
+                                          <Route path="/seo-basic" element={user ? <PackagePage pkg="SEO - BASIC" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
 
-                      <Route path="/seo-premium" element={user ? <PackagePage pkg="SEO - PREMIUM" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} /> : <Navigate to="/login" replace />} />
+                      <Route path="/seo-premium" element={user ? <PackagePage pkg="SEO - PREMIUM" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
 
-                      <Route path="/seo-pro" element={user ? <PackagePage pkg="SEO - PRO" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} /> : <Navigate to="/login" replace />} />
+                      <Route path="/seo-pro" element={user ? <PackagePage pkg="SEO - PRO" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
 
-                      <Route path="/seo-ultimate" element={user ? <PackagePage pkg="SEO - ULTIMATE" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} /> : <Navigate to="/login" replace />} />
+                      <Route path="/seo-ultimate" element={user ? <PackagePage pkg="SEO - ULTIMATE" packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
 
                     <Route path="/monthly-tasks" element={user ? <MonthlyTasksPage packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
 

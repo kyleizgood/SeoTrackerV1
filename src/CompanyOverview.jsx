@@ -795,12 +795,12 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
         zIndex: 2,
         maxWidth: '1400px',
         margin: '0 auto',
-        background: 'rgba(255, 255, 255, 0.95)',
+        background: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)',
         backdropFilter: 'blur(10px)',
         borderRadius: '24px',
         padding: '2.5rem',
-        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
+        boxShadow: darkMode ? '0 20px 40px rgba(0, 0, 0, 0.3)' : '0 20px 40px rgba(0, 0, 0, 0.1)',
+        border: darkMode ? '1px solid rgba(75, 85, 99, 0.3)' : '1px solid rgba(255, 255, 255, 0.2)',
         height: 'calc(100vh - 4rem)',
         overflow: 'hidden',
         display: 'flex',
@@ -832,7 +832,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
             </h1>
             <p style={{
               fontSize: '1rem',
-              color: '#6c757d',
+              color: darkMode ? '#9ca3af' : '#6c757d',
               fontWeight: '500',
               margin: '0'
             }}>
@@ -913,13 +913,13 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
         }}>
           {/* Company Status Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ fontWeight: '600', color: '#495057', fontSize: '0.9rem' }}>Company Status:</label>
+            <label style={{ fontWeight: '600', color: darkMode ? '#f3f4f6' : '#495057', fontSize: '0.9rem' }}>Company Status:</label>
             {statusOptions}
           </div>
 
           {/* Task Status Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ fontWeight: '600', color: '#495057', fontSize: '0.9rem' }}>Task Status:</label>
+            <label style={{ fontWeight: '600', color: darkMode ? '#f3f4f6' : '#495057', fontSize: '0.9rem' }}>Task Status:</label>
             <select 
               value={filter} 
               onChange={e => { setFilter(e.target.value); setPage(1); }}
@@ -941,7 +941,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
 
           {/* Package Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ fontWeight: '600', color: '#495057', fontSize: '0.9rem' }}>Package:</label>
+            <label style={{ fontWeight: '600', color: darkMode ? '#f3f4f6' : '#495057', fontSize: '0.9rem' }}>Package:</label>
             <select 
               value={packageFilter} 
               onChange={e => { setPackageFilter(e.target.value); setPage(1); }}
@@ -966,12 +966,12 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
             display: 'flex', 
             alignItems: 'center', 
             gap: '8px',
-            background: 'rgba(255, 255, 255, 0.9)',
+            background: darkMode ? 'rgba(55, 65, 81, 0.9)' : 'rgba(255, 255, 255, 0.9)',
             borderRadius: '6px',
             padding: '4px 10px',
-            border: '1px solid rgba(102, 126, 234, 0.2)'
+            border: `1px solid ${darkMode ? 'rgba(156, 163, 175, 0.3)' : 'rgba(102, 126, 234, 0.2)'}`
           }}>
-            <span style={{ fontSize: '0.9rem' }}>🔍</span>
+            <span style={{ fontSize: '0.9rem', color: darkMode ? '#d1d5db' : '#6b7280' }}>🔍</span>
             <input
               type="text"
               placeholder="Search company..."
@@ -983,7 +983,8 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                 background: 'transparent',
                 outline: 'none',
                 fontSize: '0.85rem',
-                fontWeight: '500'
+                fontWeight: '500',
+                color: darkMode ? '#f3f4f6' : '#374151'
               }}
             />
           </div>
@@ -1444,11 +1445,11 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
 `}</style>
         {/* Table Section */}
         <div style={{
-          background: 'rgba(255, 255, 255, 0.8)',
+          background: darkMode ? 'rgba(31, 41, 55, 0.8)' : 'rgba(255, 255, 255, 0.8)',
           borderRadius: '16px',
           padding: '2rem',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-          border: '1px solid rgba(255, 255, 255, 0.3)',
+          boxShadow: darkMode ? '0 8px 32px rgba(0, 0, 0, 0.2)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
+          border: darkMode ? '1px solid rgba(75, 85, 99, 0.3)' : '1px solid rgba(255, 255, 255, 0.3)',
           flex: 1,
           overflow: 'hidden',
           display: 'flex',
@@ -1458,7 +1459,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
           <h3 style={{
             fontSize: '1.3rem',
             fontWeight: '700',
-            color: '#495057',
+            color: darkMode ? '#f3f4f6' : '#495057',
             marginBottom: '1.5rem',
             textAlign: 'center',
             flexShrink: 0
@@ -1473,23 +1474,24 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
             <table style={{ 
               width: '100%', 
               borderCollapse: 'collapse',
-              background: 'rgba(255, 255, 255, 0.9)',
+              background: darkMode ? 'rgba(31, 41, 55, 0.9)' : 'rgba(255, 255, 255, 0.9)',
               borderRadius: '12px',
               overflow: 'hidden',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)'
+              boxShadow: darkMode ? '0 4px 16px rgba(0, 0, 0, 0.3)' : '0 4px 16px rgba(0, 0, 0, 0.1)',
+              color: darkMode ? '#f3f4f6' : '#374151'
             }}>
-          <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'rgba(255, 255, 255, 0.95)' }}>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)' }}>
             <tr>
-              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.95)' }}>Company Name</th>
-              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.95)' }}>Package</th>
-              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.95)' }}>Start Date</th>
-              <th style={{ padding: 12, textAlign: 'left', borderBottom: '2px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.95)' }}>EOC Date</th>
-              <th style={{ padding: 12, textAlign: 'center', borderBottom: '2px solid #e2e8f0', background: 'rgba(255, 255, 255, 0.95)' }}>Status</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: `2px solid ${darkMode ? '#4b5563' : '#e2e8f0'}`, background: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)', color: darkMode ? '#f3f4f6' : '#374151' }}>Company Name</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: `2px solid ${darkMode ? '#4b5563' : '#e2e8f0'}`, background: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)', color: darkMode ? '#f3f4f6' : '#374151' }}>Package</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: `2px solid ${darkMode ? '#4b5563' : '#e2e8f0'}`, background: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)', color: darkMode ? '#f3f4f6' : '#374151' }}>Start Date</th>
+              <th style={{ padding: 12, textAlign: 'left', borderBottom: `2px solid ${darkMode ? '#4b5563' : '#e2e8f0'}`, background: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)', color: darkMode ? '#f3f4f6' : '#374151' }}>EOC Date</th>
+              <th style={{ padding: 12, textAlign: 'center', borderBottom: `2px solid ${darkMode ? '#4b5563' : '#e2e8f0'}`, background: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)', color: darkMode ? '#f3f4f6' : '#374151' }}>Status</th>
               {TASK_GROUPS.map(group => (
-                <th key={group.key} style={{ border: '1px solid #ccc', padding: 8, background: 'rgba(255, 255, 255, 0.95)' }}>
+                <th key={group.key} style={{ border: `1px solid ${darkMode ? '#4b5563' : '#ccc'}`, padding: 8, background: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)', color: darkMode ? '#f3f4f6' : '#374151' }}>
                   {group.label}
                   {group.fields.length > 1 && (
-                    <div style={{ fontSize: '0.8em', color: '#888' }}>
+                    <div style={{ fontSize: '0.8em', color: darkMode ? '#9ca3af' : '#888' }}>
                       {group.fields.map(f => f.label).join(' / ')}
                     </div>
                   )}
@@ -1508,20 +1510,21 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                 }} onClick={() => setSelectedRow(row)}>
                   <td style={{ 
                     padding: 12,
-                    background: row.status === 'Active' ? '#e8f5e9' : 
-                                row.status === 'OnHold' ? '#f3e5f5' : 'transparent',
+                    background: row.status === 'Active' ? (darkMode ? '#065f46' : '#e8f5e9') : 
+                                row.status === 'OnHold' ? (darkMode ? '#581c87' : '#f3e5f5') : 'transparent',
                     borderRadius: '8px',
-                    border: row.status === 'Active' ? '1px solid #c8e6c9' : 
-                           row.status === 'OnHold' ? '1px solid #e1bee7' : 'none'
+                    border: row.status === 'Active' ? (darkMode ? '1px solid #059669' : '1px solid #c8e6c9') : 
+                           row.status === 'OnHold' ? (darkMode ? '1px solid #7c3aed' : '1px solid #e1bee7') : 'none',
+                    color: darkMode ? '#f3f4f6' : '#374151'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span>{row.name}</span>
                       {row.status === 'OnHold' && (
-                        <span style={{ fontSize: '0.8rem', color: '#ba68c8' }} title="Company is on hold">⏸️</span>
+                        <span style={{ fontSize: '0.8rem', color: darkMode ? '#c084fc' : '#ba68c8' }} title="Company is on hold">⏸️</span>
                       )}
                     </div>
                   </td>
-                  <td style={{ padding: 12 }}>
+                  <td style={{ padding: 12, color: darkMode ? '#f3f4f6' : '#374151' }}>
                     <span className="package-badge" style={{
                       background: PACKAGE_COLORS[row.package] || '#eee',
                       color: '#fff',
@@ -1535,15 +1538,15 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
                       {row.package}
                     </span>
                   </td>
-                  <td style={{ padding: 12 }}>{row.start || 'N/A'}</td>
-                  <td style={{ padding: 12 }}>
+                  <td style={{ padding: 12, color: darkMode ? '#f3f4f6' : '#374151' }}>{row.start || 'N/A'}</td>
+                  <td style={{ padding: 12, color: darkMode ? '#f3f4f6' : '#374151' }}>
                     {row.eocDate ? row.eocDate : (row.start ? getEOC(row.start) : 'N/A')}
                   </td>
                   <td style={{ padding: 12, textAlign: 'center' }}>
                     {renderStatusPill(row.status)}
                   </td>
                   {TASK_GROUPS.map(group => (
-                    <td key={group.key} style={{ border: '1px solid #ccc', padding: 8, textAlign: 'center' }}>
+                    <td key={group.key} style={{ border: `1px solid ${darkMode ? '#4b5563' : '#ccc'}`, padding: 8, textAlign: 'center', color: darkMode ? '#f3f4f6' : '#374151' }}>
                       {group.fields.map((field, idx) => {
                         const status = getStatusDisplay(row[field.key]);
                         let pillClass = 'status-pill';
@@ -1585,7 +1588,7 @@ export default function CompanyOverview({ darkMode, setDarkMode }) {
             transition: 'background 0.18s, color 0.18s',
           }}
         >Prev</button>
-        <span>Page {page} of {pageCount || 1}</span>
+        <span style={{ color: darkMode ? '#f3f4f6' : '#374151' }}>Page {page} of {pageCount || 1}</span>
         <button
           onClick={() => setPage(p => Math.min(pageCount, p + 1))}
           disabled={page === pageCount || pageCount === 0}

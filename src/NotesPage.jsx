@@ -43,6 +43,31 @@ function formatDate(dateStr) {
   return d.toLocaleString();
 }
 
+function formatFullDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+}
+
+function formatReminderDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+}
+
+function isOverdue(dateStr) {
+  if (!dateStr) return false;
+  return new Date(dateStr) < new Date();
+}
+
 export default function NotesPage({ darkMode, setDarkMode }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -344,7 +369,9 @@ export default function NotesPage({ darkMode, setDarkMode }) {
               onClick={() => setSelectedId(note.id)}
               style={{
                 background: selectedId === note.id ? (darkMode ? '#263043' : '#e3f2fd') : (darkMode ? '#23272e' : '#fff'),
-                borderLeft: selectedId === note.id ? '4px solid #1976d2' : '4px solid transparent',
+                borderLeft: selectedId === note.id ? '4px solid #1976d2' : 
+                           (note.type === 'reminder' && note.reminderDate && isOverdue(note.reminderDate)) ? '4px solid #dc2626' :
+                           (note.type === 'reminder' && note.reminderDate) ? '4px solid #f59e0b' : '4px solid transparent',
                 padding: '14px 18px',
                 cursor: 'pointer',
                 borderBottom: darkMode ? '1px solid #333' : '1px solid #f0f0f0',
@@ -358,13 +385,27 @@ export default function NotesPage({ darkMode, setDarkMode }) {
                 boxSizing: 'border-box',
                 marginRight: 0,
                 color: darkMode ? '#e3e3e3' : '#232323',
+                position: 'relative'
               }}
             >
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: '1.08em', color: darkMode ? '#e3e3e3' : '#232323', marginBottom: 2 }}>{note.title}</div>
                 <div style={{ fontSize: '0.98em', color: darkMode ? '#bdbdbd' : '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>{note.content}</div>
+                <div style={{ fontSize: '0.88em', color: darkMode ? '#9ca3af' : '#6b7280', marginTop: 4 }}>📅 {formatFullDate(note.createdAt)}</div>
                 {note.type === 'reminder' && note.reminderDate && (
-                  <div style={{ fontSize: '0.92em', color: darkMode ? '#ffbdbd' : '#d32f2f', marginTop: 2 }}>⏰ {formatDate(note.reminderDate)}</div>
+                  <div style={{ 
+                    fontSize: '0.94em', 
+                    color: isOverdue(note.reminderDate) ? '#dc2626' : (darkMode ? '#fbbf24' : '#d97706'), 
+                    marginTop: 6, 
+                    fontWeight: '600',
+                    background: isOverdue(note.reminderDate) ? 'rgba(220, 38, 38, 0.1)' : (darkMode ? 'rgba(251, 191, 36, 0.1)' : 'rgba(217, 119, 6, 0.1)'),
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    border: `1px solid ${isOverdue(note.reminderDate) ? 'rgba(220, 38, 38, 0.3)' : (darkMode ? 'rgba(251, 191, 36, 0.3)' : 'rgba(217, 119, 6, 0.3)')}`,
+                    display: 'inline-block'
+                  }}>
+                    {isOverdue(note.reminderDate) ? '🚨' : '⏰'} Due: {formatReminderDate(note.reminderDate)}
+                  </div>
                 )}
               </div>
               {note.priority && note.priority.trim() && (
@@ -664,10 +705,48 @@ export default function NotesPage({ darkMode, setDarkMode }) {
               <button onClick={() => handleDelete(selectedNote.id)} style={{ background: 'none', border: 'none', color: '#c00', fontSize: '1.3em', cursor: 'pointer' }} title="Delete note/reminder">🗑️</button>
             </div>
             <div style={{ fontSize: '1.13em', color: darkMode ? '#bdbdbd' : '#232323', marginBottom: 18, whiteSpace: 'pre-line' }}>{selectedNote.content}</div>
-            <div style={{ display: 'flex', gap: 18, color: darkMode ? '#aaa' : '#888', fontSize: '0.98em' }}>
-              <div>Created: {formatDate(selectedNote.createdAt)}</div>
-              <div>Updated: {formatDate(selectedNote.updatedAt)}</div>
-              {selectedNote.priority && selectedNote.priority.trim() && <div>Priority: {selectedNote.priority}</div>}
+            
+            {/* Reminder Date - Prominent Display */}
+            {selectedNote.type === 'reminder' && selectedNote.reminderDate && (
+              <div style={{ 
+                background: isOverdue(selectedNote.reminderDate) ? 
+                  (darkMode ? 'rgba(220, 38, 38, 0.15)' : 'rgba(220, 38, 38, 0.1)') : 
+                  (darkMode ? 'rgba(251, 191, 36, 0.15)' : 'rgba(217, 119, 6, 0.1)'),
+                border: `2px solid ${isOverdue(selectedNote.reminderDate) ? '#dc2626' : (darkMode ? '#fbbf24' : '#d97706')}`,
+                borderRadius: '12px',
+                padding: '16px 20px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <div style={{ fontSize: '2em' }}>
+                  {isOverdue(selectedNote.reminderDate) ? '🚨' : '⏰'}
+                </div>
+                <div>
+                  <div style={{ 
+                    fontWeight: '700', 
+                    fontSize: '1.1em', 
+                    color: isOverdue(selectedNote.reminderDate) ? '#dc2626' : (darkMode ? '#fbbf24' : '#d97706'),
+                    marginBottom: '4px'
+                  }}>
+                    {isOverdue(selectedNote.reminderDate) ? 'OVERDUE' : 'REMINDER SET'}
+                  </div>
+                  <div style={{ 
+                    fontSize: '1.05em', 
+                    fontWeight: '600',
+                    color: darkMode ? '#f3f4f6' : '#1f2937'
+                  }}>
+                    Due: {formatReminderDate(selectedNote.reminderDate)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, color: darkMode ? '#aaa' : '#888', fontSize: '0.98em', background: darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', padding: '12px 16px', borderRadius: '8px', border: darkMode ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.1)' }}>
+              <div style={{ fontWeight: '600', color: darkMode ? '#90caf9' : '#1976d2', fontSize: '1.02em' }}>📅 Created: {formatFullDate(selectedNote.createdAt)}</div>
+              <div style={{ fontSize: '0.94em' }}>📝 Updated: {formatDate(selectedNote.updatedAt)}</div>
+              {selectedNote.priority && selectedNote.priority.trim() && <div style={{ fontSize: '0.94em' }}>⭐ Priority: {selectedNote.priority}</div>}
             </div>
           </div>
         ) : (
@@ -721,10 +800,7 @@ export default function NotesPage({ darkMode, setDarkMode }) {
                     <DatePicker
                       selected={modalData?.reminderDate ? new Date(modalData.reminderDate) : null}
                       onChange={date => setModalData(d => ({ ...d, reminderDate: date ? date.toISOString() : '' }))}
-                      showTimeSelect
-                      timeFormat="HH:mm"
-                      timeIntervals={15}
-                      dateFormat="MMMM d, yyyy h:mm aa"
+                      dateFormat="MMMM d, yyyy"
                       placeholderText="Type: MM/DD/YYYY or click to pick"
                       className="custom-datepicker-input"
                       showYearDropdown

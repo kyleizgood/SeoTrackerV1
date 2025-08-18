@@ -346,7 +346,7 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
   };
 
   return (
-    <section className="company-tracker-page" style={{ width: '100%', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '2.5rem', paddingBottom: '3.5rem', marginTop: 0, background: darkMode ? '#181a1b' : '#f7f6f2' }}>
+    <section className="company-tracker-page" style={{ width: '100%', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '2.5rem', paddingBottom: '3.5rem', marginTop: 0, background: darkMode ? '#181a1b' : '#f7f6f2', color: darkMode ? '#f3f4f6' : '#374151' }}>
       {/* Alerts */}
       {showAuditBAlert && (
         <div style={{
@@ -393,7 +393,7 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
       
       {/* Header with History Button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-      <h1 className="fancy-title" style={{ textAlign: 'center', marginBottom: 10, marginTop: 0 }}>Site Audits</h1>
+      <h1 className="fancy-title" style={{ textAlign: 'center', marginBottom: 10, marginTop: 0, color: darkMode ? '#f3f4f6' : 'inherit' }}>Site Audits</h1>
         <button
           onClick={() => setShowHistory(!showHistory)}
           style={{
@@ -415,23 +415,23 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
         </button>
       </div>
       
-      <p className="hero-desc" style={{ textAlign: 'center', marginBottom: 18, marginTop: 0 }}>Companies are automatically sorted into the tables below based on their package start and EOC dates.</p>
+      <p className="hero-desc" style={{ textAlign: 'center', marginBottom: 18, marginTop: 0, color: darkMode ? '#d1d5db' : 'inherit' }}>Companies are automatically sorted into the tables below based on their package start and EOC dates.</p>
       
       {/* History Panel */}
       {showHistory && (
         <div style={{
           width: '100%',
           maxWidth: 1600,
-          background: '#ffffff',
+          background: darkMode ? '#1f2937' : '#ffffff',
           borderRadius: 12,
           padding: '20px',
           marginBottom: '20px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          border: '1px solid #e9ecef'
+          boxShadow: darkMode ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
+          border: darkMode ? '1px solid #374151' : '1px solid #e9ecef'
         }}>
-          <h3 style={{ margin: '0 0 15px 0', color: '#495057', fontSize: '1.1rem' }}>📋 Change History</h3>
+          <h3 style={{ margin: '0 0 15px 0', color: darkMode ? '#f3f4f6' : '#495057', fontSize: '1.1rem' }}>📋 Change History</h3>
           {history.length === 0 ? (
-            <p style={{ color: '#6c757d', textAlign: 'center', fontStyle: 'italic' }}>No changes recorded yet.</p>
+            <p style={{ color: darkMode ? '#9ca3af' : '#6c757d', textAlign: 'center', fontStyle: 'italic' }}>No changes recorded yet.</p>
           ) : (
             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
               {history.map((entry, index) => (
@@ -442,22 +442,22 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '12px',
-                    border: '1px solid #e9ecef',
+                    border: darkMode ? '1px solid #4b5563' : '1px solid #e9ecef',
                     borderRadius: '8px',
                     marginBottom: '8px',
-                    background: entry.action === 'reverted' ? '#fff3cd' : '#ffffff',
+                    background: entry.action === 'reverted' ? (darkMode ? '#451a03' : '#fff3cd') : (darkMode ? '#374151' : '#ffffff'),
                     borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : '4px solid #007bff'
                   }}
                 >
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: '600', color: '#495057', marginBottom: '4px' }}>
+                    <div style={{ fontWeight: '600', color: darkMode ? '#f3f4f6' : '#495057', marginBottom: '4px' }}>
                       {entry.companyName} - {entry.packageName}
                     </div>
-                    <div style={{ fontSize: '0.9rem', color: '#6c757d' }}>
+                    <div style={{ fontSize: '0.9rem', color: darkMode ? '#d1d5db' : '#6c757d' }}>
                       {entry.field}: <span style={{ color: '#dc3545' }}>{entry.oldValue}</span> → <span style={{ color: '#28a745' }}>{entry.newValue}</span>
                       {entry.action === 'reverted' && <span style={{ color: '#ffc107', marginLeft: '8px' }}>🔄 Reverted</span>}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: '#adb5bd', marginTop: '4px' }}>
+                    <div style={{ fontSize: '0.8rem', color: darkMode ? '#9ca3af' : '#adb5bd', marginTop: '4px' }}>
                       {formatTimestamp(entry.timestamp)}
                     </div>
                   </div>
@@ -518,9 +518,9 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
           style={{
             flex: '0 1 48%',
             width: '48%',
-            background: '#fff',
+            background: darkMode ? '#1f2937' : '#fff',
             borderRadius: 18,
-            boxShadow: '0 2px 16px #ececec',
+            boxShadow: darkMode ? '0 2px 16px rgba(0,0,0,0.3)' : '0 2px 16px #ececec',
             padding: '2em 1.5em',
             margin: 0,
             minWidth: 0,
@@ -529,19 +529,19 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
         >
           <h2 style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.3em', marginBottom: 18, letterSpacing: '0.04em', color: '#b26a00' }}>Site Audit B</h2>
           <div className="responsive-table-wrapper">
-            <table className="company-table report-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', background: 'rgba(255,255,255,0.98)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 12px #ececec' }}>
+            <table className="company-table report-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', background: darkMode ? 'rgba(31,41,55,0.98)' : 'rgba(255,255,255,0.98)', borderRadius: 16, overflow: 'hidden', boxShadow: darkMode ? '0 2px 12px rgba(0,0,0,0.3)' : '0 2px 12px #ececec', color: darkMode ? '#f3f4f6' : '#374151' }}>
               <thead>
-                <tr style={{ background: '#f7f6f2' }}>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Company Name</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Package</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Start Date</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Days Since Start</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Status</th>
+                <tr style={{ background: darkMode ? '#374151' : '#f7f6f2' }}>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Company Name</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Package</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Start Date</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Days Since Start</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {table1.length === 0 ? (
-                  <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies for half-year audit today.</td></tr>
+                  <tr><td colSpan={5} style={{ textAlign: 'center', color: darkMode ? '#9ca3af' : '#aaa' }}>No companies for half-year audit today.</td></tr>
                 ) : table1.map(c => {
                   const startDate = parseDisplayDateToInput(c.start);
                   const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
@@ -553,7 +553,7 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
                       background: isRecentlyChanged ? '#fff3cd' : 'transparent',
                       borderLeft: isRecentlyChanged ? '4px solid #ffc107' : 'none'
                     }}>
-                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #b26a00', letterSpacing: '0.02em', borderRadius: 8 }}>
+                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: darkMode ? 'linear-gradient(90deg, #374151 60%, #4b5563 100%)' : 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #b26a00', letterSpacing: '0.02em', borderRadius: 8, color: darkMode ? '#f3f4f6' : '#232323' }}>
                         {c.name}
                         {isRecentlyChanged && <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#ffc107' }}>🔄</span>}
                       </td>
@@ -580,9 +580,9 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
           style={{
             flex: '0 1 48%',
             width: '48%',
-            background: '#fff',
+            background: darkMode ? '#1f2937' : '#fff',
             borderRadius: 18,
-            boxShadow: '0 2px 16px #ececec',
+            boxShadow: darkMode ? '0 2px 16px rgba(0,0,0,0.3)' : '0 2px 16px #ececec',
             padding: '2em 1.5em',
             margin: 0,
             minWidth: 0,
@@ -591,19 +591,19 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
         >
           <h2 style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.3em', marginBottom: 18, letterSpacing: '0.04em', color: '#1976d2' }}>Site Audit C</h2>
           <div className="responsive-table-wrapper">
-            <table className="company-table report-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', background: 'rgba(255,255,255,0.98)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 12px #ececec' }}>
+            <table className="company-table report-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', background: darkMode ? 'rgba(31,41,55,0.98)' : 'rgba(255,255,255,0.98)', borderRadius: 16, overflow: 'hidden', boxShadow: darkMode ? '0 2px 12px rgba(0,0,0,0.3)' : '0 2px 12px #ececec', color: darkMode ? '#f3f4f6' : '#374151' }}>
               <thead>
-                <tr style={{ background: '#f7f6f2' }}>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Company Name</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Package</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Start Date</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Days Since Start</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600 }}>Status</th>
+                <tr style={{ background: darkMode ? '#374151' : '#f7f6f2' }}>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Company Name</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Package</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Start Date</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Days Since Start</th>
+                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {table2.length === 0 ? (
-                  <tr><td colSpan={5} style={{ textAlign: 'center', color: '#aaa' }}>No companies for pre-EOC audit today.</td></tr>
+                  <tr><td colSpan={5} style={{ textAlign: 'center', color: darkMode ? '#9ca3af' : '#aaa' }}>No companies for pre-EOC audit today.</td></tr>
                 ) : table2.map(c => {
                   const startDate = parseDisplayDateToInput(c.start);
                   const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
@@ -615,7 +615,7 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
                       background: isRecentlyChanged ? '#fff3cd' : 'transparent',
                       borderLeft: isRecentlyChanged ? '4px solid #ffc107' : 'none'
                     }}>
-                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #1976d2', letterSpacing: '0.02em', borderRadius: 8 }}>
+                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: darkMode ? 'linear-gradient(90deg, #374151 60%, #4b5563 100%)' : 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #1976d2', letterSpacing: '0.02em', borderRadius: 8, color: darkMode ? '#f3f4f6' : '#232323' }}>
                         {c.name}
                         {isRecentlyChanged && <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#ffc107' }}>🔄</span>}
                       </td>

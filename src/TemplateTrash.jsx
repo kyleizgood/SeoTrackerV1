@@ -93,8 +93,8 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
   ) : [];
 
   return (
-    <section className="company-tracker-page" style={{ background: darkMode ? '#181a1b' : '#f7f6f2', minHeight: '100vh', marginTop: 0 }}>
-      <h1 className="trash-header">Template Trash</h1>
+    <section className="company-tracker-page" style={{ background: darkMode ? '#181a1b' : '#f7f6f2', minHeight: '100vh', marginTop: 0, color: darkMode ? '#f3f4f6' : '#374151' }}>
+      <h1 className="trash-header" style={{ color: darkMode ? '#f3f4f6' : 'inherit' }}>Template Trash</h1>
       {(!Array.isArray(trash) || trash.length === 0) && (
         <div style={{ color: '#b00', margin: '1em 0', fontWeight: 600 }}>
           {trash.length === 0 ? 'Trash is empty or you are not logged in.' : 'Unable to load trash. Please log in.'}
@@ -105,21 +105,27 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
           <table className="company-table trash-table">
             <thead>
               <tr>
-                <th style={{ minWidth: 220 }}>
+                <th style={{ minWidth: 220, color: darkMode ? '#f3f4f6' : 'inherit', background: darkMode ? '#374151' : 'inherit' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                     <span>Title</span>
                     <input
                       type="text"
                       className="package-search-input"
-                      style={{ minWidth: 180, marginTop: 6 }}
+                      style={{ 
+                        minWidth: 180, 
+                        marginTop: 6,
+                        background: darkMode ? '#374151 !important' : '#fff !important',
+                        color: darkMode ? '#f3f4f6 !important' : '#232323 !important',
+                        border: darkMode ? '1.5px solid #4b5563 !important' : '1.5px solid #e0e0e0 !important'
+                      }}
                       placeholder="Search trashed templates..."
                       value={search}
                       onChange={e => setSearch(e.target.value)}
                     />
                   </div>
                 </th>
-                <th>Content</th>
-                <th style={{ minWidth: 120, textAlign: 'right' }}>
+                <th style={{ color: darkMode ? '#f3f4f6' : 'inherit', background: darkMode ? '#374151' : 'inherit' }}>Content</th>
+                <th style={{ minWidth: 120, textAlign: 'right', color: darkMode ? '#f3f4f6' : 'inherit', background: darkMode ? '#374151' : 'inherit' }}>
                   {trash.length > 0 && (
                     <button className="trash-action-btn delete" style={{ minWidth: 100, marginLeft: 8 }} onClick={handleDeleteAll}>
                       Delete All
@@ -130,17 +136,17 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
             </thead>
             <tbody>
               {filteredTrash.length === 0 && (
-                <tr><td colSpan={3} className="trash-empty">Trash is empty.</td></tr>
+                <tr><td colSpan={3} className="trash-empty" style={{ color: darkMode ? '#9ca3af' : 'inherit' }}>Trash is empty.</td></tr>
               )}
               {filteredTrash.map((template, idx) => (
                 <tr key={template.id || idx}>
-                  <td style={{ fontWeight: 700, fontSize: '1.13rem', color: '#232323', background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #4e342e', letterSpacing: '0.02em' }}>
+                  <td style={{ fontWeight: 700, fontSize: '1.13rem', color: darkMode ? '#f3f4f6' : '#232323', background: darkMode ? 'linear-gradient(90deg, #374151 60%, #4b5563 100%)' : 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #4e342e', letterSpacing: '0.02em' }}>
                     {template.title || template.subject || template.name || 'No Title'}
                   </td>
-                  <td style={{ maxWidth: 400, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fff8f8' }}>
+                  <td style={{ maxWidth: 400, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: darkMode ? '#1f2937' : '#fff8f8', color: darkMode ? '#d1d5db' : 'inherit' }}>
                     {template.content || template.company || template.ticketId || template.package || template.status || 'No Content'}
                   </td>
-                  <td>
+                  <td style={{ background: darkMode ? '#1f2937' : 'inherit' }}>
                     <button className="trash-action-btn restore" onClick={() => handleRestore(template)}>Restore</button>
                     <button className="trash-action-btn delete" onClick={() => handleDeleteForever(template)}>Delete Forever</button>
                   </td>
