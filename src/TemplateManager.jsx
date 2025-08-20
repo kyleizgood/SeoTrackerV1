@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { getTemplates, saveTemplate, deleteTemplate, getTrash, saveTrash, getCategories, saveCategories } from './firestoreHelpers';
+import { getTemplates, saveTemplate, saveTemplateOptimistic, deleteTemplate, deleteTemplatesBulk, getTrash, saveTrash, getCategories, saveCategories } from './firestoreHelpers';
 // Add paginated fetcher for templates
 import { getDocs, collection, query, orderBy, limit as fsLimit, startAfter as fsStartAfter } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { toast } from 'sonner';
+import './TemplateManager.css';
 
 async function getTemplatesPaginated(limitCount = 20, startAfterDoc = null) {
   const user = auth.currentUser;
@@ -56,8 +57,7 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
   const [openCategory, setOpenCategory] = useState(DEFAULT_CATEGORIES[0]);
   const [showCategoryInput, setShowCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(null); // category name or null
-
+  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState(null);
 
   // LocalStorage cache key
   const TEMPLATES_CACHE_KEY = 'templates_cache_v1';
@@ -72,13 +72,39 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       setTemplates(prev => loadMore ? [...prev, ...fetched] : fetched);
       setLastDoc(newLastDoc);
       setHasMore(more);
-      // Cache in localStorage
       if (!loadMore) localStorage.setItem(TEMPLATES_CACHE_KEY, JSON.stringify({ templates: fetched, lastDocId: newLastDoc?.id || null, ts: Date.now() }));
     } catch (e) {
-      // Optionally handle error
+      console.error('Error fetching templates:', e);
     }
     setLoading(false);
     setLoadingMore(false);
+  };
+
+  // Fix existing templates with incorrect category assignments
+  const fixExistingTemplates = async () => {
+    try {
+      const existingTemplates = templates.filter(t => 
+        t.category === 'Other' && t.customCategory && t.customCategory.trim()
+      );
+      
+      if (existingTemplates.length > 0) {
+        console.log(`Found ${existingTemplates.length} templates with incorrect category assignments`);
+        
+        for (const template of existingTemplates) {
+          const fixedTemplate = {
+            ...template,
+            category: template.customCategory.trim()
+          };
+          
+          await saveTemplateOptimistic(fixedTemplate);
+          console.log(`Fixed template: ${template.title} -> ${fixedTemplate.category}`);
+        }
+        
+        fetchTemplates(false);
+      }
+    } catch (error) {
+      console.error('Error fixing existing templates:', error);
+    }
   };
 
   // On mount: try cache, then fetch
@@ -86,13 +112,13 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
     const cache = localStorage.getItem(TEMPLATES_CACHE_KEY);
     if (cache) {
       const { templates: cachedTemplates, lastDocId, ts } = JSON.parse(cache);
-      if (Array.isArray(cachedTemplates) && Date.now() - ts < 1000 * 60 * 30) { // 30 min cache to reduce Firestore reads
+      if (Array.isArray(cachedTemplates) && Date.now() - ts < 1000 * 60 * 30) {
         setTemplates(cachedTemplates);
         setLoading(false);
-        // Still fetch latest in background with longer delay
+        fixExistingTemplates();
         setTimeout(() => {
           fetchTemplates(false);
-        }, 5000); // 5 second delay for background fetch
+        }, 5000);
         return;
       }
     }
@@ -125,22 +151,31 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!newTemplate.title.trim() || !newTemplate.content.trim()) return;
+    
+    if (newTemplate.category === 'Other' && !newTemplate.customCategory.trim()) {
+      toast.error('Please enter a custom category name');
+      return;
+    }
+
+    const finalCategory = newTemplate.category === 'Other' && newTemplate.customCategory.trim() 
+      ? newTemplate.customCategory.trim() 
+      : newTemplate.category;
 
     const template = {
       ...newTemplate,
+      category: finalCategory,
       id: Date.now(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
     try {
-      await saveTemplate(template);
+      await saveTemplateOptimistic(template);
       setTemplates(prev => [template, ...prev]);
       setNewTemplate({ title: '', content: '', category: DEFAULT_CATEGORIES[0], customCategory: '' });
       toast.success('Template added successfully');
-
     } catch (error) {
-      alert('Error adding template');
+      toast.error('Error adding template');
     }
   };
 
@@ -158,23 +193,32 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!newTemplate.title.trim() || !newTemplate.content.trim()) return;
+    
+    if (newTemplate.category === 'Other' && !newTemplate.customCategory.trim()) {
+      toast.error('Please enter a custom category name');
+      return;
+    }
+
+    const finalCategory = newTemplate.category === 'Other' && newTemplate.customCategory.trim() 
+      ? newTemplate.customCategory.trim() 
+      : newTemplate.category;
 
     const updatedTemplate = {
       ...newTemplate,
+      category: finalCategory,
       id: selectedTemplate,
       updatedAt: new Date().toISOString()
     };
 
     try {
-      await saveTemplate(updatedTemplate);
+      await saveTemplateOptimistic(updatedTemplate);
       setTemplates(prev => prev.map(t => t.id === selectedTemplate ? updatedTemplate : t));
       setNewTemplate({ title: '', content: '', category: DEFAULT_CATEGORIES[0], customCategory: '' });
       setIsEditing(false);
       setSelectedTemplate(null);
       toast.success('Template updated successfully');
-
     } catch (error) {
-      alert('Error updating template');
+      toast.error('Error updating template');
     }
   };
 
@@ -183,9 +227,8 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       await deleteTemplate(id);
       setTemplates(prev => prev.filter(t => t.id !== id));
       toast.success('Template deleted successfully');
-
     } catch (error) {
-      alert('Error deleting template');
+      toast.error('Error deleting template');
     }
   };
 
@@ -194,7 +237,6 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
     toast.success('Template copied to clipboard!');
   };
 
-  // Remove logic with confirmation
   const handleRemove = (id) => {
     setConfirmRemoveId(id);
   };
@@ -209,18 +251,13 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       setTemplates(prev => prev.filter(t => t.id !== confirmRemoveId));
       setConfirmRemoveId(null);
       toast.success('Template moved to trash successfully');
-
     } catch (error) {
-      alert('Error removing template');
+      toast.error('Error removing template');
     }
   };
 
   const handleRemoveCancel = () => {
     setConfirmRemoveId(null);
-  };
-
-  const toggleDropdown = (id) => {
-    setSelectedTemplate(selectedTemplate === id ? null : id);
   };
 
   const handleAddCategory = async (e) => {
@@ -234,248 +271,346 @@ const TemplateManager = ({ darkMode, setDarkMode }) => {
       setNewCategoryName('');
       setShowCategoryInput(false);
       toast.success('Category added successfully');
-
     } catch (error) {
-      alert('Error adding category');
+      toast.error('Error adding category');
     }
   };
 
-  // Replace handleDeleteCategory to show confirmation dialog
   const handleDeleteCategory = (cat) => {
     setConfirmDeleteCategory(cat);
   };
 
-  // Confirm and cancel handlers
   const handleDeleteCategoryConfirm = async () => {
     try {
+      const templatesInCategory = (templates || []).filter(t => t.category === confirmDeleteCategory);
+      
+      if (templatesInCategory.length > 0) {
+        console.log(`Deleting ${templatesInCategory.length} templates in category: ${confirmDeleteCategory}`);
+        
+        const templateIds = templatesInCategory.map(t => t.id);
+        await deleteTemplatesBulk(templateIds);
+        
+        setTemplates(prev => prev.filter(t => t.category !== confirmDeleteCategory));
+        localStorage.removeItem(TEMPLATES_CACHE_KEY);
+      }
+      
       const updatedCategories = categories.filter(c => c !== confirmDeleteCategory);
       await saveCategories(updatedCategories);
       setCategories(updatedCategories);
       setConfirmDeleteCategory(null);
-      toast.success('Category deleted successfully');
+      
+      toast.success(`Category "${confirmDeleteCategory}" and ${templatesInCategory.length} templates deleted successfully`);
+      
+      setTimeout(() => {
+        fetchTemplates(false);
+      }, 1000);
 
     } catch (error) {
-      alert('Error deleting category');
+      console.error('Error deleting category:', error);
+      toast.error('Error deleting category');
     }
   };
+
   const handleDeleteCategoryCancel = () => {
     setConfirmDeleteCategory(null);
   };
 
   // Group templates by category
-  const groupedTemplates = templates.reduce((acc, t) => {
+  const groupedTemplates = (templates || []).reduce((acc, t) => {
     const cat = t.category || 'Other';
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(t);
     return acc;
   }, {});
-  // Ensure 'Other' is always last in the categories and allCategories arrays
-  const categoriesWithoutOther = categories.filter(c => c !== 'Other');
-  const allCategoriesRaw = Array.from(new Set([...categoriesWithoutOther, ...Object.keys(groupedTemplates)]));
+  
+  if (!groupedTemplates['Other']) {
+    groupedTemplates['Other'] = [];
+  }
+  
+  const categoriesWithoutOther = (categories || []).filter(c => c !== 'Other');
+  const allCategoriesRaw = Array.from(new Set([
+    ...categoriesWithoutOther, 
+    ...Object.keys(groupedTemplates).filter(cat => cat !== 'Other')
+  ]));
   const allCategories = [...allCategoriesRaw.filter(c => c !== 'Other'), 'Other'];
 
   return (
-    <div className={`template-manager-2col modern-template-manager${darkMode ? ' dark' : ''}`}>
-      {/* Left: Heading, desc, and form */}
-      <div className="template-form-side template-card">
-        <h1 className="template-title">Templates</h1>
-        <p className="template-desc">Manage your templates and easily copy them when needed.</p>
-        <form onSubmit={isEditing ? handleUpdate : handleAdd} className="template-form">
+    <div className={`template-manager-modern${darkMode ? ' dark' : ''}`}>
+      <div className="template-header">
+        <h1>Template Manager</h1>
+        <p>Create, organize, and manage your templates with ease</p>
+      </div>
+
+      <div className="template-main-grid">
+        {/* Form Section */}
+        <div className="template-form-card">
+          <h2 className="template-form-title">
+            {isEditing ? 'Edit Template' : 'Create Template'}
+          </h2>
+          <p className="template-form-desc">
+            {isEditing ? 'Update your template details below' : 'Add a new template to your collection'}
+          </p>
+
+          <form onSubmit={isEditing ? handleUpdate : handleAdd}>
+            <label className="template-label">Template Title</label>
           <input
             type="text"
-            name="templateTitle"
             className="template-input"
-            placeholder="Enter template title"
+              placeholder="Enter a descriptive title"
             value={newTemplate.title}
             onChange={(e) => setNewTemplate({ ...newTemplate, title: e.target.value })}
             required
           />
+
+            <label className="template-label">Template Content</label>
           <textarea
-            name="templateContent"
             className="template-textarea"
-            placeholder="Enter template content"
+              placeholder="Enter your template content here..."
             value={newTemplate.content}
             onChange={(e) => setNewTemplate({ ...newTemplate, content: e.target.value })}
             required
           />
-          <label style={{fontWeight: 600, marginTop: 4}}>Category</label>
+
+            <label className="template-label">Category</label>
           <select
-            className="template-input"
+              className="template-select"
             value={newTemplate.category}
             onChange={e => setNewTemplate({ ...newTemplate, category: e.target.value, customCategory: '' })}
-            style={{marginBottom: newTemplate.category === 'Other' ? 8 : 16}}
           >
-            {[...categoriesWithoutOther, 'Other'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              {[...categoriesWithoutOther, 'Other'].map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
           </select>
+
           {newTemplate.category === 'Other' && (
+              <>
+                <label className="template-label">Custom Category Name</label>
             <input
               type="text"
-              name="customCategory"
               className="template-input"
-              placeholder="Enter custom category"
+                  placeholder="Enter custom category name"
               value={newTemplate.customCategory}
               onChange={e => setNewTemplate({ ...newTemplate, customCategory: e.target.value })}
               required
             />
-          )}
-          <div className="template-form-btns">
-            <button type="submit" className="template-btn primary">
-              {isEditing ? 'Update Template' : 'Add Template'}
+              </>
+            )}
+
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <button
+                type="submit"
+                className="template-button template-button-primary"
+              >
+                {isEditing ? 'Update Template' : 'Create Template'}
             </button>
             {isEditing && (
-              <button type="button" className="template-btn secondary" onClick={() => {
+                <button
+                  type="button"
+                  className="template-button template-button-secondary"
+                  onClick={() => {
                 setIsEditing(false);
-                setNewTemplate({ title: '', content: '', category: categories[0], customCategory: '' });
+                    setNewTemplate({ title: '', content: '', category: (categories || DEFAULT_CATEGORIES)[0], customCategory: '' });
                 setSelectedTemplate(null);
-              }}>
+                  }}
+                >
                 Cancel
               </button>
             )}
           </div>
         </form>
       </div>
-      {/* Right: Template list grouped by category in drawers */}
-      <div className="template-list-side template-card" style={{position: 'relative'}}>
-        <div className="template-list-header" style={{
-          display: 'flex',
-          alignItems: 'center',
-          marginBottom: '20px',
-          gap: '10px',
-        }}>
-          <h2 className="template-list-title" style={{margin: 0, padding: 0, fontSize: '1.5rem', fontWeight: 700}}>Your Templates</h2>
-          <div style={{display: 'flex', alignItems: 'center', marginLeft: 10}}>
+
+        {/* Templates Section */}
+        <div className="template-templates-card">
+          <div className="template-templates-header">
+            <h2 className="template-templates-title">Your Templates</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             {!showCategoryInput && (
               <button
-                className="template-btn primary"
-                style={{ padding: '0.3em 0.8em', fontSize: '1.1em', border: '2px solid #1976d2', borderRadius: 6 }}
-                title="Add Category"
+                  className="template-add-category-button"
                 onClick={() => setShowCategoryInput(true)}
               >
-                ➕
+                  ➕ Add Category
               </button>
             )}
             {showCategoryInput && (
-              <form onSubmit={handleAddCategory} style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 0 }}>
+                <form onSubmit={handleAddCategory} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <input
                   type="text"
-                  name="newCategoryName"
+                    className="template-input"
+                    style={{ margin: 0, width: '200px' }}
+                    placeholder="Category name"
                   value={newCategoryName}
                   onChange={e => setNewCategoryName(e.target.value)}
-                  placeholder="Category name"
                   autoFocus
-                  style={{ padding: '0.3em 0.7em', fontSize: '1em', border: '1.5px solid #1976d2', borderRadius: 6, minWidth: 90 }}
-                />
-                <button type="submit" className="template-btn primary" style={{ padding: '0.3em 0.7em', fontSize: '1em', borderRadius: 6 }}>✔</button>
-                <button type="button" className="template-btn secondary" style={{ padding: '0.3em 0.7em', fontSize: '1em', borderRadius: 6 }} onClick={() => { setShowCategoryInput(false); setNewCategoryName(""); }}>✖</button>
+                  />
+                  <button type="submit" className="template-add-category-button">✔</button>
+                  <button
+                    type="button"
+                    className="template-button template-button-secondary"
+                    style={{ margin: 0 }}
+                    onClick={() => { setShowCategoryInput(false); setNewCategoryName(""); }}
+                  >
+                    ✖
+                  </button>
               </form>
             )}
           </div>
         </div>
-        {allCategories.map(cat => (
-          <div key={cat} className="template-category-drawer">
-            <div className="template-category-header" style={{display: 'flex', alignItems: 'center', gap: 8}}>
-              <span style={{cursor: 'pointer'}} onClick={() => setOpenCategory(openCategory === cat ? null : cat)}>
-                <span className="template-category-arrow">{openCategory === cat ? '\u25bc' : '\u25ba'}</span>
-                <span className="template-category-title">{cat}</span>
-                <span className="template-category-count">({(groupedTemplates[cat] || []).length})</span>
+
+          {loading ? (
+            <div className="template-loading-state">
+              <div>Loading templates...</div>
+            </div>
+          ) : allCategories.length === 0 ? (
+            <div className="template-empty-state">
+              <h3>No categories found</h3>
+              <p>Create your first category to get started</p>
+            </div>
+          ) : (
+            allCategories.map(cat => (
+              <div key={cat} className="template-category-card">
+                <div
+                  className="template-category-header"
+                  onClick={() => setOpenCategory(openCategory === cat ? null : cat)}
+                >
+                  <div className="template-category-title">
+                    <span>{openCategory === cat ? '▼' : '▶'}</span>
+                    <span>{cat}</span>
+                    <span className="template-category-count">
+                      {(groupedTemplates[cat] || []).length}
               </span>
+                  </div>
               {cat !== 'Other' && (
                 <button
-                  className="icon-btn danger"
-                  title="Delete category"
-                  style={{marginLeft: 4, fontSize: '1.1em', padding: '0 0.5em'}} 
-                  onClick={() => handleDeleteCategory(cat)}
-                >
-                  ×
+                      className="template-delete-button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCategory(cat);
+                      }}
+                    >
+                      Delete
                 </button>
               )}
             </div>
+
             {openCategory === cat && (
-              <>
-                <div className="responsive-table-wrapper">
-                  <table className="minimal-table">
-                    <thead>
-                      <tr>
-                        <th style={{width: '30%'}}>Title</th>
-                        <th style={{width: '50%'}}>Content</th>
-                        <th style={{textAlign: 'right', width: '20%'}}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(groupedTemplates[cat] || []).length === 0 && (
-                        <tr><td colSpan={3} className="template-list-empty">No templates in this category.</td></tr>
-                      )}
-                      {(groupedTemplates[cat] || []).map(template => {
-                        const expanded = selectedTemplate === template.id;
-                        return (
-                          <React.Fragment key={template.id}>
-                            <tr className={expanded ? 'expanded-row' : ''} onClick={() => setSelectedTemplate(expanded ? null : template.id)} style={{cursor: 'pointer'}}>
-                              <td><span className="template-item-title">{template.title}</span></td>
-                              <td className="muted" style={{whiteSpace: 'pre', wordBreak: 'break-word', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis'}}>
-                                {!expanded ? (
-                                  <span className="template-preview">{template.content.length > 80 ? template.content.slice(0, 80) + '...' : template.content}</span>
-                                ) : (
-                                  <span className="template-preview">{template.content.length > 80 ? template.content.slice(0, 80) + '...' : template.content}</span>
-                                )}
-                              </td>
-                              <td style={{textAlign: 'right'}} onClick={e => e.stopPropagation()}>
-                                <button className="icon-btn" title="Edit" onClick={() => handleEdit(template)}>✏️</button>
-                                <button className="icon-btn" title="Copy" onClick={() => handleCopy(template.content)}>📋</button>
-                                <button className="icon-btn danger" title="Remove" onClick={() => handleRemove(template.id)}>🗑️</button>
-                              </td>
-                            </tr>
-                            {expanded && (
-                              <tr className="dropdown-row">
-                                <td colSpan={3} style={{background: 'var(--bg-main)', borderBottom: '1px solid var(--border)'}}>
-                                  <div className="template-dropdown-content" style={{padding: '1em 0 0.5em 0', color: 'var(--text-main)'}}>
-                                    <pre style={{margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{template.content}</pre>
+                  <div>
+                    {(groupedTemplates[cat] || []).length === 0 ? (
+                      <div className="template-empty-state">
+                        <p>No templates in this category</p>
+                      </div>
+                    ) : (
+                      (groupedTemplates[cat] || []).map(template => (
+                        <div key={template.id} className="template-item">
+                          <div className="template-item-title">
+                            {template.title || 'Untitled'}
+                          </div>
+                          <div className="template-item-content">
+                            {(template.content || '').length > 150 
+                              ? (template.content || '').slice(0, 150) + '...' 
+                              : (template.content || '')}
+                          </div>
+                          <div className="template-action-buttons">
+                            <button
+                              className="template-action-button template-action-button-edit"
+                              onClick={() => handleEdit(template)}
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              className="template-action-button template-action-button-copy"
+                              onClick={() => handleCopy(template.content || '')}
+                            >
+                              📋 Copy
+                            </button>
+                            <button
+                              className="template-action-button template-action-button-delete"
+                              onClick={() => handleRemove(template.id)}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    
+                    {hasMore && !loading && (
+                      <div style={{ padding: '1.5rem', textAlign: 'center' }}>
+                        <button
+                          onClick={() => fetchTemplates(true)}
+                          disabled={loadingMore}
+                          className="template-button template-button-primary"
+                          style={{ opacity: loadingMore ? 0.6 : 1 }}
+                        >
+                          {loadingMore ? 'Loading...' : 'Load More Templates'}
+                        </button>
                                   </div>
-                                </td>
-                              </tr>
                             )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
                 </div>
-                {/* Load more button for templates */}
-                {hasMore && !loading && (
-                  <button onClick={() => fetchTemplates(true)} disabled={loadingMore} style={{ margin: 18, padding: '10px 24px', borderRadius: 8, background: '#1976d2', color: '#fff', fontWeight: 700, border: 'none', fontSize: 16, cursor: 'pointer', opacity: loadingMore ? 0.6 : 1 }}>
-                    {loadingMore ? 'Loading...' : 'Load more templates'}
-                  </button>
                 )}
-              </>
+              </div>
+            ))
             )}
           </div>
-        ))}
       </div>
 
+      {/* Confirmation Modals */}
       {confirmRemoveId && (
-        <div className="confirm-modal-overlay">
-          <div className="confirm-modal-box">
-            <div className="confirm-title">Are you sure you want to remove this template?</div>
-            <div className="confirm-desc">It will be moved to Trash.</div>
-            <div className="confirm-btns">
-              <button className="confirm-btn delete" onClick={handleRemoveConfirm}>Yes, Remove</button>
-              <button className="confirm-btn cancel" onClick={handleRemoveCancel}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {confirmDeleteCategory && (
-        <div className="confirm-modal-overlay">
-          <div className="confirm-modal-box">
-            <div className="confirm-title">Delete Category?</div>
-            <div className="confirm-desc">Are you sure you want to delete the category <b>{confirmDeleteCategory}</b>? This will also delete all templates in this category.</div>
-            <div className="confirm-btns">
-              <button className="confirm-btn delete" onClick={handleDeleteCategoryConfirm}>Yes, Delete</button>
-              <button className="confirm-btn cancel" onClick={handleDeleteCategoryCancel}>Cancel</button>
+        <div className="template-modal">
+          <div className="template-modal-content">
+            <h3 className="template-modal-title">Delete Template?</h3>
+            <p className="template-modal-desc">
+              Are you sure you want to delete this template? It will be moved to trash.
+            </p>
+            <div className="template-modal-buttons">
+              <button
+                className="template-button template-button-secondary"
+                onClick={handleRemoveCancel}
+              >
+                Cancel
+              </button>
+              <button
+                className="template-button template-action-button-delete"
+                onClick={handleRemoveConfirm}
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
       )}
 
+      {confirmDeleteCategory && (
+        <div className="template-modal">
+          <div className="template-modal-content">
+            <h3 className="template-modal-title">Delete Category?</h3>
+            <p className="template-modal-desc">
+              Are you sure you want to delete the category <strong>{confirmDeleteCategory}</strong>? 
+              {(() => {
+                const templatesInCategory = (templates || []).filter(t => t.category === confirmDeleteCategory);
+                return templatesInCategory.length > 0 
+                  ? ` This will also delete ${templatesInCategory.length} template${templatesInCategory.length === 1 ? '' : 's'} in this category.`
+                  : ' This category is empty.';
+              })()}
+            </p>
+            <div className="template-modal-buttons">
+              <button
+                className="template-button template-button-secondary"
+                onClick={handleDeleteCategoryCancel}
+              >
+                Cancel
+              </button>
+              <button
+                className="template-button template-action-button-delete"
+                onClick={handleDeleteCategoryConfirm}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { getTrash, saveTrash, saveTemplate, saveTicket, saveCompany, getPackages, savePackages, getCategories, saveCategories, deleteTemplate } from './firestoreHelpers';
 import { toast } from 'sonner';
+import './TemplateTrash.css'; // New import for modern styles
 
 const TemplateTrash = ({ darkMode, setDarkMode }) => {
   const [trash, setTrash] = useState([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [search, setSearch] = useState('');
   const [showDeleteAll, setShowDeleteAll] = useState(false);
-
 
   useEffect(() => {
     // Fetch trash from Firestore
@@ -93,95 +93,115 @@ const TemplateTrash = ({ darkMode, setDarkMode }) => {
   ) : [];
 
   return (
-    <section className="company-tracker-page" style={{ background: darkMode ? '#181a1b' : '#f7f6f2', minHeight: '100vh', marginTop: 0, color: darkMode ? '#f3f4f6' : '#374151' }}>
-      <h1 className="trash-header" style={{ color: darkMode ? '#f3f4f6' : 'inherit' }}>Template Trash</h1>
+    <div className={`trash-modern${darkMode ? ' dark' : ''}`}>
+      <h1 className="trash-header">Template Trash</h1>
+      
       {(!Array.isArray(trash) || trash.length === 0) && (
-        <div style={{ color: '#b00', margin: '1em 0', fontWeight: 600 }}>
+        <div className="trash-empty-state">
           {trash.length === 0 ? 'Trash is empty or you are not logged in.' : 'Unable to load trash. Please log in.'}
         </div>
       )}
-      <div className="table-scroll-container table-responsive">
-        <div className="responsive-table-wrapper">
-          <table className="company-table trash-table">
-            <thead>
-              <tr>
-                <th style={{ minWidth: 220, color: darkMode ? '#f3f4f6' : 'inherit', background: darkMode ? '#374151' : 'inherit' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                    <span>Title</span>
-                    <input
-                      type="text"
-                      className="package-search-input"
-                      style={{ 
-                        minWidth: 180, 
-                        marginTop: 6,
-                        background: darkMode ? '#374151 !important' : '#fff !important',
-                        color: darkMode ? '#f3f4f6 !important' : '#232323 !important',
-                        border: darkMode ? '1.5px solid #4b5563 !important' : '1.5px solid #e0e0e0 !important'
-                      }}
-                      placeholder="Search trashed templates..."
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                    />
-                  </div>
-                </th>
-                <th style={{ color: darkMode ? '#f3f4f6' : 'inherit', background: darkMode ? '#374151' : 'inherit' }}>Content</th>
-                <th style={{ minWidth: 120, textAlign: 'right', color: darkMode ? '#f3f4f6' : 'inherit', background: darkMode ? '#374151' : 'inherit' }}>
-                  {trash.length > 0 && (
-                    <button className="trash-action-btn delete" style={{ minWidth: 100, marginLeft: 8 }} onClick={handleDeleteAll}>
-                      Delete All
-                    </button>
-                  )}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTrash.length === 0 && (
-                <tr><td colSpan={3} className="trash-empty" style={{ color: darkMode ? '#9ca3af' : 'inherit' }}>Trash is empty.</td></tr>
-              )}
-              {filteredTrash.map((template, idx) => (
-                <tr key={template.id || idx}>
-                  <td style={{ fontWeight: 700, fontSize: '1.13rem', color: darkMode ? '#f3f4f6' : '#232323', background: darkMode ? 'linear-gradient(90deg, #374151 60%, #4b5563 100%)' : 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #4e342e', letterSpacing: '0.02em' }}>
-                    {template.title || template.subject || template.name || 'No Title'}
-                  </td>
-                  <td style={{ maxWidth: 400, whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: darkMode ? '#1f2937' : '#fff8f8', color: darkMode ? '#d1d5db' : 'inherit' }}>
-                    {template.content || template.company || template.ticketId || template.package || template.status || 'No Content'}
-                  </td>
-                  <td style={{ background: darkMode ? '#1f2937' : 'inherit' }}>
-                    <button className="trash-action-btn restore" onClick={() => handleRestore(template)}>Restore</button>
-                    <button className="trash-action-btn delete" onClick={() => handleDeleteForever(template)}>Delete Forever</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      {confirmDeleteId && (
-        <div className="confirm-modal-overlay">
-          <div className="confirm-modal-box">
-            <div className="confirm-title">Are you sure you want to permanently delete this template?</div>
-            <div className="confirm-desc">This action cannot be undone.</div>
-            <div className="confirm-btns">
-              <button className="confirm-btn delete" onClick={handleDeleteConfirm}>Yes, Delete Forever</button>
-              <button className="confirm-btn cancel" onClick={handleDeleteCancel}>Cancel</button>
+
+      {Array.isArray(trash) && trash.length > 0 && (
+        <>
+          {/* Search container */}
+          <div className="trash-search-container">
+            <div className="trash-search-wrapper">
+              <span className="trash-search-icon">🔍</span>
+              <input
+                type="text"
+                className="trash-search-input"
+                placeholder="Search trashed templates..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
             </div>
           </div>
-        </div>
+
+          {/* Table container */}
+          <div className="trash-table-container">
+            <table className="trash-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Content</th>
+                  <th style={{ textAlign: 'right' }}>
+                    <button className="trash-action-btn delete-all" onClick={handleDeleteAll}>
+                      Delete All
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTrash.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="trash-empty-row">
+                      {search ? 'No templates found matching your search.' : 'Trash is empty.'}
+                    </td>
+                  </tr>
+                )}
+                {filteredTrash.map((template, idx) => (
+                  <tr key={template.id || idx}>
+                    <td className="trash-title-cell">
+                      {template.title || template.subject || template.name || 'No Title'}
+                    </td>
+                    <td className="trash-content-cell">
+                      {template.content || template.company || template.ticketId || template.package || template.status || 'No Content'}
+                    </td>
+                    <td className="trash-actions-cell">
+                      <div className="trash-action-buttons">
+                        <button className="trash-action-btn restore" onClick={() => handleRestore(template)}>
+                          Restore
+                        </button>
+                        <button className="trash-action-btn delete" onClick={() => handleDeleteForever(template)}>
+                          Delete Forever
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
-      {showDeleteAll && (
-        <div className="confirm-modal-overlay">
-          <div className="confirm-modal-box">
-            <div className="confirm-title">Are you sure you want to permanently delete all items in the trash?</div>
-            <div className="confirm-desc">This action cannot be undone.</div>
-            <div className="confirm-btns">
-              <button className="confirm-btn delete" onClick={handleDeleteAllConfirm}>Yes, Delete All</button>
-              <button className="confirm-btn cancel" onClick={handleDeleteAllCancel}>Cancel</button>
+
+      {/* Confirmation Modal for Delete */}
+      {confirmDeleteId && (
+        <div className="trash-modal-overlay">
+          <div className="trash-modal">
+            <div className="trash-modal-title">Delete Template Forever?</div>
+            <div className="trash-modal-desc">Are you sure you want to permanently delete this template? This action cannot be undone.</div>
+            <div className="trash-modal-buttons">
+              <button className="trash-modal-btn delete" onClick={handleDeleteConfirm}>
+                Yes, Delete Forever
+              </button>
+              <button className="trash-modal-btn cancel" onClick={handleDeleteCancel}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
 
-    </section>
+      {/* Confirmation Modal for Delete All */}
+      {showDeleteAll && (
+        <div className="trash-modal-overlay">
+          <div className="trash-modal">
+            <div className="trash-modal-title">Delete All Templates?</div>
+            <div className="trash-modal-desc">Are you sure you want to permanently delete all items in the trash? This action cannot be undone.</div>
+            <div className="trash-modal-buttons">
+              <button className="trash-modal-btn delete" onClick={handleDeleteAllConfirm}>
+                Yes, Delete All
+              </button>
+              <button className="trash-modal-btn cancel" onClick={handleDeleteAllCancel}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

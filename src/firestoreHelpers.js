@@ -559,7 +559,32 @@ export async function deleteTemplate(templateId) {
   }
   
   await deleteDoc(doc(db, 'users', user.uid, 'templates', templateId.toString()));
+  // Clear cache when templates are deleted
+  clearCache(`templates_${user.uid}`);
   console.log('Template deleted from Firestore (throttled)');
+}
+
+// Bulk delete templates (for category deletion)
+export async function deleteTemplatesBulk(templateIds) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not logged in');
+  
+  // Use a single throttle key for bulk operations
+  const throttleKey = `deleteTemplatesBulk_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Bulk delete templates throttled, skipping write');
+    return;
+  }
+  
+  // Delete all templates in parallel
+  const deletePromises = templateIds.map(id => 
+    deleteDoc(doc(db, 'users', user.uid, 'templates', id.toString()))
+  );
+  
+  await Promise.all(deletePromises);
+  // Clear cache when templates are deleted
+  clearCache(`templates_${user.uid}`);
+  console.log(`${templateIds.length} templates deleted from Firestore (bulk operation)`);
 }
 
 // --- TICKET HELPERS ---
@@ -867,7 +892,16 @@ export async function getPackagesPaginated(limitCount = 20, startAfterDoc = null
 export async function saveCategories(categories) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not logged in');
+  
+  // Throttle writes to prevent excessive operations
+  const throttleKey = `saveCategories_${user.uid}`;
+  if (!throttleWrite(throttleKey)) {
+    console.log('Save categories throttled, skipping write');
+    return;
+  }
+  
   await setDoc(doc(db, 'users', user.uid, 'meta', 'categories'), { categories });
+  console.log('Categories saved to Firestore (throttled)');
 }
 
 export async function getCategories() {

@@ -3,6 +3,7 @@ import { savePackages, saveHistoryLog, loadHistoryLog, clearHistoryLog } from '.
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { toast } from 'sonner';
+import './MonthlyTasksPage.css'; // New import for modern styles
 
 const packageNames = ['SEO - BASIC', 'SEO - PREMIUM', 'SEO - PRO', 'SEO - ULTIMATE'];
 const packageColors = {
@@ -717,178 +718,55 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+    <div className="monthly-tasks-modern">
       {/* Header */}
-      <div style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        borderRadius: '20px',
-        padding: '32px',
-        marginBottom: '32px',
-        color: 'white',
-        textAlign: 'center',
-        boxShadow: '0 8px 32px rgba(102, 126, 234, 0.3)',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <div style={{
-          position: 'absolute',
-          top: '-50%',
-          right: '-50%',
-          width: '200%',
-          height: '200%',
-          background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
-          animation: 'pulse 3s ease-in-out infinite'
-        }} />
-        <h1 style={{ margin: '0', fontSize: '2.5rem', fontWeight: '700', marginBottom: '8px', position: 'relative', zIndex: 1 }}>
+      <div className="monthly-tasks-header">
+        <h1 className="monthly-tasks-title">
           Monthly Tasks for {currentMonth}
         </h1>
-        <p style={{ margin: '0', fontSize: '1.2rem', opacity: '0.9', position: 'relative', zIndex: 1 }}>
+        <p className="monthly-tasks-subtitle">
           Manage your reports, link buildings, and bookmarkings in one place.
         </p>
       </div>
 
       {/* Task Type Tabs */}
-      <div style={{
-        background: 'rgba(255, 255, 255, 0.95)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: '20px',
-        padding: '24px',
-        marginBottom: '32px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-        border: '1px solid rgba(255, 255, 255, 0.3)'
-      }}>
-        <h3 style={{
-          margin: '0 0 20px 0',
-          fontSize: '1.3rem',
-          fontWeight: '700',
-          color: '#495057',
-          textAlign: 'center'
-        }}>
+      <div className="monthly-tasks-tabs">
+        <h3 className="monthly-tasks-tabs-title">
           📋 Task Categories
         </h3>
-        <div style={{ 
-          display: 'flex', 
-          gap: '16px', 
-          justifyContent: 'center', 
-          flexWrap: 'wrap' 
-        }}>
+        <div className="monthly-tasks-tabs-container">
           <button
             onClick={() => setSelectedTaskType('reports')}
-            style={{
-              padding: '16px 24px',
-              borderRadius: '16px',
-              border: selectedTaskType === 'reports' ? '2.5px solid #007bff' : '1.5px solid #dee2e6',
-              background: selectedTaskType === 'reports' ? 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)' : '#fff',
-              color: selectedTaskType === 'reports' ? '#fff' : '#495057',
-              fontWeight: selectedTaskType === 'reports' ? 700 : 500,
-              fontSize: '1.1rem',
-              cursor: 'pointer',
-              boxShadow: selectedTaskType === 'reports' ? '0 4px 16px rgba(0,123,255,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
-              transition: 'all 0.3s ease',
-              minWidth: '160px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transform: selectedTaskType === 'reports' ? 'translateY(-2px)' : 'none'
-            }}
+            className={`monthly-tasks-tab${selectedTaskType === 'reports' ? ' active' : ''}`}
           >
-            <span style={{ fontSize: '1.5rem' }}>📊</span> Reports
+            <span>📊</span> Reports
           </button>
           <button
             onClick={() => setSelectedTaskType('linkBuildings')}
-            style={{
-              padding: '16px 24px',
-              borderRadius: '16px',
-              border: selectedTaskType === 'linkBuildings' ? '2.5px solid #ffc107' : '1.5px solid #dee2e6',
-              background: selectedTaskType === 'linkBuildings' ? 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)' : '#fff',
-              color: selectedTaskType === 'linkBuildings' ? '#fff' : '#495057',
-              fontWeight: selectedTaskType === 'linkBuildings' ? 700 : 500,
-              fontSize: '1.1rem',
-              cursor: 'pointer',
-              boxShadow: selectedTaskType === 'linkBuildings' ? '0 4px 16px rgba(255,193,7,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
-              transition: 'all 0.3s ease',
-              minWidth: '160px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transform: selectedTaskType === 'linkBuildings' ? 'translateY(-2px)' : 'none'
-            }}
+            className={`monthly-tasks-tab link-buildings${selectedTaskType === 'linkBuildings' ? ' active' : ''}`}
           >
-            <span style={{ fontSize: '1.5rem' }}>🔗</span> Link Buildings
+            <span>🔗</span> Link Buildings
           </button>
           <button
             onClick={() => setSelectedTaskType('bookmarkings')}
-            style={{
-              padding: '16px 24px',
-              borderRadius: '16px',
-              border: selectedTaskType === 'bookmarkings' ? '2.5px solid #6f42c1' : '1.5px solid #dee2e6',
-              background: selectedTaskType === 'bookmarkings' ? 'linear-gradient(135deg, #6f42c1 0%, #5a2d91 100%)' : '#fff',
-              color: selectedTaskType === 'bookmarkings' ? '#fff' : '#495057',
-              fontWeight: selectedTaskType === 'bookmarkings' ? 700 : 500,
-              fontSize: '1.1rem',
-              cursor: 'pointer',
-              boxShadow: selectedTaskType === 'bookmarkings' ? '0 4px 16px rgba(111,66,193,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
-              transition: 'all 0.3s ease',
-              minWidth: '160px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transform: selectedTaskType === 'bookmarkings' ? 'translateY(-2px)' : 'none'
-            }}
+            className={`monthly-tasks-tab bookmarkings${selectedTaskType === 'bookmarkings' ? ' active' : ''}`}
           >
-            <span style={{ fontSize: '1.5rem' }}>🔖</span> Bookmarkings
+            <span>🔖</span> Bookmarkings
           </button>
         </div>
       </div>
 
       {/* Package Selection */}
-      <div style={{
-        background: 'rgba(255, 255, 255, 0.95)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: '20px',
-        padding: '24px',
-        marginBottom: '24px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-        border: '1px solid rgba(255, 255, 255, 0.3)'
-      }}>
-        <h3 style={{
-          margin: '0 0 20px 0',
-          fontSize: '1.3rem',
-          fontWeight: '700',
-          color: '#495057',
-          textAlign: 'center'
-        }}>
+      <div className="monthly-tasks-packages">
+        <h3 className="monthly-tasks-packages-title">
           📦 Package Selection
         </h3>
-        <div style={{ 
-          display: 'flex', 
-          gap: 12, 
-          justifyContent: 'center', 
-          flexWrap: 'wrap' 
-        }}>
+        <div className="monthly-tasks-packages-container">
           {packageNames.map(pkg => (
             <button
               key={pkg}
               onClick={() => setSelectedPackage(pkg)}
-              style={{
-                padding: '12px 20px',
-                borderRadius: 12,
-                border: selectedPackage === pkg
-                  ? `3px solid ${packageColors[pkg]}`
-                  : `2px solid ${packageColors[pkg]}`,
-                background: selectedPackage === pkg
-                  ? `linear-gradient(135deg, ${packageColors[pkg]} 0%, ${packageColors[pkg]}dd 100%)`
-                  : '#fff',
-                color: selectedPackage === pkg ? '#fff' : packageColors[pkg],
-                fontWeight: selectedPackage === pkg ? 700 : 600,
-                fontSize: '1rem',
-                cursor: 'pointer',
-                boxShadow: selectedPackage === pkg ? `0 4px 12px ${packageColors[pkg]}40` : '0 2px 8px rgba(0,0,0,0.1)',
-                transition: 'all 0.3s ease',
-                outline: 'none',
-                minWidth: 120,
-                transform: selectedPackage === pkg ? 'translateY(-1px)' : 'none'
-              }}
+              className={`monthly-tasks-package ${pkg.toLowerCase().replace('seo - ', '').replace(' ', '-')}${selectedPackage === pkg ? ' active' : ''}`}
             >
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                 <span>{pkg.replace('SEO - ', '')}</span>
@@ -909,22 +787,8 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
 
       {/* Links Used Toggle Button */}
       {selectedTaskType === 'linkBuildings' && (
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '20px',
-          padding: '24px',
-          marginBottom: '16px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-          border: '1px solid rgba(255, 255, 255, 0.3)',
-          textAlign: 'center'
-        }}>
-          <h3 style={{
-            margin: '0 0 16px 0',
-            fontSize: '1.3rem',
-            fontWeight: '700',
-            color: '#495057'
-          }}>
+        <div className="monthly-tasks-link-management">
+          <h3 className="monthly-tasks-link-management-title">
             🔗 Link Management
           </h3>
           <button
@@ -938,23 +802,9 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                 setShowMonthlyLinks(true);
               }
             }}
-            style={{
-              padding: '12px 24px',
-              borderRadius: '12px',
-              border: '2px solid #e0e7ef',
-              background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-              color: '#495057',
-              fontWeight: '600',
-              fontSize: '1rem',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-            }}
+            className="monthly-tasks-link-toggle"
           >
-            <span style={{ fontSize: '1.2rem' }}>🔗</span>
+            <span>🔗</span>
             <span>Links used</span>
             <span style={{ fontSize: '0.9rem', opacity: '0.7' }}>
               {showMonthlyLinks ? 'Hide' : 'Show'}
@@ -1300,34 +1150,12 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
       )}
 
       {/* Analytics Toggle Button */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        marginBottom: '20px' 
-      }}>
+      <div className="monthly-tasks-analytics-toggle">
         <button
           onClick={() => setShowAnalytics(!showAnalytics)}
-          style={{
-            padding: '12px 24px',
-            borderRadius: '12px',
-            border: '2px solid #667eea',
-            background: showAnalytics 
-              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
-              : '#fff',
-            color: showAnalytics ? '#fff' : '#667eea',
-            fontWeight: '600',
-            fontSize: '1rem',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.2)',
-            transition: 'all 0.3s ease',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            minWidth: '200px',
-            justifyContent: 'center'
-          }}
+          className={`monthly-tasks-analytics-btn${showAnalytics ? ' active' : ''}`}
         >
-          <span style={{ fontSize: '1.2rem' }}>
+          <span>
             {showAnalytics ? '📊' : '📈'}
           </span>
           <span>
@@ -1943,62 +1771,25 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
       )}
 
       {/* Search and History Controls */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: '24px',
-        flexWrap: 'wrap',
-        gap: '16px'
-      }}>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <div style={{ position: 'relative' }}>
+      <div className="monthly-tasks-controls">
+        <div className="monthly-tasks-search-container">
+          <div className="monthly-tasks-search">
             <input
               type="text"
               placeholder={`Search companies in ${selectedPackage}...`}
               value={search[selectedPackage] || ''}
               onChange={(e) => setSearch(prev => ({ ...prev, [selectedPackage]: e.target.value }))}
-              style={{
-                padding: '12px 16px 12px 48px',
-                borderRadius: '12px',
-                border: '2px solid #e0e7ef',
-                fontSize: '1rem',
-                minWidth: '300px',
-                outline: 'none',
-                transition: 'all 0.3s ease',
-                background: '#fff',
-                color: '#495057'
-              }}
+              className="monthly-tasks-search-input"
               onFocus={(e) => e.target.style.borderColor = '#007bff'}
               onBlur={(e) => e.target.style.borderColor = '#e0e7ef'}
             />
-            <span style={{
-              position: 'absolute',
-              left: '16px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              fontSize: '1.2rem',
-              color: '#6c757d'
-            }}>
+            <span className="monthly-tasks-search-icon">
               🔍
             </span>
           </div>
           <button
             onClick={() => setShowHistory(!showHistory)}
-            style={{
-              padding: '12px 16px',
-              borderRadius: '12px',
-              border: '2px solid #6c757d',
-              background: showHistory ? 'linear-gradient(135deg, #6c757d 0%, #5a6268 100%)' : '#fff',
-              color: showHistory ? '#fff' : '#6c757d',
-              fontWeight: 600,
-              fontSize: '1rem',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
+            className={`monthly-tasks-history-btn${showHistory ? ' active' : ''}`}
           >
             <span>📋</span>
             {showHistory ? 'Hide History' : 'Show History'}
@@ -2006,20 +1797,7 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
           {showHistory && (
             <button
               onClick={() => setClearHistoryModal(true)}
-              style={{
-                padding: '12px 16px',
-                borderRadius: '12px',
-                border: '2px solid #dc3545',
-                background: '#fff',
-                color: '#dc3545',
-                fontWeight: 600,
-                fontSize: '1rem',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
+              className="monthly-tasks-clear-history-btn"
             >
               <span>🗑️</span>
               Clear History
@@ -2030,64 +1808,39 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
 
       {/* History Section */}
       {showHistory && (
-        <div style={{
-          background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-          borderRadius: '16px',
-          padding: '24px',
-          marginBottom: '24px',
-          border: '1px solid #e0e7ef',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-        }}>
-          <h3 style={{ margin: '0 0 16px 0', color: '#495057', fontSize: '1.2rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="monthly-tasks-history">
+          <h3 className="monthly-tasks-history-title">
             <span>📊</span> Recent Changes
           </h3>
-          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+          <div className="monthly-tasks-history-content">
             {history.length === 0 ? (
-              <p style={{ color: '#6c757d', fontStyle: 'italic', textAlign: 'center', padding: '20px' }}>No recent changes</p>
+              <p className="monthly-tasks-history-empty">No recent changes</p>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <table className="monthly-tasks-history-table">
                 <thead>
-                  <tr style={{ 
-                    borderBottom: '2px solid #dee2e6',
-                    background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)'
-                  }}>
-                    <th style={{ padding: '12px', textAlign: 'left', color: '#495057', fontWeight: '600' }}>⏰ Time</th>
-                    <th style={{ padding: '12px', textAlign: 'left', color: '#495057', fontWeight: '600' }}>🏢 Company</th>
-                    <th style={{ padding: '12px', textAlign: 'left', color: '#495057', fontWeight: '600' }}>📦 Package</th>
-                    <th style={{ padding: '12px', textAlign: 'left', color: '#495057', fontWeight: '600' }}>📝 Field</th>
-                    <th style={{ padding: '12px', textAlign: 'left', color: '#495057', fontWeight: '600' }}>🔄 Old Value</th>
-                    <th style={{ padding: '12px', textAlign: 'left', color: '#495057', fontWeight: '600' }}>✨ New Value</th>
-                    <th style={{ padding: '12px', textAlign: 'left', color: '#495057', fontWeight: '600' }}>⚡ Action</th>
+                  <tr>
+                    <th>⏰ Time</th>
+                    <th>🏢 Company</th>
+                    <th>📦 Package</th>
+                    <th>📝 Field</th>
+                    <th>🔄 Old Value</th>
+                    <th>✨ New Value</th>
+                    <th>⚡ Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {history.map(entry => (
-                    <tr key={entry.id} style={{ 
-                      borderBottom: '1px solid #dee2e6',
-                      background: 'white',
-                      transition: 'background-color 0.2s ease'
-                    }}>
-                      <td style={{ padding: '12px', fontSize: '0.9rem', color: '#6c757d' }}>
-                        {formatTimestamp(entry.timestamp)}
-                      </td>
-                      <td style={{ padding: '12px', fontWeight: '500' }}>{entry.companyName}</td>
-                      <td style={{ padding: '12px', color: '#6c757d' }}>{entry.packageName}</td>
-                      <td style={{ padding: '12px', color: '#6c757d' }}>{entry.field}</td>
-                      <td style={{ padding: '12px', color: '#6c757d' }}>{entry.oldValue}</td>
-                      <td style={{ padding: '12px', color: '#6c757d' }}>{entry.newValue}</td>
-                      <td style={{ padding: '12px' }}>
+                    <tr key={entry.id}>
+                      <td>{formatTimestamp(entry.timestamp)}</td>
+                      <td>{entry.companyName}</td>
+                      <td>{entry.packageName}</td>
+                      <td>{entry.field}</td>
+                      <td>{entry.oldValue}</td>
+                      <td>{entry.newValue}</td>
+                      <td>
                         <button
                           onClick={() => revertChange(entry)}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: '6px',
-                            border: '1px solid #007bff',
-                            background: '#fff',
-                            color: '#007bff',
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                          }}
+                          className="monthly-tasks-history-revert-btn"
                         >
                           🔄 Revert
                         </button>
@@ -2102,49 +1855,25 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
       )}
 
       {/* Companies Table */}
-      <div style={{
-        background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-        borderRadius: '20px',
-        padding: '24px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-        overflow: 'auto',
-        border: '1px solid #e0e7ef'
-      }}>
+      <div className="monthly-tasks-table-container">
         {filteredCompanies.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
-            <div style={{ fontSize: '4rem', marginBottom: '16px' }}>📭</div>
-            <p style={{ fontStyle: 'italic', fontSize: '1.1rem', margin: '0' }}>
+          <div className="monthly-tasks-table-empty">
+            <div className="monthly-tasks-table-empty-icon">📭</div>
+            <p className="monthly-tasks-table-empty-text">
               No companies found for {selectedPackage} or matching your search.
             </p>
           </div>
         ) : (
           <>
             {/* Status Filter Bar */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '20px',
-              padding: '16px 20px',
-              background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-              borderRadius: '12px',
-              border: '1px solid #dee2e6',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-            }}>
+            <div className="monthly-tasks-status-filter">
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ 
-                  color: '#495057', 
-                  fontSize: '0.95rem', 
-                  fontWeight: '600',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}>
+                <span className="monthly-tasks-status-filter-label">
                   🔍 Filter by Status:
                 </span>
                 
                 {/* Status Filter Buttons */}
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div className="monthly-tasks-status-filter-buttons">
                   {[
                     { value: 'all', label: 'All', icon: '📋', color: '#6c757d' },
                     { value: 'Pending', label: 'Pending', icon: '⏳', color: '#ffc107' },
@@ -2154,35 +1883,8 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                     <button
                       key={filter.value}
                       onClick={() => setStatusFilter(filter.value)}
-                      style={{
-                        padding: '8px 16px',
-                        borderRadius: '8px',
-                        border: `2px solid ${statusFilter === filter.value ? filter.color : '#dee2e6'}`,
-                        background: statusFilter === filter.value 
-                          ? `linear-gradient(135deg, ${filter.color} 0%, ${filter.color}dd 100%)`
-                          : 'white',
-                        color: statusFilter === filter.value ? 'white' : '#495057',
-                        fontWeight: '600',
-                        fontSize: '0.85rem',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s ease',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        minWidth: 'fit-content'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (statusFilter !== filter.value) {
-                          e.target.style.borderColor = filter.color;
-                          e.target.style.transform = 'translateY(-1px)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (statusFilter !== filter.value) {
-                          e.target.style.borderColor = '#dee2e6';
-                          e.target.style.transform = 'translateY(0)';
-                        }
-                      }}
+                      className={`monthly-tasks-status-filter-btn${statusFilter === filter.value ? ' active' : ''}`}
+                      style={{ color: filter.color, borderColor: statusFilter === filter.value ? filter.color : '#dee2e6' }}
                     >
                       <span>{filter.icon}</span>
                       {filter.label}
@@ -2192,13 +1894,7 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
               </div>
               
               {/* Filter Summary */}
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '8px',
-                color: '#6c757d',
-                fontSize: '0.9rem'
-              }}>
+              <div className="monthly-tasks-status-filter-summary">
                 <span>📊</span>
                 <span>
                   {statusFilter === 'all' 
@@ -2209,31 +1905,14 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
               </div>
             </div>
 
-            <table style={{ 
-              width: '100%', 
-              borderCollapse: 'collapse',
-              tableLayout: 'fixed'
-            }}>
+            <table className="monthly-tasks-table">
             <thead>
-              <tr style={{
-                borderBottom: '2px solid #dee2e6',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white'
-              }}>
-                <th style={{
-                  padding: '20px 16px',
-                  textAlign: 'left',
-                  fontWeight: '700',
-                  fontSize: '1.1rem'
-                }}>
+              <tr>
+                <th>
                   🏢 Company Name
                 </th>
                 {selectedTaskType === 'reports' && (
                   <th style={{
-                    padding: '20px 12px',
-                    textAlign: 'center',
-                    fontWeight: '700',
-                    fontSize: '0.9rem',
                     width: '160px',
                     maxWidth: '160px',
                     position: 'relative'
@@ -2245,23 +1924,13 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                       gap: '6px',
                       position: 'relative'
                     }}>
-                      <span style={{ 
-                        fontSize: '1rem',
-                        filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))'
-                      }}>📅</span>
-                      <span style={{ 
-                        textShadow: '0 1px 2px rgba(0,0,0,0.1)'
-                      }}>Start Date</span>
+                      <span>📅</span>
+                      <span>Start Date</span>
                     </div>
                   </th>
                 )}
                 {taskFields.map(field => (
-                  <th key={field.key} style={{
-                    padding: '20px 16px',
-                    textAlign: 'left',
-                    fontWeight: '700',
-                    fontSize: '1.1rem'
-                  }}>
+                  <th key={field.key}>
                     {field.icon} {field.label}
                   </th>
                 ))}
@@ -2290,34 +1959,17 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                 paginatedCompanies.map((company, index) => (
                 <tr
                   key={company.id}
-                  style={{
-                    borderBottom: '1px solid #e0e7ef',
-                    background: company.status === 'OnHold' ? '#f8f9fa' : (index % 2 === 0 ? 'white' : '#f8f9fa'),
-                    transition: 'all 0.3s ease',
-                    position: 'relative',
-                    opacity: company.status === 'OnHold' ? 0.8 : 1,
-                    borderLeft: company.status === 'OnHold' ? '4px solid #ba68c8' : 'none'
-                  }}
+                  className={company.status === 'OnHold' ? 'onhold' : ''}
                 >
-                  <td style={{
-                    padding: '20px 16px',
-                    fontWeight: '600',
-                    fontSize: '1rem',
-                    color: '#495057',
-                    position: 'relative',
-                    background: company.status === 'Active' ? '#e8f5e9' : 
-                                company.status === 'OnHold' ? '#f3e5f5' : 'transparent',
-                    borderRadius: '8px',
-                    border: company.status === 'Active' ? '1px solid #c8e6c9' : 
-                           company.status === 'OnHold' ? '1px solid #e1bee7' : 'none'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <td className={`monthly-tasks-company-cell${company.status === 'OnHold' ? ' onhold' : ''}`}>
+                    <div className="monthly-tasks-company-content">
                       <span>{company.name}</span>
                       {/* On Hold indicator */}
                       {company.status === 'OnHold' && (
                         <span style={{ fontSize: '0.8rem', color: '#ba68c8' }} title="Company is on hold">⏸️</span>
                       )}
                       {/* Overall completion indicator */}
+                      <div className="monthly-tasks-company-indicators">
                       {(() => {
                         const taskFields = getTaskFields();
                         const completedTasks = taskFields.filter(field => company[field.key] === 'Completed').length;
@@ -2331,6 +1983,7 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                           return <span style={{ fontSize: '0.8rem', color: '#007bff' }}>🔄</span>;
                         }
                       })()}
+                      </div>
                     </div>
                   </td>
                   {selectedTaskType === 'reports' && (
@@ -2413,48 +2066,10 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                         value={company[field.key] || 'Pending'}
                         onChange={(e) => handleStatusChange(selectedPackage, company.id, field.key, e.target.value)}
                         disabled={(field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' || company.status === 'OnHold'}
+                        className={`monthly-tasks-status-select ${(company[field.key] || 'Pending').toLowerCase()}`}
                         style={{
-                          width: '100%',
-                          padding: '12px 16px',
-                          borderRadius: '12px',
-                          border: `2px solid ${getStatusColor(company[field.key] || 'Pending')}`,
-                          fontSize: '0.9rem',
-                          background: (field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' || company.status === 'OnHold'
-                            ? '#f8f9fa' 
-                            : `linear-gradient(135deg, ${getStatusColor(company[field.key] || 'Pending')}10 0%, ${getStatusColor(company[field.key] || 'Pending')}05 100%)`,
-                          cursor: (field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' || company.status === 'OnHold' ? 'not-allowed' : 'pointer',
-                          outline: 'none',
-                          transition: 'all 0.3s ease',
                           color: getStatusColor(company[field.key] || 'Pending'),
-                          fontWeight: '600',
-                          boxShadow: `0 4px 12px ${getStatusColor(company[field.key] || 'Pending')}20`,
-                          opacity: (field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed' || company.status === 'OnHold' ? 0.7 : 1,
-                          appearance: 'none',
-                          backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${getStatusColor(company[field.key] || 'Pending').replace('#', '%23')}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'right 12px center',
-                          backgroundSize: '16px',
-                          paddingRight: '40px'
-                        }}
-                        onFocus={(e) => {
-                          e.target.style.transform = 'translateY(-2px)';
-                          e.target.style.boxShadow = `0 6px 20px ${getStatusColor(company[field.key] || 'Pending')}30`;
-                        }}
-                        onBlur={(e) => {
-                          e.target.style.transform = 'translateY(0)';
-                          e.target.style.boxShadow = `0 4px 12px ${getStatusColor(company[field.key] || 'Pending')}20`;
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!((field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed')) {
-                            e.target.style.transform = 'translateY(-1px)';
-                            e.target.style.boxShadow = `0 6px 16px ${getStatusColor(company[field.key] || 'Pending')}25`;
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!((field.key === 'reportII' || field.key === 'bmCreation') && company[field.key] === 'Completed')) {
-                            e.target.style.transform = 'translateY(0)';
-                            e.target.style.boxShadow = `0 4px 12px ${getStatusColor(company[field.key] || 'Pending')}20`;
-                          }
+                          borderColor: getStatusColor(company[field.key] || 'Pending')
                         }}
                       >
                         {selectedTaskType === 'reports' ? (
@@ -2488,62 +2103,21 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                       {field.key === 'reportII' && 
                        shouldShowReadyForReportII(company) && 
                        company[field.key] !== 'Completed' && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '-8px',
-                          right: '-8px',
-                          background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)',
-                          color: 'white',
-                          padding: '4px 8px',
-                          borderRadius: '12px',
-                          fontSize: '0.65rem',
-                          fontWeight: '600',
-                          boxShadow: '0 2px 8px rgba(255, 107, 107, 0.3)',
-                          zIndex: 10,
-                          animation: 'pulse 2s ease-in-out infinite',
-                          border: '2px solid white',
-                          whiteSpace: 'nowrap'
-                        }}>
+                        <div className="monthly-tasks-badge ready">
                           📋 Ready for Report II
                         </div>
                       )}
                       
                       {/* Report II Completed Badge */}
                       {field.key === 'reportII' && company[field.key] === 'Completed' && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '-8px',
-                          right: '-8px',
-                          background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
-                          color: 'white',
-                          padding: '4px 8px',
-                          borderRadius: '12px',
-                          fontSize: '0.7rem',
-                          fontWeight: '600',
-                          boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)',
-                          zIndex: 10,
-                          border: '2px solid white'
-                        }}>
+                        <div className="monthly-tasks-badge done">
                           ✅ Done
                         </div>
                       )}
 
                       {/* BM Creation Completed Badge */}
                       {field.key === 'bmCreation' && company[field.key] === 'Completed' && (
-                        <div style={{
-                          position: 'absolute',
-                          top: '-8px',
-                          right: '-8px',
-                          background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
-                          color: 'white',
-                          padding: '4px 8px',
-                          borderRadius: '12px',
-                          fontSize: '0.7rem',
-                          fontWeight: '600',
-                          boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)',
-                          zIndex: 10,
-                          border: '2px solid white'
-                        }}>
+                        <div className="monthly-tasks-badge done">
                           ✅ Done
                         </div>
                       )}
@@ -2560,44 +2134,23 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
 
       {/* Pagination Controls */}
       {filteredCompanies.length > companiesPerPage && (
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: '24px',
-          padding: '16px 24px',
-          background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-          borderRadius: '16px',
-          border: '1px solid #dee2e6',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#6c757d', fontSize: '0.9rem' }}>
+        <div className="monthly-tasks-pagination">
+          <div className="monthly-tasks-pagination-info">
+            <span>
               Showing {startIndex + 1} to {Math.min(endIndex, filteredCompanies.length)} of {filteredCompanies.length} companies
             </span>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="monthly-tasks-pagination-controls">
             <button
               onClick={goToPreviousPage}
               disabled={currentPage === 1}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '8px',
-                border: '2px solid #007bff',
-                background: currentPage === 1 ? '#f8f9fa' : 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)',
-                color: currentPage === 1 ? '#6c757d' : 'white',
-                fontWeight: '600',
-                fontSize: '0.9rem',
-                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                opacity: currentPage === 1 ? 0.6 : 1
-              }}
+              className="monthly-tasks-pagination-btn"
             >
               ← Previous
             </button>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div className="monthly-tasks-pagination-pages">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let pageNum;
                 if (totalPages <= 5) {
@@ -2614,20 +2167,7 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
                   <button
                     key={pageNum}
                     onClick={() => goToPage(pageNum)}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      border: '2px solid #dee2e6',
-                      background: currentPage === pageNum 
-                        ? 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)' 
-                        : 'white',
-                      color: currentPage === pageNum ? 'white' : '#495057',
-                      fontWeight: '600',
-                      fontSize: '0.9rem',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s ease',
-                      minWidth: '40px'
-                    }}
+                    className={`monthly-tasks-pagination-page${currentPage === pageNum ? ' active' : ''}`}
                   >
                     {pageNum}
                   </button>
@@ -2638,18 +2178,7 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
             <button
               onClick={goToNextPage}
               disabled={currentPage === totalPages}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '8px',
-                border: '2px solid #007bff',
-                background: currentPage === totalPages ? '#f8f9fa' : 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)',
-                color: currentPage === totalPages ? '#6c757d' : 'white',
-                fontWeight: '600',
-                fontSize: '0.9rem',
-                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                opacity: currentPage === totalPages ? 0.6 : 1
-              }}
+              className="monthly-tasks-pagination-btn"
             >
               Next →
             </button>
@@ -2659,65 +2188,27 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
 
       {/* Modals */}
       {confirmModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-            borderRadius: '20px',
-            padding: '32px',
-            maxWidth: '400px',
-            width: '90%',
-            textAlign: 'center',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-            border: '1px solid #e0e7ef'
-          }}>
-            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⚠️</div>
-            <h3 style={{ margin: '0 0 16px 0', color: '#495057' }}>
+        <div className="monthly-tasks-modal-overlay">
+          <div className="monthly-tasks-modal">
+            <div className="monthly-tasks-modal-icon">⚠️</div>
+            <h3 className="monthly-tasks-modal-title">
               Confirm {confirmModal.fieldKey === 'reportII' ? 'Report II' : 'BM Creation'} Completion
             </h3>
-            <p style={{ margin: '0 0 24px 0', color: '#6c757d' }}>
+            <p className="monthly-tasks-modal-desc">
               Are you sure you want to mark {confirmModal.fieldKey === 'reportII' ? 'Report II' : 'BM Creation'} as completed for <strong>{confirmModal.companyName}</strong>? 
               <br /><br />
               <span style={{ color: '#dc3545', fontWeight: '600' }}>⚠️ Warning:</span> {confirmModal.fieldKey === 'reportII' ? 'Report II' : 'BM Creation'} is a one-time task. Once completed, it cannot be changed or undone.
             </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <div className="monthly-tasks-modal-buttons">
               <button
                 onClick={() => setConfirmModal(null)}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '10px',
-                  border: '2px solid #6c757d',
-                  background: '#fff',
-                  color: '#6c757d',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
+                className="monthly-tasks-modal-btn cancel"
               >
                 ❌ Cancel
               </button>
               <button
                 onClick={confirmStatusChange}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '10px',
-                  border: '2px solid #28a745',
-                  background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
-                  color: '#fff',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
+                className="monthly-tasks-modal-btn confirm"
               >
                 ✅ Confirm
               </button>
@@ -2727,63 +2218,25 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
       )}
 
       {revertModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-            borderRadius: '20px',
-            padding: '32px',
-            maxWidth: '400px',
-            width: '90%',
-            textAlign: 'center',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-            border: '1px solid #e0e7ef'
-          }}>
-            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>⚠️</div>
-            <h3 style={{ margin: '0 0 16px 0', color: '#495057' }}>
+        <div className="monthly-tasks-modal-overlay">
+          <div className="monthly-tasks-modal">
+            <div className="monthly-tasks-modal-icon">⚠️</div>
+            <h3 className="monthly-tasks-modal-title">
               Revert Change
             </h3>
-            <p style={{ margin: '0 0 24px 0', color: '#6c757d' }}>
+            <p className="monthly-tasks-modal-desc">
               Are you sure you want to revert {revertModal.field} for {revertModal.companyName} back to "{revertModal.oldValue}"?
             </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <div className="monthly-tasks-modal-buttons">
               <button
                 onClick={() => setRevertModal(null)}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '10px',
-                  border: '2px solid #6c757d',
-                  background: '#fff',
-                  color: '#6c757d',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
+                className="monthly-tasks-modal-btn cancel"
               >
                 ❌ Cancel
               </button>
               <button
                 onClick={confirmRevert}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '10px',
-                  border: '2px solid #dc3545',
-                  background: 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)',
-                  color: '#fff',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
+                className="monthly-tasks-modal-btn revert"
               >
                 🔄 Revert
               </button>
@@ -2793,63 +2246,25 @@ export default function MonthlyTasksPage({ packages, setPackages }) {
       )}
 
       {clearHistoryModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-            borderRadius: '20px',
-            padding: '32px',
-            maxWidth: '400px',
-            width: '90%',
-            textAlign: 'center',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
-            border: '1px solid #e0e7ef'
-          }}>
-            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🗑️</div>
-            <h3 style={{ margin: '0 0 16px 0', color: '#495057' }}>
+        <div className="monthly-tasks-modal-overlay">
+          <div className="monthly-tasks-modal">
+            <div className="monthly-tasks-modal-icon">🗑️</div>
+            <h3 className="monthly-tasks-modal-title">
               Clear History
             </h3>
-            <p style={{ margin: '0 0 24px 0', color: '#6c757d' }}>
+            <p className="monthly-tasks-modal-desc">
               Are you sure you want to clear all history? This action cannot be undone.
             </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <div className="monthly-tasks-modal-buttons">
               <button
                 onClick={() => setClearHistoryModal(false)}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '10px',
-                  border: '2px solid #6c757d',
-                  background: '#fff',
-                  color: '#6c757d',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
+                className="monthly-tasks-modal-btn cancel"
               >
                 ❌ Cancel
               </button>
               <button
                 onClick={handleClearHistory}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '10px',
-                  border: '2px solid #dc3545',
-                  background: 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)',
-                  color: '#fff',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
+                className="monthly-tasks-modal-btn revert"
               >
                 🗑️ Clear History
               </button>

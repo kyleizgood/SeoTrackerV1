@@ -551,7 +551,6 @@ const months = [
   'July', 'August', 'September', 'October', 'November', 'December'
 
 ];
-
 // Helper function to get styles for disabled dropdowns
 const getDisabledStyles = (isDisabled) => ({
   opacity: isDisabled ? 0.7 : 1,
@@ -701,7 +700,7 @@ export function getActiveDays(company) {
 
 
 
-function CompanyTracker({ editData, clearEdit, packages, setPackages }) {
+function CompanyTracker({ editData, clearEdit, packages, setPackages, darkMode }) {
 
   const [companies, setCompanies] = useState([]);
 
@@ -17460,7 +17459,7 @@ function App() {
 
                     <Route path="/da-pa-checker" element={user ? <DApaChecker darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
 
-                    <Route path="/company-tracker" element={user ? <CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} packages={packages} setPackages={setPackages} /> : <Navigate to="/login" replace />} />
+                    <Route path="/company-tracker" element={user ? <CompanyTracker editCompany setEditData={setEditData} editData={editData} clearEdit={() => setEditData(null)} packages={packages} setPackages={setPackages} darkMode={darkMode} /> : <Navigate to="/login" replace />} />
 
                             <Route path="/packages" element={user ? <UnifiedPackages packages={packages} setPackages={setPackages} setIsUpdatingPackages={setIsUpdatingPackages} tickets={tickets} setTickets={setTickets} saveTickets={saveTickets} user={user} darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
 

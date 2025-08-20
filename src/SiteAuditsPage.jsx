@@ -4,6 +4,7 @@ import { updateCompanyAuditStatus, getPackages, savePackages, updatePackageCompa
 import { getAdjustedEOC, getActiveDays } from './App.jsx';
 import { addBackgroundOperation } from './optimisticUI.js';
 import { toast } from 'sonner';
+import './SiteAuditsPage.css'; // New import for modern styles
 
 const AUDIT_STATUS_KEY = 'siteAuditStatus';
 const PRE_EOC_STATUS_KEY = 'sitePreEOCStatus';
@@ -346,143 +347,70 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
   };
 
   return (
-    <section className="company-tracker-page" style={{ width: '100%', minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '2.5rem', paddingBottom: '3.5rem', marginTop: 0, background: darkMode ? '#181a1b' : '#f7f6f2', color: darkMode ? '#f3f4f6' : '#374151' }}>
-      {/* Alerts */}
-      {showAuditBAlert && (
-        <div style={{
-          background: '#fffbe6',
-          color: '#b26a00',
-          borderRadius: 12,
-          padding: '1em 2em',
-          fontWeight: 700,
-          fontSize: '1.08em',
-          border: '1.5px solid #ffe082',
-          boxShadow: '0 1px 4px #fffbe6',
-          marginBottom: 18,
-          marginLeft: 2,
-          letterSpacing: '0.03em',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-        }}>
-          <span style={{fontSize:'1.2em',marginRight:8}}>⚠️</span>
-          {table1.length} package{table1.length > 1 ? 's' : ''} need Site Audit B.
-        </div>
-      )}
-      {showAuditCAlert && (
-        <div style={{
-          background: '#e3f2fd',
-          color: '#1976d2',
-          borderRadius: 12,
-          padding: '1em 2em',
-          fontWeight: 700,
-          fontSize: '1.08em',
-          border: '1.5px solid #90caf9',
-          boxShadow: '0 1px 4px #e3f2fd',
-          marginBottom: 18,
-          marginLeft: 2,
-          letterSpacing: '0.03em',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-        }}>
-          <span style={{fontSize:'1.2em',marginRight:8}}>🔔</span>
-          {table2.length} package{table2.length > 1 ? 's' : ''} need Site Audit C.
-        </div>
-      )}
-      
-      {/* Header with History Button */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px' }}>
-      <h1 className="fancy-title" style={{ textAlign: 'center', marginBottom: 10, marginTop: 0, color: darkMode ? '#f3f4f6' : 'inherit' }}>Site Audits</h1>
+    <div className={`site-audits-modern${darkMode ? ' dark' : ''}`}>
+      {/* Header */}
+      <div className="site-audits-header">
+        <h1 className="site-audits-title">Site Audits</h1>
+        <p className="site-audits-subtitle">
+          Companies are automatically sorted into the tables below based on their package start and EOC dates.
+        </p>
+      </div>
+
+      {/* Header Actions */}
+      <div className="site-audits-header-actions">
         <button
           onClick={() => setShowHistory(!showHistory)}
-          style={{
-            padding: '8px 16px',
-            background: showHistory ? '#007bff' : '#f8f9fa',
-            color: showHistory ? '#ffffff' : '#495057',
-            border: '1px solid #dee2e6',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '0.9rem',
-            fontWeight: '600',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
+          className={`site-audits-history-button${showHistory ? ' active' : ''}`}
         >
           📋 {showHistory ? 'Hide History' : 'Show History'} ({history.length})
         </button>
       </div>
-      
-      <p className="hero-desc" style={{ textAlign: 'center', marginBottom: 18, marginTop: 0, color: darkMode ? '#d1d5db' : 'inherit' }}>Companies are automatically sorted into the tables below based on their package start and EOC dates.</p>
-      
+
+      {/* Alerts */}
+      <div className="site-audits-alerts">
+        {showAuditBAlert && (
+          <div className="site-audits-alert warning">
+            <span>⚠️</span>
+            {table1.length} package{table1.length > 1 ? 's' : ''} need Site Audit B.
+          </div>
+        )}
+        {showAuditCAlert && (
+          <div className="site-audits-alert info">
+            <span>🔔</span>
+            {table2.length} package{table2.length > 1 ? 's' : ''} need Site Audit C.
+          </div>
+        )}
+      </div>
+
       {/* History Panel */}
       {showHistory && (
-        <div style={{
-          width: '100%',
-          maxWidth: 1600,
-          background: darkMode ? '#1f2937' : '#ffffff',
-          borderRadius: 12,
-          padding: '20px',
-          marginBottom: '20px',
-          boxShadow: darkMode ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
-          border: darkMode ? '1px solid #374151' : '1px solid #e9ecef'
-        }}>
-          <h3 style={{ margin: '0 0 15px 0', color: darkMode ? '#f3f4f6' : '#495057', fontSize: '1.1rem' }}>📋 Change History</h3>
+        <div className="site-audits-history-panel">
+          <h3 className="site-audits-history-title">📋 Change History</h3>
           {history.length === 0 ? (
-            <p style={{ color: darkMode ? '#9ca3af' : '#6c757d', textAlign: 'center', fontStyle: 'italic' }}>No changes recorded yet.</p>
+            <p className="site-audits-history-empty">No changes recorded yet.</p>
           ) : (
-            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            <div className="site-audits-history-content">
               {history.map((entry, index) => (
                 <div
                   key={entry.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '12px',
-                    border: darkMode ? '1px solid #4b5563' : '1px solid #e9ecef',
-                    borderRadius: '8px',
-                    marginBottom: '8px',
-                    background: entry.action === 'reverted' ? (darkMode ? '#451a03' : '#fff3cd') : (darkMode ? '#374151' : '#ffffff'),
-                    borderLeft: entry.action === 'reverted' ? '4px solid #ffc107' : '4px solid #007bff'
-                  }}
+                  className={`site-audits-history-entry${entry.action === 'reverted' ? ' reverted' : ''}`}
                 >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: '600', color: darkMode ? '#f3f4f6' : '#495057', marginBottom: '4px' }}>
+                  <div className="site-audits-history-info">
+                    <div className="site-audits-history-header">
                       {entry.companyName} - {entry.packageName}
                     </div>
-                    <div style={{ fontSize: '0.9rem', color: darkMode ? '#d1d5db' : '#6c757d' }}>
-                      {entry.field}: <span style={{ color: '#dc3545' }}>{entry.oldValue}</span> → <span style={{ color: '#28a745' }}>{entry.newValue}</span>
-                      {entry.action === 'reverted' && <span style={{ color: '#ffc107', marginLeft: '8px' }}>🔄 Reverted</span>}
+                    <div className="site-audits-history-changes">
+                      {entry.field}: <span className="site-audits-history-old-value">{entry.oldValue}</span> → <span className="site-audits-history-new-value">{entry.newValue}</span>
+                      {entry.action === 'reverted' && <span className="site-audits-history-reverted">🔄 Reverted</span>}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: darkMode ? '#9ca3af' : '#adb5bd', marginTop: '4px' }}>
+                    <div className="site-audits-history-timestamp">
                       {formatTimestamp(entry.timestamp)}
                     </div>
                   </div>
                   {entry.action !== 'reverted' && (
                     <button
                       onClick={() => revertChange(entry)}
-                      style={{
-                        padding: '6px 12px',
-                        background: '#f8f9fa',
-                        color: '#6c757d',
-                        border: '1px solid #dee2e6',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '0.8rem',
-                        fontWeight: '500',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseOver={(e) => {
-                        e.target.style.background = '#e9ecef';
-                        e.target.style.color = '#495057';
-                      }}
-                      onMouseOut={(e) => {
-                        e.target.style.background = '#f8f9fa';
-                        e.target.style.color = '#6c757d';
-                      }}
+                      className="site-audits-history-revert-button"
                     >
                       ↩️ Revert
                     </button>
@@ -493,218 +421,135 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
           )}
         </div>
       )}
-      
-      <div
-        className="site-audits-table-row"
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          flexWrap: 'nowrap',
-          justifyContent: 'center',
-          alignItems: 'flex-start',
-          gap: '2vw',
-          width: '100%',
-          maxWidth: 1600,
-          margin: '0 auto',
-          padding: '0.5vw 0 2vw 0',
-          boxSizing: 'border-box',
-          background: 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)',
-          borderRadius: 24,
-          boxShadow: '0 2px 24px #ececec',
-        }}
-      >
-        {/* Table 1 */}
-        <div
-          style={{
-            flex: '0 1 48%',
-            width: '48%',
-            background: darkMode ? '#1f2937' : '#fff',
-            borderRadius: 18,
-            boxShadow: darkMode ? '0 2px 16px rgba(0,0,0,0.3)' : '0 2px 16px #ececec',
-            padding: '2em 1.5em',
-            margin: 0,
-            minWidth: 0,
-            overflowX: 'auto',
-          }}
-        >
-          <h2 style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.3em', marginBottom: 18, letterSpacing: '0.04em', color: '#b26a00' }}>Site Audit B</h2>
-          <div className="responsive-table-wrapper">
-            <table className="company-table report-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', background: darkMode ? 'rgba(31,41,55,0.98)' : 'rgba(255,255,255,0.98)', borderRadius: 16, overflow: 'hidden', boxShadow: darkMode ? '0 2px 12px rgba(0,0,0,0.3)' : '0 2px 12px #ececec', color: darkMode ? '#f3f4f6' : '#374151' }}>
-              <thead>
-                <tr style={{ background: darkMode ? '#374151' : '#f7f6f2' }}>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Company Name</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Package</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Start Date</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Days Since Start</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Status</th>
+
+      {/* Tables Container */}
+      <div className="site-audits-tables-container">
+        {/* Table 1 - Site Audit B */}
+        <div className="site-audits-table-container">
+          <h2 className="site-audits-table-title audit-b">Site Audit B</h2>
+          <table className="site-audits-table">
+            <thead>
+              <tr>
+                <th>Company Name</th>
+                <th>Package</th>
+                <th>Start Date</th>
+                <th>Days Since Start</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {table1.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="site-audits-empty-message">
+                    No companies for half-year audit today.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {table1.length === 0 ? (
-                  <tr><td colSpan={5} style={{ textAlign: 'center', color: darkMode ? '#9ca3af' : '#aaa' }}>No companies for half-year audit today.</td></tr>
-                ) : table1.map(c => {
-                  const startDate = parseDisplayDateToInput(c.start);
-                  const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
-                  const isRecentlyChanged = recentChanges.has(c.id);
-                  
-                  return (
-                    <tr key={c.id} style={{ 
-                      transition: 'background 0.18s',
-                      background: isRecentlyChanged ? '#fff3cd' : 'transparent',
-                      borderLeft: isRecentlyChanged ? '4px solid #ffc107' : 'none'
-                    }}>
-                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: darkMode ? 'linear-gradient(90deg, #374151 60%, #4b5563 100%)' : 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #b26a00', letterSpacing: '0.02em', borderRadius: 8, color: darkMode ? '#f3f4f6' : '#232323' }}>
-                        {c.name}
-                        {isRecentlyChanged && <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#ffc107' }}>🔄</span>}
-                      </td>
-                      <td style={{ padding: '0.7em', textAlign: 'center' }}>
-                        <span className={getPackageClass(c.package)}>{c.package}</span>
-                      </td>
-                      <td style={{ padding: '0.7em', textAlign: 'center' }}>{c.start}</td>
-                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 600, color: '#b26a00' }}>{daysSinceStart}</td>
-                      <td style={{ padding: '0.7em', textAlign: 'center' }}>
-                        <select value={auditStatus[c.id] || 'Pending'} onChange={e => handleAuditStatusChange(c.id, e.target.value)} style={{ padding: '0.3em 1em', borderRadius: 8, fontWeight: 600, background: auditStatus[c.id] === 'Completed' ? '#eaffea' : '#ffeaea', color: auditStatus[c.id] === 'Completed' ? '#19744d' : '#c00', border: '1.5px solid #b6b6d8', minWidth: 120, boxShadow: '0 1px 4px #ececec', transition: 'background 0.18s, color 0.18s' }}>
-                          <option value="Pending">🔴 Pending</option>
-                          <option value="Completed">🟢 Completed</option>
-                        </select>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+              ) : table1.map(c => {
+                const startDate = parseDisplayDateToInput(c.start);
+                const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
+                const isRecentlyChanged = recentChanges.has(c.id);
+                
+                return (
+                  <tr key={c.id} className={isRecentlyChanged ? 'recently-changed' : ''}>
+                    <td className="site-audits-company-cell">
+                      {c.name}
+                      {isRecentlyChanged && <span>🔄</span>}
+                    </td>
+                    <td className="site-audits-package-cell">
+                      <span className={getPackageClass(c.package)}>{c.package}</span>
+                    </td>
+                    <td className="site-audits-date-cell">{c.start}</td>
+                    <td className="site-audits-days-cell audit-b">{daysSinceStart}</td>
+                    <td className="site-audits-status-cell">
+                      <select 
+                        value={auditStatus[c.id] || 'Pending'} 
+                        onChange={e => handleAuditStatusChange(c.id, e.target.value)}
+                        className={`site-audits-status-select${auditStatus[c.id] === 'Completed' ? ' completed' : ''}`}
+                      >
+                        <option value="Pending">🔴 Pending</option>
+                        <option value="Completed">🟢 Completed</option>
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-        {/* Table 2 */}
-        <div
-          style={{
-            flex: '0 1 48%',
-            width: '48%',
-            background: darkMode ? '#1f2937' : '#fff',
-            borderRadius: 18,
-            boxShadow: darkMode ? '0 2px 16px rgba(0,0,0,0.3)' : '0 2px 16px #ececec',
-            padding: '2em 1.5em',
-            margin: 0,
-            minWidth: 0,
-            overflowX: 'auto',
-          }}
-        >
-          <h2 style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.3em', marginBottom: 18, letterSpacing: '0.04em', color: '#1976d2' }}>Site Audit C</h2>
-          <div className="responsive-table-wrapper">
-            <table className="company-table report-table" style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', background: darkMode ? 'rgba(31,41,55,0.98)' : 'rgba(255,255,255,0.98)', borderRadius: 16, overflow: 'hidden', boxShadow: darkMode ? '0 2px 12px rgba(0,0,0,0.3)' : '0 2px 12px #ececec', color: darkMode ? '#f3f4f6' : '#374151' }}>
-              <thead>
-                <tr style={{ background: darkMode ? '#374151' : '#f7f6f2' }}>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Company Name</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Package</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Start Date</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Days Since Start</th>
-                  <th style={{ padding: '0.7em', borderRadius: 8, fontWeight: 600, color: darkMode ? '#f3f4f6' : '#374151' }}>Status</th>
+
+        {/* Table 2 - Site Audit C */}
+        <div className="site-audits-table-container">
+          <h2 className="site-audits-table-title audit-c">Site Audit C</h2>
+          <table className="site-audits-table">
+            <thead>
+              <tr>
+                <th>Company Name</th>
+                <th>Package</th>
+                <th>Start Date</th>
+                <th>Days Since Start</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {table2.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="site-audits-empty-message">
+                    No companies for pre-EOC audit today.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {table2.length === 0 ? (
-                  <tr><td colSpan={5} style={{ textAlign: 'center', color: darkMode ? '#9ca3af' : '#aaa' }}>No companies for pre-EOC audit today.</td></tr>
-                ) : table2.map(c => {
-                  const startDate = parseDisplayDateToInput(c.start);
-                  const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
-                  const isRecentlyChanged = recentChanges.has(c.id);
-                  
-                  return (
-                    <tr key={c.id} style={{ 
-                      transition: 'background 0.18s',
-                      background: isRecentlyChanged ? '#fff3cd' : 'transparent',
-                      borderLeft: isRecentlyChanged ? '4px solid #ffc107' : 'none'
-                    }}>
-                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 700, background: darkMode ? 'linear-gradient(90deg, #374151 60%, #4b5563 100%)' : 'linear-gradient(90deg, #f7f6f2 60%, #e0e7ef 100%)', borderLeft: '4px solid #1976d2', letterSpacing: '0.02em', borderRadius: 8, color: darkMode ? '#f3f4f6' : '#232323' }}>
-                        {c.name}
-                        {isRecentlyChanged && <span style={{ marginLeft: '8px', fontSize: '0.8rem', color: '#ffc107' }}>🔄</span>}
-                      </td>
-                      <td style={{ padding: '0.7em', textAlign: 'center' }}>
-                        <span className={getPackageClass(c.package)}>{c.package}</span>
-                      </td>
-                      <td style={{ padding: '0.7em', textAlign: 'center' }}>{c.start}</td>
-                      <td style={{ padding: '0.7em', textAlign: 'center', fontWeight: 600, color: '#1976d2' }}>{daysSinceStart}</td>
-                      <td style={{ padding: '0.7em', textAlign: 'center' }}>
-                        <select value={preEOCStatus[c.id] || 'Pending'} onChange={e => handlePreEOCStatusChange(c.id, e.target.value)} style={{ padding: '0.3em 1em', borderRadius: 8, fontWeight: 600, background: preEOCStatus[c.id] === 'Completed' ? '#eaffea' : '#ffeaea', color: preEOCStatus[c.id] === 'Completed' ? '#19744d' : '#c00', border: '1.5px solid #b6b6d8', minWidth: 120, boxShadow: '0 1px 4px #ececec', transition: 'background 0.18s, color 0.18s' }}>
-                          <option value="Pending">🔴 Pending</option>
-                          <option value="Completed">🟢 Completed</option>
-                        </select>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+              ) : table2.map(c => {
+                const startDate = parseDisplayDateToInput(c.start);
+                const daysSinceStart = startDate ? daysBetween(startDate, today) : 0;
+                const isRecentlyChanged = recentChanges.has(c.id);
+                
+                return (
+                  <tr key={c.id} className={isRecentlyChanged ? 'recently-changed' : ''}>
+                    <td className="site-audits-company-cell audit-c">
+                      {c.name}
+                      {isRecentlyChanged && <span>🔄</span>}
+                    </td>
+                    <td className="site-audits-package-cell">
+                      <span className={getPackageClass(c.package)}>{c.package}</span>
+                    </td>
+                    <td className="site-audits-date-cell">{c.start}</td>
+                    <td className="site-audits-days-cell audit-c">{daysSinceStart}</td>
+                    <td className="site-audits-status-cell">
+                      <select 
+                        value={preEOCStatus[c.id] || 'Pending'} 
+                        onChange={e => handlePreEOCStatusChange(c.id, e.target.value)}
+                        className={`site-audits-status-select${preEOCStatus[c.id] === 'Completed' ? ' completed' : ''}`}
+                      >
+                        <option value="Pending">🔴 Pending</option>
+                        <option value="Completed">🟢 Completed</option>
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
       {/* Confirmation Modal */}
       {confirmModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          background: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          backdropFilter: 'blur(5px)',
-          animation: 'fadeIn 0.3s ease-out'
-        }}>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: 12,
-            padding: '30px',
-            width: '90%',
-            maxWidth: 450,
-            textAlign: 'center',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-            animation: 'scaleIn 0.3s ease-out'
-          }}>
-            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm Action</h3>
-            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+        <div className="site-audits-modal-overlay">
+          <div className="site-audits-modal">
+            <div className="site-audits-modal-title">Confirm Action</div>
+            <div className="site-audits-modal-desc">
               Are you sure you want to mark "{confirmModal.company?.name} - {confirmModal.company?.package}" as "{confirmModal.newValue}"?
               This action cannot be undone.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+            </div>
+            <div className="site-audits-modal-buttons">
               <button
-                onClick={() => {
-                  confirmStatusChange();
-                  setConfirmModal(null);
-                }}
-                style={{
-                  padding: '10px 25px',
-                  background: '#28a745',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: '1em',
-                  fontWeight: '600',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
+                onClick={confirmStatusChange}
+                className="site-audits-modal-btn confirm"
               >
                 Yes, Mark as {confirmModal.newValue}
               </button>
               <button
                 onClick={() => setConfirmModal(null)}
-                style={{
-                  padding: '10px 25px',
-                  background: '#dc3545',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: '1em',
-                  fontWeight: '600',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
+                className="site-audits-modal-btn cancel"
               >
                 Cancel
               </button>
@@ -715,67 +560,23 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
 
       {/* Revert Confirmation Modal */}
       {revertModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          background: 'rgba(0,0,0,0.6)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          backdropFilter: 'blur(5px)',
-          animation: 'fadeIn 0.3s ease-out'
-        }}>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: 12,
-            padding: '30px',
-            width: '90%',
-            maxWidth: 450,
-            textAlign: 'center',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-            animation: 'scaleIn 0.3s ease-out'
-          }}>
-            <h3 style={{ marginBottom: 15, color: '#333' }}>Confirm Revert</h3>
-            <p style={{ marginBottom: 25, color: '#555', fontSize: '0.95em' }}>
+        <div className="site-audits-modal-overlay">
+          <div className="site-audits-modal">
+            <div className="site-audits-modal-title">Confirm Revert</div>
+            <div className="site-audits-modal-desc">
               Are you sure you want to revert "{revertModal.companyName} - {revertModal.packageName}" {revertModal.field} from "{revertModal.newValue}" back to "{revertModal.oldValue}"?
               This action cannot be undone.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'space-around', gap: 15 }}>
+            </div>
+            <div className="site-audits-modal-buttons">
               <button
                 onClick={confirmRevert}
-                style={{
-                  padding: '10px 25px',
-                  background: '#ffc107',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: '1em',
-                  fontWeight: '600',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
+                className="site-audits-modal-btn revert"
               >
                 Yes, Revert
               </button>
               <button
                 onClick={() => setRevertModal(null)}
-                style={{
-                  padding: '10px 25px',
-                  background: '#dc3545',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: '1em',
-                  fontWeight: '600',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
+                className="site-audits-modal-btn cancel"
               >
                 Cancel
               </button>
@@ -783,7 +584,7 @@ function SiteAuditsPage({ packages, setPackages, darkMode, setDarkMode }) {
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
