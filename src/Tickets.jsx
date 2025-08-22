@@ -14,7 +14,7 @@ function formatDate(dateStr) {
   return d.toLocaleString();
 }
 
-function Tickets({ darkMode, setDarkMode }) {
+function Tickets({ darkMode, setDarkMode, packages, setPackages, setCachedData, user, setIsUpdatingPackages, savePackages, toast }) {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -295,9 +295,9 @@ function Tickets({ darkMode, setDarkMode }) {
         if ((oldTicket.isBusinessProfileClaiming || oldTicket.taskType === 'businessProfileClaiming' || oldTicket.type === 'Business Profile Claiming') && 
             oldTicket.status !== ticketWithDefaults.status) {
           try {
-            // Use the centralized sync function from App.jsx
-            const { syncTicketWithPackage } = await import('./App');
-            await syncTicketWithPackage(ticketWithDefaults, ticketWithDefaults.status);
+            // Use the centralized sync function from ticketSyncUtils
+            const { syncTicketWithPackage } = await import('./ticketSyncUtils');
+            await syncTicketWithPackage(ticketWithDefaults, ticketWithDefaults.status, packages, setPackages, setCachedData, user, setIsUpdatingPackages, savePackages, toast);
           } catch (error) {
             console.error('Error syncing with packages:', error);
             toast.error('Failed to sync with package task');
@@ -610,27 +610,40 @@ function Tickets({ darkMode, setDarkMode }) {
                 >
                   🗑️
                 </button>
-                <select
-                  className="tickets-status-select"
-                  value={selectedTicket.status || 'open'}
-                  onChange={async (e) => {
-                    const newStatus = e.target.value;
-                    const oldStatus = selectedTicket.status || 'open';
-                    setTickets(tickets => tickets.map(t => t.id === selectedTicket.id ? { ...t, status: newStatus, updatedAt: new Date().toISOString() } : t));
-                    try {
-                      await saveTicket({ ...selectedTicket, status: newStatus, updatedAt: new Date().toISOString() });
-                      
-                      // If ticket moved out of current tab, clear selection
-                      const isNowClosed = newStatus === 'closed';
-                      const isNowOpen = newStatus !== 'closed';
-                      if ((activeTab === 'open' && isNowClosed) || (activeTab === 'closed' && isNowOpen)) {
-                        setSelectedId(null);
-                      }
-                    } catch (err) {
-                      alert('Failed to update status.');
-                    }
-                  }}
-                >
+                                 <select
+                   className="tickets-status-select"
+                   value={selectedTicket.status || 'open'}
+                   onChange={async (e) => {
+                     const newStatus = e.target.value;
+                     const oldStatus = selectedTicket.status || 'open';
+                     setTickets(tickets => tickets.map(t => t.id === selectedTicket.id ? { ...t, status: newStatus, updatedAt: new Date().toISOString() } : t));
+                     try {
+                       await saveTicket({ ...selectedTicket, status: newStatus, updatedAt: new Date().toISOString() });
+                       
+                       // Sync with packages if this is a Business Profile Claiming ticket and status changed
+                       if ((selectedTicket.isBusinessProfileClaiming || selectedTicket.taskType === 'businessProfileClaiming' || selectedTicket.type === 'Business Profile Claiming') && 
+                           oldStatus !== newStatus) {
+                         try {
+                           // Use the centralized sync function from ticketSyncUtils
+                           const { syncTicketWithPackage } = await import('./ticketSyncUtils');
+                           await syncTicketWithPackage(selectedTicket, newStatus, packages, setPackages, setCachedData, user, setIsUpdatingPackages, savePackages, toast);
+                         } catch (error) {
+                           console.error('Error syncing with packages:', error);
+                           toast.error('Failed to sync with package task');
+                         }
+                       }
+                       
+                       // If ticket moved out of current tab, clear selection
+                       const isNowClosed = newStatus === 'closed';
+                       const isNowOpen = newStatus !== 'closed';
+                       if ((activeTab === 'open' && isNowClosed) || (activeTab === 'closed' && isNowOpen)) {
+                         setSelectedId(null);
+                       }
+                     } catch (err) {
+                       alert('Failed to update status.');
+                     }
+                   }}
+                 >
                   <option value="open">Open</option>
                   <option value="closed">Closed</option>
                 </select>
