@@ -123,9 +123,13 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
     try {
       let startAfterDoc = loadMore && pagination[section]?.lastDoc ? pagination[section].lastDoc : null;
       const { items, lastDoc, hasMore } = await getResourcesPaginated(20, startAfterDoc);
+      
+      // Filter items by section and ensure they have the section field
+      const sectionItems = items.filter(i => i.section === section);
+      
       setLinks(prev => ({
         ...prev,
-        [section]: loadMore ? [...(prev[section] || []), ...items.filter(i => i.section === section)] : items.filter(i => i.section === section)
+        [section]: loadMore ? [...(prev[section] || []), ...sectionItems] : sectionItems
       }));
       setPagination(prev => ({
         ...prev,
@@ -134,10 +138,11 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
       // Cache in localStorage
       if (!loadMore) {
         const cache = JSON.parse(localStorage.getItem(RESOURCES_CACHE_KEY) || '{}');
-        cache[section] = { items: items.filter(i => i.section === section), lastDocId: lastDoc?.id || null, ts: Date.now() };
+        cache[section] = { items: sectionItems, lastDocId: lastDoc?.id || null, ts: Date.now() };
         localStorage.setItem(RESOURCES_CACHE_KEY, JSON.stringify(cache));
       }
     } catch (e) {
+      console.error('Error fetching resources:', e);
       setPagination(prev => ({ ...prev, [section]: { ...(prev[section] || {}), loadingMore: false } }));
     }
     setLoading(false);
@@ -155,7 +160,11 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
         const cache = JSON.parse(localStorage.getItem(RESOURCES_CACHE_KEY) || '{}');
         for (const s of loadedSections) {
           if (cache[s] && Array.isArray(cache[s].items) && Date.now() - cache[s].ts < 1000 * 60 * 10) {
-            grouped[s] = cache[s].items;
+            // Ensure cached items have the section field
+            grouped[s] = cache[s].items.map(item => ({
+              ...item,
+              section: item.section || s
+            }));
             pag[s] = { lastDoc: null, hasMore: true, loadingMore: false };
             // Still fetch latest in background
             fetchResources(s, false);
@@ -168,6 +177,7 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
         setLinks(grouped);
         setPagination(pag);
       } catch (e) {
+        console.error('Error loading initial data:', e);
         setLoading(false);
       }
       setLoading(false);
@@ -197,56 +207,38 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
   };
 
   const handleModalAdd = () => {
-    if (!modalTitle.trim() || !modalUrl.trim()) return;
+    if (!modalTitle.trim() || !modalUrl.trim()) {
+      toast.error('Please enter both title and URL');
+      return;
+    }
     
-    const newResource = {
+    // Basic URL validation
+    try {
+      new URL(modalUrl.trim());
+    } catch (e) {
+      toast.error('Please enter a valid URL');
+      return;
+    }
+    
+    // Move to step 2 to select section
+    setPendingLink({
       name: modalTitle.trim(),
-      url: modalUrl.trim(),
-      id: Date.now(),
-      createdAt: new Date().toISOString()
-    };
-
-    // Optimistically update UI
-    setLinks(l => ({
-      ...l,
-      [pendingLink]: [...(l[pendingLink] || []), newResource]
-    }));
-    setModalOpen(false);
-    setModalStep(1);
-    setModalTitle('');
-    setModalUrl('');
-    setPendingLink(null);
-    
-    
-
-    // Add to history for add
-    addToHistory(createHistoryEntry(newResource.id, pendingLink, newResource.name, 'created', '', 'Resource created'));
-
-    // Firestore operations in background
-    (async () => {
-      try {
-        await saveResource(newResource);
-      } catch (e) {
-        // Revert optimistic update on error
-        setLinks(l => ({
-          ...l,
-          [pendingLink]: l[pendingLink].filter(r => r.id !== newResource.id)
-        }));
-        alert('Failed to save resource to database. Please try again.');
-        // console.error('Failed to save resource:', e);
-      }
-    })();
+      url: modalUrl.trim()
+    });
+    setModalStep(2);
   };
 
   const handleSectionSelect = async (section) => {
     if (!pendingLink) return;
-    // Create resource object with id
+    // Create resource object with all required fields
     const resource = {
-      id: `${Date.now()}-${section}-${pendingLink.name}`,
+      id: `${Date.now()}-${section}-${pendingLink.name.replace(/[^a-zA-Z0-9]/g, '')}`,
       name: pendingLink.name,
       url: pendingLink.url,
-      section
+      section: section,
+      createdAt: new Date().toISOString()
     };
+    
     // Optimistically update UI
     setLinks(l => ({
       ...l,
@@ -258,18 +250,23 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
     setModalUrl('');
     setPendingLink(null);
     toast.success('Resource added successfully');
+    
     // Add to history for add
     addToHistory(createHistoryEntry(resource.id, section, resource.name, 'created', '', 'Resource created'));
+    
     // Save to Firestore in background
-    saveResource(resource).catch(e => {
+    try {
+      await saveResource(resource);
+      console.log('Resource saved successfully:', resource);
+    } catch (e) {
+      console.error('Failed to save resource:', e);
       // Remove from UI if save fails
       setLinks(l => ({
         ...l,
         [section]: l[section].filter(r => r.id !== resource.id)
       }));
-      alert('Failed to save resource to database. Please try again.');
-      // console.error('Failed to save resource:', e);
-    });
+      toast.error('Failed to save resource to database. Please try again.');
+    }
   };
 
   const handleDelete = (section, idx) => {
@@ -746,7 +743,15 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
           }}>
             <button
               style={{ position: 'absolute', top: 18, right: 18, background: 'none', border: 'none', fontSize: 22, color: '#888', cursor: 'pointer' }}
-              onClick={() => { setModalOpen(false); setModalStep(1); setModalTitle(''); setModalUrl(''); setPendingLink(null); }}
+              onClick={() => { 
+                setModalOpen(false); 
+                setModalStep(1); 
+                setModalTitle(''); 
+                setModalUrl(''); 
+                setPendingLink(null);
+                setShowAddTable(false);
+                setNewTableName('');
+              }}
               aria-label="Close"
             >×</button>
             {modalStep === 1 && (
@@ -795,13 +800,25 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
                   }}
                   onClick={handleModalAdd}
                 >
-                  Add
+                  Next
                 </button>
               </>
             )}
             {modalStep === 2 && (
               <>
-                <div style={{ fontWeight: 800, fontSize: '1.1em', color: '#1976d2', marginBottom: 8 }}>Which section to add?</div>
+                <div style={{ fontWeight: 800, fontSize: '1.1em', color: '#1976d2', marginBottom: 8 }}>Select Section for Resource</div>
+                {pendingLink && (
+                  <div style={{ 
+                    background: '#f8f9fa', 
+                    padding: '12px 16px', 
+                    borderRadius: '8px', 
+                    marginBottom: '16px',
+                    border: '1px solid #e9ecef'
+                  }}>
+                    <div style={{ fontWeight: 600, color: '#495057', marginBottom: '4px' }}>{pendingLink.name}</div>
+                    <div style={{ fontSize: '0.9em', color: '#6c757d', wordBreak: 'break-all' }}>{pendingLink.url}</div>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 12 }}>
                   {sections.map(section => (
                     <button
@@ -823,23 +840,43 @@ export default function ResourcesPage({ darkMode, setDarkMode }) {
                     </button>
                   ))}
                 </div>
-                <button
-                  style={{
-                    background: 'linear-gradient(90deg, #388e3c 60%, #81c784 100%)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 8,
-                    fontWeight: 700,
-                    fontSize: '1em',
-                    padding: '0.5em 1.3em',
-                    cursor: 'pointer',
-                    marginTop: 8,
-                    boxShadow: '0 1px 6px #ececec',
-                  }}
-                  onClick={() => setShowAddTable(true)}
-                >
-                  + Add New Table
-                </button>
+                <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                  <button
+                    style={{
+                      background: '#6c757d',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontWeight: 700,
+                      fontSize: '1em',
+                      padding: '0.5em 1.3em',
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 6px #ececec',
+                    }}
+                    onClick={() => {
+                      setModalStep(1);
+                      setPendingLink(null);
+                    }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    style={{
+                      background: 'linear-gradient(90deg, #388e3c 60%, #81c784 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontWeight: 700,
+                      fontSize: '1em',
+                      padding: '0.5em 1.3em',
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 6px #ececec',
+                    }}
+                    onClick={() => setShowAddTable(true)}
+                  >
+                    + Add New Table
+                  </button>
+                </div>
                 {showAddTable && (
                   <div style={{ marginTop: 16, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                     <input

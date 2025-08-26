@@ -99,6 +99,7 @@ body, #root {
   margin-bottom: 0.2rem;
   min-height: 36px;
   box-shadow: 0 2px 8px var(--shadow);
+  z-index: 1000;
 }
 .minimal-header span {
   font-weight: 700;
@@ -405,6 +406,8 @@ body, #root {
   min-height: 80vh;
   width: 100%;
   padding: 0;
+  position: relative;
+  z-index: 1;
   background: radial-gradient(circle at 20% 30%, rgba(180, 185, 200, 0.13) 0%, rgba(247,246,242,0.0) 60%),
     radial-gradient(circle at 80% 20%, rgba(180, 185, 200, 0.09) 0%, rgba(247,246,242,0.0) 60%),
     radial-gradient(circle at 60% 80%, rgba(180, 170, 200, 0.10) 0%, rgba(247,246,242,0.0) 70%),
@@ -1167,6 +1170,38 @@ body, #root {
   gap: 2.5rem;
   justify-content: center;
   align-items: center;
+  z-index: 1000;
+  position: relative;
+}
+
+.header-content nav a {
+  color: #1976d2;
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(25, 118, 210, 0.2);
+  cursor: pointer;
+  position: relative;
+  z-index: 1001;
+  display: inline-block;
+  min-width: 100px;
+  text-align: center;
+}
+
+.header-content nav a:hover {
+  background: #1976d2;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+}
+
+.header-content nav a:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(25, 118, 210, 0.2);
 }
 
 html, body, #root {

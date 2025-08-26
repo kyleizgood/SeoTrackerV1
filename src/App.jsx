@@ -355,7 +355,7 @@ function HomeHero({ userEmail }) {
 
     <section style={{
 
-      minHeight: '100vh',
+      minHeight: 'calc(100vh - 80px)', // Reduced height to account for header
 
       display: 'flex',
 
@@ -372,6 +372,10 @@ function HomeHero({ userEmail }) {
       position: 'relative',
 
       overflow: 'hidden',
+
+      marginTop: '0',
+
+      zIndex: 1,
 
     }}>
 
@@ -17283,7 +17287,16 @@ function App() {
 
                     <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
 
-                    <Route path="/" element={user ? <HomeHero userEmail={user && user.email ? user.email.split('@')[0] : undefined} /> : <Navigate to="/login" replace />} />
+                    <Route path="/" element={user ? (
+                      <div style={{ 
+                        position: 'relative', 
+                        zIndex: 1,
+                        minHeight: 'calc(100vh - 80px)', // Account for header height
+                        marginTop: '0'
+                      }}>
+                        <HomeHero userEmail={user && user.email ? user.email.split('@')[0] : undefined} />
+                      </div>
+                    ) : <Navigate to="/login" replace />} />
 
                     <Route path="/da-pa-checker" element={user ? <DApaChecker darkMode={darkMode} setDarkMode={setDarkMode} /> : <Navigate to="/login" replace />} />
 
