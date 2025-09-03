@@ -20,6 +20,8 @@ const packageColors = {
   'SEO - ULTIMATE': '#1A237E',
 };
 
+
+
 export default function LinkBuildings({ packages, setPackages, darkMode, setDarkMode }) {
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',

@@ -21,6 +21,8 @@ const linkRequirements = {
   'SEO - ULTIMATE': 25,
 };
 
+
+
 export default function MonthlyTasksPage({ packages, setPackages }) {
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',

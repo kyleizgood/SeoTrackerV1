@@ -2767,6 +2767,22 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
 
   
 
+  // Incentive values for each package (in PHP)
+
+  const packageIncentives = {
+
+    'SEO - BASIC': 15,
+
+    'SEO - PREMIUM': 20,
+
+    'SEO - PRO': 25,
+
+    'SEO - ULTIMATE': 30,
+
+  };
+
+  
+
   const taskOptions = [
 
     { value: 'Pending', label: '🔴 Pending' },
@@ -4267,6 +4283,12 @@ function UnifiedPackages({ packages, setPackages, setIsUpdatingPackages, tickets
                 <div style={{ fontSize: '10px', opacity: 0.8, textAlign: 'center', marginBottom: '2px' }}>
 
                   Total Companies
+
+                </div>
+
+                <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '2px', textAlign: 'center' }}>
+
+                  {packageIncentives[pkg] * stats.active} PHP
 
                 </div>
 
